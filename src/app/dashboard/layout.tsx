@@ -15,7 +15,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-[#0f0f18]">
+    <div style={{display:'flex', minHeight:'100vh', background:'var(--bg)'}}>
       <Sidebar />
       <main className="flex-1 overflow-auto">
         {children}
