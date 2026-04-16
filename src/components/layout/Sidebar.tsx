@@ -2,30 +2,45 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Users, GraduationCap, CalendarDays, ClipboardCheck,
   CreditCard, UserCog, BookOpen, ShoppingBag, Star, Dumbbell,
-  Settings, LogOut, ChevronRight, Wallet, FileBarChart
+  Settings, LogOut, Wallet, FileBarChart, ArrowLeftRight
 } from 'lucide-react'
 
-const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'الرئيسية', labelEn: 'Dashboard' },
-  { href: '/dashboard/students', icon: Users, label: 'الطالبات', labelEn: 'Students' },
-  { href: '/dashboard/classes', icon: GraduationCap, label: 'الفصول', labelEn: 'Classes' },
-  { href: '/dashboard/sessions', icon: CalendarDays, label: 'الحصص', labelEn: 'Sessions' },
-  { href: '/dashboard/attendance', icon: ClipboardCheck, label: 'الحضور', labelEn: 'Attendance' },
-  { href: '/dashboard/payments', icon: CreditCard, label: 'المدفوعات', labelEn: 'Payments' },
-  { href: '/dashboard/coaches', icon: UserCog, label: 'المدربات', labelEn: 'Coaches' },
-  { href: '/dashboard/exams', icon: BookOpen, label: 'الامتحانات', labelEn: 'Exams' },
-  { href: '/dashboard/inventory', icon: ShoppingBag, label: 'المخزون', labelEn: 'Inventory' },
-  { href: '/dashboard/events', icon: Star, label: 'الفعاليات', labelEn: 'Events' },
-  { href: '/dashboard/private', icon: Dumbbell, label: 'البرايفيت', labelEn: 'Private' },
-  { href: '/dashboard/expenses', icon: Wallet, label: 'المصروفات', labelEn: 'Expenses' },
-  { href: '/dashboard/reports', icon: FileBarChart, label: 'التقارير', labelEn: 'Reports' },
-  { href: '/dashboard/settings', icon: Settings, label: 'الإعدادات', labelEn: 'Settings' },
+const navGroups = [
+  {
+    label: 'الرئيسي',
+    items: [
+      { href: '/dashboard', icon: LayoutDashboard, label: 'لوحة التحكم' },
+      { href: '/dashboard/students', icon: Users, label: 'الطالبات' },
+      { href: '/dashboard/classes', icon: GraduationCap, label: 'الفصول' },
+      { href: '/dashboard/sessions', icon: CalendarDays, label: 'الحصص' },
+      { href: '/dashboard/attendance', icon: ClipboardCheck, label: 'الحضور' },
+    ]
+  },
+  {
+    label: 'مالي',
+    items: [
+      { href: '/dashboard/payments', icon: CreditCard, label: 'المدفوعات' },
+      { href: '/dashboard/expenses', icon: Wallet, label: 'المصروفات' },
+      { href: '/dashboard/reports', icon: FileBarChart, label: 'التقارير' },
+    ]
+  },
+  {
+    label: 'إدارة',
+    items: [
+      { href: '/dashboard/coaches', icon: UserCog, label: 'المدربات' },
+      { href: '/dashboard/exams', icon: BookOpen, label: 'الامتحانات' },
+      { href: '/dashboard/transfers', icon: ArrowLeftRight, label: 'التحويلات' },
+      { href: '/dashboard/inventory', icon: ShoppingBag, label: 'المخزون' },
+      { href: '/dashboard/events', icon: Star, label: 'الفعاليات' },
+      { href: '/dashboard/private', icon: Dumbbell, label: 'البرايفيت' },
+      { href: '/dashboard/settings', icon: Settings, label: 'الإعدادات' },
+    ]
+  }
 ]
 
 export default function Sidebar() {
@@ -38,54 +53,63 @@ export default function Sidebar() {
     router.push('/login')
   }
 
+  function isActive(href: string) {
+    if (href === '/dashboard') return pathname === '/dashboard'
+    return pathname.startsWith(href)
+  }
+
   return (
-    <aside className="w-64 min-h-screen bg-[#0d0d14] border-r border-white/5 flex flex-col">
+    <aside style={{
+      width: 210, minHeight: '100vh', flexShrink: 0,
+      background: '#FFFFFF', borderLeft: '1px solid #EDD8DC',
+      display: 'flex', flexDirection: 'column',
+    }}>
       {/* Logo */}
-      <div className="p-6 border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-lg shadow-rose-500/20 flex-shrink-0">
-            <span className="text-xl">🩰</span>
-          </div>
-          <div>
-            <p className="text-white font-bold text-sm leading-tight">Little Swan</p>
-            <p className="text-white/30 text-xs">Ballet Academy</p>
-          </div>
+      <div style={{ padding: '20px 20px 18px', borderBottom: '1px solid #EDD8DC' }}>
+        <div style={{ fontFamily: 'Georgia,serif', fontStyle: 'italic', fontSize: 18, color: '#C8788A', fontWeight: 400 }}>
+          Little Swan
+        </div>
+        <div style={{ fontSize: 9, color: '#B89CA0', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 3 }}>
+          Ballet Academy
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
-          const Icon = item.icon
-          const isActive = pathname === item.href ||
-            (item.href !== '/dashboard' && pathname.startsWith(item.href))
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all group',
-                isActive
-                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
-                  : 'text-white/40 hover:text-white/80 hover:bg-white/5'
-              )}
-            >
-              <Icon size={16} className={cn(isActive ? 'text-rose-400' : 'text-white/30 group-hover:text-white/60')} />
-              <span className="flex-1 font-medium">{item.label}</span>
-              {isActive && <ChevronRight size={14} className="text-rose-400/60" />}
-            </Link>
-          )
-        })}
+      {/* Nav */}
+      <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
+        {navGroups.map((group) => (
+          <div key={group.label}>
+            <div style={{ fontSize: 10, color: '#B89CA0', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '14px 8px 5px' }}>
+              {group.label}
+            </div>
+            {group.items.map((item) => {
+              const Icon = item.icon
+              const active = isActive(item.href)
+              return (
+                <Link key={item.href} href={item.href} style={{
+                  display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px',
+                  borderRadius: 8, marginBottom: 1, fontSize: 13, textDecoration: 'none',
+                  color: active ? '#8B4A58' : '#7A5C63',
+                  background: active ? '#F5E6EA' : 'transparent',
+                  transition: 'all .15s',
+                }}>
+                  <Icon size={14} style={{ flexShrink: 0, color: active ? '#C8788A' : '#B89CA0' }} />
+                  {item.label}
+                </Link>
+              )
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* Logout */}
-      <div className="p-4 border-t border-white/5">
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all w-full group"
-        >
-          <LogOut size={16} />
-          <span>تسجيل الخروج</span>
+      <div style={{ padding: '12px 10px', borderTop: '1px solid #EDD8DC' }}>
+        <button onClick={handleLogout} style={{
+          display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px',
+          borderRadius: 8, width: '100%', fontSize: 13, color: '#B89CA0',
+          background: 'transparent', border: 'none', cursor: 'pointer',
+        }}>
+          <LogOut size={14} />
+          تسجيل الخروج
         </button>
       </div>
     </aside>
