@@ -1,11 +1,6 @@
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body {
-  background-color: #FDFAF8 !important;
-  color: #2C1F24 !important;
-  min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --pk: #C8788A;
@@ -27,3 +22,24 @@ html, body {
   --blue: #4A6E9C;
   --blue-bg: #E8F0FA;
 }
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #E8B4C0; border-radius: 3px; }
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+input[type="date"]::-webkit-calendar-picker-indicator { filter: opacity(0.4); }
+input[type="time"]::-webkit-calendar-picker-indicator { filter: opacity(0.4); }
