@@ -6,14 +6,10 @@ export const metadata: Metadata = {
   description: 'Academy Management System — Miami Branch',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl">
-      <body className="antialiased">
+      <body style={{ backgroundColor: '#FDFAF8', color: '#2C1F24', minHeight: '100vh' }}>
         {children}
       </body>
     </html>
