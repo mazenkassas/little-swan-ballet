@@ -1,125 +1,310 @@
 import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
 import Link from 'next/link'
+import { getTranslations, getLocale } from 'next-intl/server'
+import { formatCurrency } from '@/lib/utils'
+import { Users, AlertCircle, TrendingUp, BookOpen, Clock } from 'lucide-react'
+import TransferActions from './transfers/TransferActions'
+
+export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
+  const t = await getTranslations('dashboard')
+  const tc = await getTranslations('common')
+  const tp = await getTranslations('payments')
+  const locale = await getLocale()
   const supabase = await createClient()
   const today = format(new Date(), 'yyyy-MM-dd')
 
   const [
     { count: totalStudents },
     { count: activeStudents },
-    { data: todaySessions },
+    { count: activeClasses },
     { data: todayPayments },
     { data: todayExpenses },
     { data: paymentRequired },
-    { data: recentStudents },
+    { data: pendingTransfers },
+    { data: coachAttendance },
   ] = await Promise.all([
     supabase.from('students').select('*', { count: 'exact', head: true }),
     supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-    supabase.from('sessions').select('*, class:classes(name), hall:halls(name), coach:coaches(name_ar)').eq('date', today),
-    supabase.from('payments').select('amount_paid').eq('date', today),
+    supabase.from('classes').select('*', { count: 'exact', head: true }).eq('is_active', true),
+    supabase
+      .from('payments')
+      .select('amount_paid, type, payment_method, student:students(name_ar, name_en), staff:staff(name)')
+      .eq('date', today)
+      .order('created_at', { ascending: false }),
     supabase.from('expenses').select('amount').eq('date', today),
-    supabase.from('subscriptions').select('student_id, student:students(name_ar)').eq('status', 'active').eq('remaining_sessions', 0),
-    supabase.from('students').select('id,name_ar,name_en,level:levels(name)').eq('status', 'active').order('enrollment_date', { ascending: false }).limit(6),
+    supabase
+      .from('subscriptions')
+      .select('student:students(id, name_ar, name_en, level:levels(name))')
+      .eq('status', 'active')
+      .eq('remaining_sessions', 0),
+    supabase
+      .from('student_transfers')
+      .select('id, student:students(name_ar, name_en), from_class:classes!from_class_id(name), to_class:classes!to_class_id(name), request_date')
+      .eq('status', 'pending')
+      .order('request_date', { ascending: false })
+      .limit(5),
+    supabase
+      .from('coach_attendance')
+      .select('*, coach:coaches(name_ar)')
+      .gte('check_in_time', today + 'T00:00:00')
+      .lte('check_in_time', today + 'T23:59:59')
+      .order('check_in_time', { ascending: false }),
   ])
 
   const totalRevenue = todayPayments?.reduce((s, p) => s + (p.amount_paid || 0), 0) || 0
   const totalExp = todayExpenses?.reduce((s, e) => s + (e.amount || 0), 0) || 0
   const netRevenue = totalRevenue - totalExp
 
+  const payTypeColors: Record<string, string> = {
+    subscription: '#C8788A',
+    product: '#4A8C6A',
+    event: '#8B6EC8',
+    private: '#4a90d9',
+    exam: '#C8A66E',
+    enrollment: '#C8788A',
+  }
+
+  const card: React.CSSProperties = {
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border)',
+    borderRadius: 16,
+  }
+
+  const kpis = [
+    {
+      icon: <Users size={17} />,
+      label: t('totalStudents'),
+      value: String(activeStudents || 0),
+      sub: `${totalStudents || 0} ${t('totalLabel')}`,
+      accent: '#C8788A',
+      href: '/dashboard/students',
+      alert: false,
+    },
+    {
+      icon: <AlertCircle size={17} />,
+      label: t('paymentRequiredTitle'),
+      value: String(paymentRequired?.length || 0),
+      sub: t('sessionsZeroLabel'),
+      accent: '#e04040',
+      href: '/dashboard/students',
+      alert: (paymentRequired?.length || 0) > 0,
+    },
+    {
+      icon: <TrendingUp size={17} />,
+      label: t('netRevenueToday'),
+      value: formatCurrency(netRevenue),
+      sub: `${formatCurrency(totalRevenue)} − ${formatCurrency(totalExp)}`,
+      accent: netRevenue >= 0 ? '#4A8C6A' : '#e04040',
+      href: '/dashboard/payments',
+      alert: false,
+    },
+    {
+      icon: <BookOpen size={17} />,
+      label: t('activeClasses'),
+      value: String(activeClasses || 0),
+      sub: t('activeClasses'),
+      accent: '#8B6EC8',
+      href: '/dashboard/classes',
+      alert: false,
+    },
+  ]
+
   return (
-    <div style={{ padding: 28, background: '#FDFAF8', minHeight: '100vh' }} dir="rtl">
+    <div style={{ padding: 28, background: 'var(--bg-page)', minHeight: '100%' }}>
+
+      {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 500, color: '#2C1F24', margin: 0 }}>لوحة التحكم</h1>
-        <p style={{ fontSize: 12, color: '#B89CA0', marginTop: 4 }}>
-          {format(new Date(), 'dd/MM/yyyy')} — Miami Branch
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--txt1)', margin: 0, letterSpacing: -0.3 }}>{t('title')}</h1>
+        <p style={{ fontSize: 12, color: 'var(--txt2)', marginTop: 4 }}>
+          {format(new Date(), 'EEEE, dd/MM/yyyy')}
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
-        {[
-          { label: 'إجمالي الطالبات', value: String(totalStudents || 0), sub: `${activeStudents || 0} نشطة`, iconBg: '#F5E6EA', href: '/dashboard/students' },
-          { label: 'حصص اليوم', value: String(todaySessions?.length || 0), sub: 'Hall 1 & 2', iconBg: '#E8F0FA', href: '/dashboard/sessions' },
-          { label: 'إيرادات اليوم', value: `${totalRevenue.toLocaleString()} ج`, sub: `صافي ${netRevenue.toLocaleString()} ج`, iconBg: '#E8F5EE', href: '/dashboard/payments' },
-          { label: 'تحتاج تجديد', value: String(paymentRequired?.length || 0), sub: 'اشتراك منتهي', iconBg: '#FBF0E0', href: '/dashboard/students' },
-        ].map(s => (
-          <Link key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
-            <div style={{ background: '#FFFFFF', border: '1px solid #EDD8DC', borderRadius: 12, padding: 16, cursor: 'pointer' }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: s.iconBg, marginBottom: 12 }} />
-              <div style={{ fontSize: 22, fontWeight: 500, color: '#2C1F24' }}>{s.value}</div>
-              <div style={{ fontSize: 11, color: '#B89CA0', marginTop: 4 }}>{s.label}</div>
-              <div style={{ fontSize: 11, color: '#B89CA0', marginTop: 2 }}>{s.sub}</div>
+      {/* KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 20, alignItems: 'stretch' }}>
+        {kpis.map(kpi => (
+          <Link key={kpi.label} href={kpi.href} style={{ textDecoration: 'none', display: 'block', height: '100%' }}>
+            <div style={{ ...card, padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'opacity 0.15s', height: '100%', boxSizing: 'border-box' }}
+              className="hover:opacity-90">
+              {kpi.alert && (
+                <div style={{ position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, background: '#e04040' }} />
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--txt2)' }}>{kpi.label}</span>
+                <div style={{ width: 34, height: 34, borderRadius: 9, background: kpi.accent + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', color: kpi.accent, flexShrink: 0 }}>
+                  {kpi.icon}
+                </div>
+              </div>
+              <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--txt1)', margin: '0 0 4px', letterSpacing: -0.5 }}>{kpi.value}</p>
+              <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>{kpi.sub}</p>
             </div>
           </Link>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14 }}>
-        <div style={{ background: '#FFFFFF', border: '1px solid #EDD8DC', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid #EDD8DC' }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: '#2C1F24' }}>آخر الطالبات</span>
-            <Link href="/dashboard/students" style={{ fontSize: 11, color: '#C8788A', textDecoration: 'none' }}>عرض الكل</Link>
-          </div>
-          {recentStudents?.map((s: any) => (
-            <Link key={s.id} href={`/dashboard/students/${s.id}`} style={{ textDecoration: 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', borderBottom: '1px solid #EDD8DC' }}>
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#F5E6EA', color: '#8B4A58', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 500, flexShrink: 0 }}>
-                  {s.name_ar[0]}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 13, fontWeight: 500, color: '#2C1F24', margin: 0 }}>{s.name_ar}</p>
-                  <p style={{ fontSize: 11, color: '#B89CA0', margin: 0 }}>{s.level?.name || '—'}</p>
-                </div>
-                <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 20, background: '#E8F5EE', color: '#4A8C6A' }}>نشطة</span>
-              </div>
+      {/* Row 2: Payment Required + Pending Transfers */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+
+        {/* Payment Required */}
+        <div style={card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>
+              🚨 {t('paymentRequiredTitle')}
+            </p>
+            <Link href="/dashboard/students" style={{ textDecoration: 'none' }}>
+              <span style={{ fontSize: 11, color: '#C8788A', fontWeight: 500 }}>{t('allStudentsBtn')}</span>
             </Link>
-          ))}
-          {(!recentStudents || recentStudents.length === 0) && (
-            <p style={{ textAlign: 'center', padding: 24, color: '#B89CA0', fontSize: 12, margin: 0 }}>لا توجد طالبات</p>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ background: '#FFFFFF', border: '1px solid #EDD8DC', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid #EDD8DC' }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: '#2C1F24' }}>حصص اليوم</span>
-              <Link href="/dashboard/sessions" style={{ fontSize: 11, color: '#C8788A', textDecoration: 'none' }}>الجدول</Link>
-            </div>
-            <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {todaySessions?.map((s: any) => (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#F7F0F0', borderRadius: 8, padding: '9px 11px' }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#C8788A', flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 12, fontWeight: 500, color: '#2C1F24', margin: 0 }}>{s.class?.name}</p>
-                    <p style={{ fontSize: 10, color: '#B89CA0', margin: 0 }}>{s.hall?.name}</p>
+          </div>
+          <div style={{ padding: '8px 0' }}>
+            {paymentRequired && paymentRequired.length > 0 ? paymentRequired.slice(0, 6).map((sub: any) => (
+              <Link key={sub.student?.id} href={`/dashboard/students/${sub.student?.id}`} style={{ textDecoration: 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid var(--border)', transition: 'opacity 0.1s' }}
+                  className="hover:opacity-75">
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#C8788A20', color: '#C8788A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                    {(sub.student?.name_ar || '?')[0]}
                   </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>
+                      {locale === 'en' && sub.student?.name_en ? sub.student.name_en : sub.student?.name_ar}
+                    </p>
+                    <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>{sub.student?.level?.name}</p>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, background: 'rgba(224,64,64,0.12)', color: '#e04040', border: '1px solid rgba(224,64,64,0.2)', borderRadius: 20, padding: '2px 8px', flexShrink: 0 }}>
+                    0 {tc('session')}
+                  </span>
                 </div>
-              ))}
-              {(!todaySessions || todaySessions.length === 0) && (
-                <p style={{ textAlign: 'center', padding: 12, color: '#B89CA0', fontSize: 12, margin: 0 }}>لا حصص اليوم</p>
-              )}
-            </div>
-          </div>
-
-          <div style={{ background: '#FFFFFF', border: '1px solid #EDD8DC', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #EDD8DC' }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: '#2C1F24' }}>ملخص مالي</span>
-            </div>
-            <div style={{ padding: '0 18px' }}>
-              {[
-                { label: 'الإيرادات', value: `${totalRevenue.toLocaleString()} ج`, color: '#4A8C6A' },
-                { label: 'المصروفات', value: `${totalExp.toLocaleString()} ج`, color: '#C8788A' },
-                { label: 'الصافي', value: `${netRevenue.toLocaleString()} ج`, color: netRevenue >= 0 ? '#4A8C6A' : '#C8788A' },
-              ].map(row => (
-                <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #EDD8DC' }}>
-                  <span style={{ fontSize: 12, color: '#7A5C63' }}>{row.label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: row.color }}>{row.value}</span>
-                </div>
-              ))}
-            </div>
+              </Link>
+            )) : (
+              <p style={{ textAlign: 'center', padding: '20px 0', color: 'var(--txt2)', fontSize: 12, margin: 0 }}>{t('noPaymentRequired')}</p>
+            )}
           </div>
         </div>
+
+        {/* Pending Transfers */}
+        <div style={card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>
+              ↔ {t('pendingTransfersTitle')}
+            </p>
+            <Link href="/dashboard/transfers" style={{ textDecoration: 'none' }}>
+              <span style={{ fontSize: 11, color: '#C8788A', fontWeight: 500 }}>{t('allBtn')}</span>
+            </Link>
+          </div>
+          <div style={{ padding: '6px 0' }}>
+            {pendingTransfers && pendingTransfers.length > 0 ? pendingTransfers.map((tr: any) => (
+              <div key={tr.id} style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <p style={{ fontWeight: 600, fontSize: 13, color: 'var(--txt1)', margin: 0 }}>
+                    {locale === 'en' && tr.student?.name_en ? tr.student.name_en : tr.student?.name_ar}
+                  </p>
+                  <span style={{ fontSize: 10, fontWeight: 600, background: 'rgba(232,150,10,0.12)', color: '#e8960a', border: '1px solid rgba(232,150,10,0.2)', borderRadius: 20, padding: '2px 8px' }}>
+                    {tc('sessionStatus.scheduled')}
+                  </span>
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--txt2)', margin: '0 0 10px' }}>
+                  <span style={{ color: '#C8788A' }}>{tr.from_class?.name}</span>
+                  {' → '}
+                  <span style={{ color: '#4A8C6A' }}>{tr.to_class?.name}</span>
+                </p>
+                <TransferActions transferId={tr.id} />
+              </div>
+            )) : (
+              <p style={{ textAlign: 'center', padding: '20px 0', color: 'var(--txt2)', fontSize: 12, margin: 0 }}>{t('noPendingTransfers')}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Today's Transactions + Coach Check-in */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
+
+        {/* Today's Transactions */}
+        <div style={{ ...card, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>{t('todayTransactions')}</p>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {[tp('col.student'), tp('col.type'), tp('col.paid'), tp('col.paymentMethod')].map(h => (
+                  <th key={h} style={{ textAlign: 'right', padding: '10px 14px', fontSize: 10, fontWeight: 600, color: 'var(--txt2)', textTransform: 'uppercase', letterSpacing: '0.05em', background: 'var(--bg2)' }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {todayPayments && todayPayments.length > 0 ? todayPayments.map((p: any, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid var(--border)' }} className="hover:opacity-80 transition-opacity">
+                  <td style={{ padding: '11px 14px', fontSize: 12, fontWeight: 600, color: 'var(--txt1)' }}>
+                    {locale === 'en' && p.student?.name_en ? p.student.name_en : p.student?.name_ar}
+                  </td>
+                  <td style={{ padding: '11px 14px' }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, background: (payTypeColors[p.type] || '#C8788A') + '18', color: payTypeColors[p.type] || '#C8788A', border: `1px solid ${payTypeColors[p.type] || '#C8788A'}30`, borderRadius: 20, padding: '2px 8px' }}>
+                      {tc('paymentType.' + p.type) || p.type}
+                    </span>
+                  </td>
+                  <td style={{ padding: '11px 14px', fontSize: 13, fontWeight: 700, color: '#4A8C6A' }}>
+                    {formatCurrency(p.amount_paid)}
+                  </td>
+                  <td style={{ padding: '11px 14px', fontSize: 11, color: 'var(--txt2)' }}>
+                    {tc('paymentMethod.' + p.payment_method) || p.payment_method}
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={4} style={{ textAlign: 'center', padding: '24px 0', color: 'var(--txt2)', fontSize: 12 }}>
+                    {t('noTransactions')}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Coach Check-in Status */}
+        <div style={card}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>{t('coachCheckin')}</p>
+          </div>
+          <div>
+            {coachAttendance && coachAttendance.length > 0 ? coachAttendance.map((att: any) => (
+              <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 18px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(74,144,217,0.15)', color: '#4a90d9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                  {(att.coach?.name_ar || '?')[0]}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>{att.coach?.name_ar}</p>
+                  <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>
+                    {t('checkIn')}: {att.check_in_time ? new Date(att.check_in_time).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  {att.check_out_time ? (
+                    <>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>
+                        {t('checkOut')}: {new Date(att.check_out_time).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      {att.hours_worked && (
+                        <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0 }}>{att.hours_worked.toFixed(1)}h</p>
+                      )}
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 10, fontWeight: 600, background: 'rgba(74,200,139,0.15)', color: '#4A8C6A', border: '1px solid rgba(74,200,139,0.25)', borderRadius: 20, padding: '3px 9px' }}>
+                      {t('activeStatus')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )) : (
+              <p style={{ textAlign: 'center', padding: '24px 0', color: 'var(--txt2)', fontSize: 12, margin: 0 }}>{t('noCheckins')}</p>
+            )}
+          </div>
+        </div>
+
       </div>
     </div>
   )
