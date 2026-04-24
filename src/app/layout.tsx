@@ -1,16 +1,28 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { getLocale, getMessages } from 'next-intl/server'
+import { NextIntlClientProvider } from 'next-intl'
 
 export const metadata: Metadata = {
   title: 'Little Swan Ballet Academy',
   description: 'Academy Management System — Miami Branch',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale()
+  const messages = await getMessages()
+  const dir = locale === 'ar' ? 'rtl' : 'ltr'
+
   return (
-    <html lang="ar" dir="rtl">
-      <body style={{ backgroundColor: '#FDFAF8', color: '#2C1F24', minHeight: '100vh' }}>
-        {children}
+    <html lang={locale} dir={dir} translate="no" suppressHydrationWarning>
+      <head>
+        {/* Apply saved theme before paint to prevent flash */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('ls-theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}})()` }} />
+      </head>
+      <body style={{ backgroundColor: 'var(--bg-page)', color: 'var(--txt1)', minHeight: '100vh' }}>
+        <NextIntlClientProvider messages={messages}>
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   )
