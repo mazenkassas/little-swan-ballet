@@ -1,5 +1,32 @@
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Theme variables */
+:root {
+  --border: #EDD8DC;
+  --bg2: #F5E6EA;
+  --txt2: #7A5C63;
+  --txt1: #2C1F24;
+  --bg-card: #FFFFFF;
+  --bg-page: #FDFAF8;
+  --surface: #FFFFFF;
+  --bg-popup: #FFFFFF;
+}
+
+html.dark {
+  --border: rgba(255, 255, 255, 0.1);
+  --bg2: rgba(255, 255, 255, 0.06);
+  --txt2: rgba(255, 255, 255, 0.45);
+  --txt1: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.06);
+  --bg-page: #0f0f1a;
+  --surface: #13131e;
+  --bg-popup: #1e1e2e;
+}
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+html.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.7);
+  cursor: pointer;
+}

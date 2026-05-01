@@ -2,86 +2,228 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useLocale } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
-import { ArrowRight, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
+
+const LABELS = {
+  en: {
+    back: 'Back', title: 'New Product', sub: 'Add a product to inventory',
+    name: 'Product Name', namePlaceholder: 'e.g. Ballet Leotard',
+    type: 'Product Type',
+    readyStock: 'Ready Stock', madeToOrder: 'Made to Order',
+    size: 'Size', sizePlaceholder: 'XS / S / M / L / XL',
+    costPrice: 'Cost Price (EGP)', sellingPrice: 'Selling Price (EGP)',
+    stockQty: 'Initial Stock Qty',
+    save: 'Save Product', saving: 'Saving…', cancel: 'Cancel',
+    nameRequired: 'Product name is required',
+  },
+  ar: {
+    back: 'رجوع', title: 'منتج جديد', sub: 'إضافة منتج إلى المخزون',
+    name: 'اسم المنتج', namePlaceholder: 'مثال: مايوه باليه',
+    type: 'نوع المنتج',
+    readyStock: 'مخزون جاهز', madeToOrder: 'حسب الطلب',
+    size: 'المقاس', sizePlaceholder: 'XS / S / M / L / XL',
+    costPrice: 'سعر التكلفة (جنيه)', sellingPrice: 'سعر البيع (جنيه)',
+    stockQty: 'الكمية الأولية',
+    save: 'حفظ المنتج', saving: 'جارٍ الحفظ…', cancel: 'إلغاء',
+    nameRequired: 'اسم المنتج مطلوب',
+  },
+}
 
 export default function NewProductPage() {
-  const router = useRouter()
+  const router   = useRouter()
+  const locale   = useLocale()
+  const isRtl    = locale === 'ar'
+  const L        = LABELS[isRtl ? 'ar' : 'en']
   const supabase = createClient()
-  const [loading, setLoading] = useState(false)
+
+  const [loading,  setLoading]  = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [nameErr,  setNameErr]  = useState('')
   const [form, setForm] = useState({
     name: '', type: 'ready_stock', size: '',
     cost_price: '', selling_price: '', stock_qty: '0',
   })
 
+  function setField(key: keyof typeof form, value: string) {
+    setForm(f => ({ ...f, [key]: value }))
+    if (key === 'name' && submitted && value.trim()) setNameErr('')
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setSubmitted(true)
+    if (!form.name.trim()) { setNameErr(L.nameRequired); return }
+
     setLoading(true)
     await supabase.from('products').insert({
-      name: form.name, type: form.type, size: form.size || null,
-      cost_price: parseFloat(form.cost_price) || 0,
+      name:          form.name.trim(),
+      type:          form.type,
+      size:          form.size || null,
+      cost_price:    parseFloat(form.cost_price)    || 0,
       selling_price: parseFloat(form.selling_price) || 0,
-      stock_qty: parseInt(form.stock_qty) || 0,
+      stock_qty:     form.type === 'ready_stock' ? (parseInt(form.stock_qty) || 0) : 0,
     })
     router.push('/dashboard/inventory')
   }
 
-  const inputClass = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-rose-500/60 text-sm"
+  const lbl: React.CSSProperties = {
+    display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--txt2)', marginBottom: 6,
+  }
+  const field = (hasErr = false): React.CSSProperties => ({
+    width: '100%', padding: '9px 12px', borderRadius: 8,
+    border: `1px solid ${hasErr ? '#e04040' : 'var(--border)'}`,
+    background: 'var(--bg-page)', color: 'var(--txt1)',
+    fontSize: 13, outline: 'none', fontFamily: 'inherit',
+    direction: isRtl ? 'rtl' : 'ltr', boxSizing: 'border-box',
+  })
+  const req: React.CSSProperties    = { color: '#e04040', marginInlineStart: 3 }
+  const errTxt: React.CSSProperties = { margin: '4px 0 0', color: '#e04040', fontSize: 11 }
+
+  const TYPES = [
+    { value: 'ready_stock',   label: L.readyStock,   color: '#3dab7e' },
+    { value: 'made_to_order', label: L.madeToOrder,  color: '#8e5fd9' },
+  ]
 
   return (
-    <div className="p-8 max-w-xl" dir="rtl">
-      <div className="flex items-center gap-3 mb-8">
-        <Link href="/dashboard/inventory" className="text-white/30 hover:text-white/60"><ArrowRight size={20} /></Link>
-        <h1 className="text-2xl font-bold text-white">إضافة منتج جديد</h1>
+    <div style={{ background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+
+      {/* Top bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 14, padding: '12px 28px',
+        background: 'var(--bg-card)', borderBottom: '1px solid var(--border)',
+      }}>
+        <button onClick={() => router.back()} style={{
+          background: '#d4667a', border: 'none', borderRadius: 8,
+          padding: '7px 16px', color: '#fff', fontSize: 12, fontWeight: 700,
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}>
+          {L.back}
+        </button>
+        <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
+        <div>
+          <p style={{ margin: 0, color: 'var(--txt2)', fontSize: 11 }}>{L.sub}</p>
+          <p style={{ margin: 0, color: 'var(--txt1)', fontSize: 14, fontWeight: 700 }}>{L.title}</p>
+        </div>
       </div>
-      <form onSubmit={handleSubmit}>
-        <div className="bg-white/5 border border-white/8 rounded-2xl p-6 space-y-5">
-          <div>
-            <label className="block text-white/60 text-sm mb-2">اسم المنتج *</label>
-            <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="مايوه باليه" className={inputClass} />
-          </div>
-          <div>
-            <label className="block text-white/60 text-sm mb-2">النوع</label>
-            <div className="grid grid-cols-2 gap-3">
-              {[{ v: 'ready_stock', l: '📦 مخزون جاهز' }, { v: 'made_to_order', l: '✂️ حسب الطلب' }].map(t => (
-                <button key={t.v} type="button" onClick={() => setForm(f => ({ ...f, type: t.v }))}
-                  className={`py-3 rounded-xl text-sm font-medium border transition-all ${
-                    form.type === t.v ? 'bg-rose-500/20 border-rose-500/40 text-rose-400' : 'bg-white/3 border-white/10 text-white/40'
-                  }`}>{t.l}</button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-white/60 text-sm mb-2">المقاس</label>
-            <input value={form.size} onChange={e => setForm(f => ({ ...f, size: e.target.value }))} placeholder="XS / S / M / L / XL" className={inputClass} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+
+      {/* Form */}
+      <div style={{ padding: 28, maxWidth: 620 }}>
+        <form onSubmit={handleSubmit} noValidate>
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: 14, padding: 24, display: 'flex', flexDirection: 'column', gap: 18,
+          }}>
+
+            {/* Product Name */}
             <div>
-              <label className="block text-white/60 text-sm mb-2">سعر التكلفة (جنيه)</label>
-              <input type="number" value={form.cost_price} onChange={e => setForm(f => ({ ...f, cost_price: e.target.value }))} placeholder="0" className={inputClass} />
+              <label style={lbl}>{L.name}<span style={req}>*</span></label>
+              <input
+                value={form.name}
+                placeholder={L.namePlaceholder}
+                onChange={e => setField('name', e.target.value)}
+                style={field(!!nameErr)}
+              />
+              {nameErr && <p style={errTxt}>{nameErr}</p>}
             </div>
+
+            {/* Product Type */}
             <div>
-              <label className="block text-white/60 text-sm mb-2">سعر البيع (جنيه)</label>
-              <input type="number" value={form.selling_price} onChange={e => setForm(f => ({ ...f, selling_price: e.target.value }))} placeholder="0" className={inputClass} />
+              <label style={lbl}>{L.type}</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {TYPES.map(t => {
+                  const active = form.type === t.value
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setField('type', t.value)}
+                      style={{
+                        flex: 1, padding: '8px 16px', borderRadius: 8,
+                        fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        fontFamily: 'inherit', transition: 'all 0.15s',
+                        background: active ? t.color + '18' : 'transparent',
+                        border: `1px solid ${active ? t.color : 'var(--border)'}`,
+                        color: active ? t.color : 'var(--txt2)',
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
+
+            {/* Size */}
+            <div>
+              <label style={lbl}>{L.size}</label>
+              <input
+                value={form.size}
+                placeholder={L.sizePlaceholder}
+                onChange={e => setField('size', e.target.value)}
+                style={field()}
+              />
+            </div>
+
+            {/* Cost + Selling Price */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label style={lbl}>{L.costPrice}</label>
+                <input
+                  type="number" min="0"
+                  value={form.cost_price} placeholder="0"
+                  onChange={e => setField('cost_price', e.target.value)}
+                  style={{ ...field(), direction: 'ltr' }}
+                />
+              </div>
+              <div>
+                <label style={lbl}>{L.sellingPrice}</label>
+                <input
+                  type="number" min="0"
+                  value={form.selling_price} placeholder="0"
+                  onChange={e => setField('selling_price', e.target.value)}
+                  style={{ ...field(), direction: 'ltr' }}
+                />
+              </div>
+            </div>
+
+            {/* Initial Stock (ready_stock only) */}
+            {form.type === 'ready_stock' && (
+              <div>
+                <label style={lbl}>{L.stockQty}</label>
+                <input
+                  type="number" min="0"
+                  value={form.stock_qty}
+                  onChange={e => setField('stock_qty', e.target.value)}
+                  style={{ ...field(), direction: 'ltr' }}
+                />
+              </div>
+            )}
           </div>
-          {form.type === 'ready_stock' && (
-            <div>
-              <label className="block text-white/60 text-sm mb-2">الكمية الأولية</label>
-              <input type="number" value={form.stock_qty} onChange={e => setForm(f => ({ ...f, stock_qty: e.target.value }))} min="0" className={inputClass} />
-            </div>
-          )}
-        </div>
-        <div className="flex gap-3 mt-6">
-          <button type="submit" disabled={loading}
-            className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-semibold px-6 py-3 rounded-xl transition-all shadow-lg shadow-rose-500/25 disabled:opacity-50">
-            <Save size={16} />
-            {loading ? 'جارٍ...' : 'حفظ المنتج'}
-          </button>
-          <Link href="/dashboard/inventory" className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 px-6 py-3 rounded-xl transition-all">إلغاء</Link>
-        </div>
-      </form>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+            <button type="submit" disabled={loading} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              background: '#d4667a', border: 'none', borderRadius: 10,
+              padding: '10px 24px', color: '#fff', fontSize: 13, fontWeight: 700,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1, fontFamily: 'inherit',
+            }}>
+              <Save size={14} />
+              {loading ? L.saving : L.save}
+            </button>
+            <button type="button" onClick={() => router.back()} style={{
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: 10, padding: '10px 24px', color: 'var(--txt2)',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              {L.cancel}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

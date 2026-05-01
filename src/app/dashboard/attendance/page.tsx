@@ -1,24 +1,33 @@
 import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
 import AttendanceSheet from './AttendanceSheet'
+import { getLocale } from 'next-intl/server'
 
 export default async function AttendancePage({
   searchParams,
 }: {
   searchParams: Promise<{ session?: string; date?: string }>
 }) {
-  const params = await searchParams
+  const params   = await searchParams
+  const locale   = await getLocale()
+  const isRtl    = locale === 'ar'
   const supabase = await createClient()
-  const today = params.date || format(new Date(), 'yyyy-MM-dd')
+  const today    = params.date || format(new Date(), 'yyyy-MM-dd')
 
-  // Get sessions for selected date
-  const { data: sessions } = await supabase
+  const { data: rawSessions } = await supabase
     .from('sessions')
-    .select('*, class:classes(name, level:levels(name)), hall:halls(name), coach:coaches(name_ar)')
+    .select('*, class:classes(name, start_time, end_time, grade:grades(name), term:terms(name)), hall:halls(name), coach:coaches(name_ar, name_en)')
     .eq('date', today)
     .order('created_at')
 
-  // Get selected session details
+  // Deduplicate by class_id
+  const seen = new Set<string>()
+  const sessions = (rawSessions || []).filter((s: any) => {
+    if (seen.has(s.class_id)) return false
+    seen.add(s.class_id)
+    return true
+  })
+
   let selectedSession = null
   let enrolledStudents: any[] = []
   let existingAttendance: any[] = []
@@ -26,7 +35,7 @@ export default async function AttendancePage({
   if (params.session) {
     const { data: sess } = await supabase
       .from('sessions')
-      .select('*, class:classes(*, level:levels(*)), hall:halls(*), coach:coaches(*)')
+      .select('*, class:classes(*, grade:grades(*), term:terms(*)), hall:halls(*), coach:coaches(*)')
       .eq('id', params.session)
       .single()
     selectedSession = sess
@@ -34,7 +43,7 @@ export default async function AttendancePage({
     if (sess) {
       const { data: enrolled } = await supabase
         .from('class_students')
-        .select('*, student:students(*, level:levels(name), subscriptions:subscriptions(remaining_sessions, status, total_sessions))')
+        .select('*, student:students(*, level:levels(name), subscriptions:subscriptions(remaining_sessions, status, total_sessions, start_date))')
         .eq('class_id', sess.class_id)
 
       enrolledStudents = (enrolled || [])
@@ -50,69 +59,136 @@ export default async function AttendancePage({
     }
   }
 
+  function fmt12h(time: string) {
+    if (!time) return ''
+    const [h, m] = time.split(':').map(Number)
+    const h12 = h % 12 || 12
+    const suffix = isRtl
+      ? (h < 12 ? 'ص' : 'م')
+      : (h < 12 ? 'AM' : 'PM')
+    return m === 0 ? `${h12} ${suffix}` : `${h12}:${String(m).padStart(2, '0')} ${suffix}`
+  }
+
+  const L = isRtl ? {
+    title: 'الحضور والغياب',
+    sub: 'تسجيل حضور الطالبات',
+    todaySessions: 'حصص اليوم',
+    noSessions: 'لا توجد حصص اليوم',
+    selectSession: 'اختر حصة',
+    toRecord: 'اضغط على حصة من القائمة لعرض الطالبات',
+    noCoach: 'بدون مدربة',
+  } : {
+    title: 'Attendance',
+    sub: 'Record student attendance',
+    todaySessions: "Today's Sessions",
+    noSessions: 'No sessions today',
+    selectSession: 'Select a session',
+    toRecord: 'Click a session from the list to view students',
+    noCoach: 'No coach',
+  }
+
   return (
-    <div className="p-8" dir="rtl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">تسجيل الحضور</h1>
-        <p className="text-white/40 text-sm mt-1">سجّل حضور الطالبات لكل حصة</p>
+    <div style={{ padding: '28px 32px', background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--txt1)', margin: 0 }}>{L.title}</h1>
+        <p style={{ fontSize: 13, color: 'var(--txt2)', marginTop: 3 }}>{L.sub}</p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Sessions List */}
-        <div className="bg-white/5 border border-white/8 rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-white font-semibold text-sm">حصص اليوم</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20, alignItems: 'stretch' }}>
+
+        {/* Sessions sidebar */}
+        <div style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            padding: '14px 16px', borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--txt1)' }}>{L.todaySessions}</p>
             <form>
               <input
                 type="date"
                 name="date"
                 defaultValue={today}
-                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white/60 text-xs focus:outline-none focus:border-rose-500/60"
+                lang={isRtl ? 'ar' : 'en-GB'}
+                style={{
+                  background: 'var(--bg-page)', border: '1px solid var(--border)',
+                  borderRadius: 7, padding: '4px 8px', fontSize: 11,
+                  color: 'var(--txt2)', outline: 'none', cursor: 'pointer',
+                }}
               />
             </form>
           </div>
-          <div className="space-y-2">
-            {sessions && sessions.length > 0 ? sessions.map((s: any) => (
-              <a
-                key={s.id}
-                href={`?session=${s.id}&date=${today}`}
-                className={`block rounded-xl px-4 py-3 transition-all border ${
-                  params.session === s.id
-                    ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
-                    : 'bg-white/3 border-white/5 text-white/70 hover:bg-white/6'
-                }`}
-              >
-                <p className="text-sm font-medium">{s.class?.name}</p>
-                <p className="text-xs opacity-60 mt-0.5">{s.hall?.name} • {s.coach?.name_ar || 'بدون مدربة'}</p>
-                <span className={`text-xs mt-1.5 inline-block px-2 py-0.5 rounded-full border ${
-                  s.status === 'completed' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' :
-                  s.status === 'cancelled' ? 'text-red-400 border-red-500/30 bg-red-500/10' :
-                  'text-violet-400 border-violet-500/30 bg-violet-500/10'
-                }`}>
-                  {s.status === 'completed' ? 'منتهية' : s.status === 'cancelled' ? 'ملغية' : 'مجدولة'}
-                </span>
-              </a>
-            )) : (
-              <div className="text-center py-10 text-white/20">
-                <p className="text-sm">لا توجد حصص لهذا اليوم</p>
+
+          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+            {sessions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--txt2)', fontSize: 12, opacity: 0.6 }}>
+                {L.noSessions}
               </div>
-            )}
+            ) : sessions.map((s: any) => {
+              const isSelected = params.session === s.id
+              const gradeName  = s.class?.grade?.name  || ''
+              const termName   = s.class?.term?.name   || ''
+              const timeStr    = s.class?.start_time ? `${fmt12h(s.class.start_time)} – ${fmt12h(s.class.end_time)}` : ''
+              const coachName  = isRtl ? s.coach?.name_ar : s.coach?.name_en
+              return (
+                <a
+                  key={s.id}
+                  href={`?session=${s.id}&date=${today}`}
+                  style={{
+                    display: 'block', padding: '10px 12px', borderRadius: 10,
+                    border: `1px solid ${isSelected ? '#d4667a60' : 'var(--border)'}`,
+                    background: isSelected ? '#d4667a10' : 'var(--bg-page)',
+                    textDecoration: 'none', transition: 'background 0.15s',
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: isSelected ? '#d4667a' : 'var(--txt1)' }}>
+                    {[gradeName, termName].filter(Boolean).join(' · ')}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--txt2)', direction: 'ltr', textAlign: isRtl ? 'right' : 'left' }}>
+                    {[timeStr, s.hall?.name].filter(Boolean).join(' · ')}
+                  </p>
+                  {coachName && (
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--txt2)', opacity: 0.7 }}>{coachName}</p>
+                  )}
+                  <span style={{
+                    display: 'inline-block', marginTop: 6, fontSize: 10, fontWeight: 600,
+                    padding: '2px 8px', borderRadius: 20,
+                    background: s.status === 'completed' ? '#3dab7e18' : s.status === 'cancelled' ? '#e0404018' : '#7c3aed18',
+                    color:      s.status === 'completed' ? '#3dab7e'   : s.status === 'cancelled' ? '#e04040'   : '#7c3aed',
+                    border: `1px solid ${s.status === 'completed' ? '#3dab7e30' : s.status === 'cancelled' ? '#e0404030' : '#7c3aed30'}`,
+                  }}>
+                    {s.status === 'completed' ? (isRtl ? 'مكتملة' : 'Completed') :
+                     s.status === 'cancelled' ? (isRtl ? 'ملغاة'   : 'Cancelled') :
+                                                (isRtl ? 'مجدولة'  : 'Scheduled')}
+                  </span>
+                </a>
+              )
+            })}
           </div>
         </div>
 
-        {/* Attendance Sheet */}
-        <div className="xl:col-span-2">
+        {/* Attendance sheet */}
+        <div>
           {selectedSession ? (
             <AttendanceSheet
               session={selectedSession}
               students={enrolledStudents}
               existingAttendance={existingAttendance}
+              isRtl={isRtl}
             />
           ) : (
-            <div className="bg-white/5 border border-white/8 rounded-2xl p-6 h-full flex items-center justify-center">
-              <div className="text-center text-white/20">
-                <p className="text-lg font-medium">اختر حصة من القائمة</p>
-                <p className="text-sm mt-1">لتسجيل الحضور</p>
+            <div style={{
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: 16, padding: 48,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <div style={{ textAlign: 'center', color: 'var(--txt2)' }}>
+                <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{L.selectSession}</p>
+                <p style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>{L.toRecord}</p>
               </div>
             </div>
           )}

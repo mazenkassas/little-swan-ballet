@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   description: 'Academy Management System — Miami Branch',
 }
 
+const THEME_SCRIPT = `(function(){try{if(localStorage.getItem('ls-theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}})();`
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale()
   const messages = await getMessages()
@@ -16,8 +18,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={locale} dir={dir} translate="no" suppressHydrationWarning>
       <head>
-        {/* Apply saved theme before paint to prevent flash */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('ls-theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}})()` }} />
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body style={{ backgroundColor: 'var(--bg-page)', color: 'var(--txt1)', minHeight: '100vh' }}>
         <NextIntlClientProvider messages={messages}>

@@ -2,16 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { Sun, Moon } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 export default function ThemeToggle() {
   const [dark, setDark] = useState(false)
+  const t = useTranslations('theme')
 
   useEffect(() => {
-    const saved = localStorage.getItem('ls-theme')
-    if (saved === 'dark') {
-      setDark(true)
-      document.documentElement.classList.add('dark')
-    }
+    setDark(document.documentElement.classList.contains('dark'))
   }, [])
 
   function toggle() {
@@ -29,11 +27,11 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      title={dark ? 'وضع النهار' : 'وضع الليل'}
+      title={dark ? t('light') : t('dark')}
       style={{
         width: 34, height: 34,
         borderRadius: 8,
-        border: '0.5px solid var(--border)',
+        border: '1px solid var(--border)',
         background: 'var(--bg2)',
         color: 'var(--txt2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',

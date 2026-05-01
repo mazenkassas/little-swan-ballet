@@ -19,11 +19,7 @@ export function formatDate(date: string, fmt = 'dd MMM yyyy'): string {
 }
 
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'EGP',
-    minimumFractionDigits: 0,
-  }).format(amount)
+  return `${new Intl.NumberFormat('en-US', { minimumFractionDigits: 0 }).format(amount)} EGP`
 }
 
 export function haversineDistance(

@@ -2,13 +2,17 @@ import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { format, subDays, startOfMonth } from 'date-fns'
 import RevenueChart from './RevenueChart'
+import { getTranslations, getLocale } from 'next-intl/server'
 
 export default async function ReportsPage() {
+  const t      = await getTranslations('reports')
+  const tc     = await getTranslations('common')
+  const locale = await getLocale()
+  const isRtl  = locale === 'ar'
   const supabase = await createClient()
   const today = format(new Date(), 'yyyy-MM-dd')
   const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
 
-  // Last 30 days revenue
   const { data: last30Payments } = await supabase
     .from('payments')
     .select('date, amount_paid, type')
@@ -22,7 +26,6 @@ export default async function ReportsPage() {
     .gte('date', format(subDays(new Date(), 29), 'yyyy-MM-dd'))
     .lte('date', today)
 
-  // Build daily chart data
   const revenueByDay: Record<string, number> = {}
   const expenseByDay: Record<string, number> = {}
 
@@ -42,7 +45,6 @@ export default async function ReportsPage() {
     net: revenueByDay[date] - (expenseByDay[date] || 0),
   }))
 
-  // Payment by type this month
   const { data: monthPayments } = await supabase
     .from('payments')
     .select('type, amount_paid')
@@ -53,57 +55,70 @@ export default async function ReportsPage() {
   monthPayments?.forEach(p => { byType[p.type] = (byType[p.type] || 0) + p.amount_paid })
 
   const typeLabels: Record<string, string> = {
-    subscription: 'اشتراك', product: 'منتجات', event: 'فعاليات',
-    private: 'برايفيت', exam: 'امتحانات', enrollment: 'تسجيل',
+    subscription: tc('paymentType.subscription'), product: tc('paymentType.product'),
+    event: tc('paymentType.event'), private: tc('paymentType.private'),
+    exam: tc('paymentType.exam'), enrollment: tc('paymentType.enrollment'),
   }
 
-  // Stats
   const totalMonthRevenue = monthPayments?.reduce((s, p) => s + p.amount_paid, 0) || 0
   const { data: activeStudents } = await supabase.from('students').select('id', { count: 'exact', head: true }).eq('status', 'active')
   const { data: coachHours } = await supabase.from('coach_attendance').select('hours_worked').gte('created_at', monthStart).not('hours_worked', 'is', null)
   const totalCoachHours = coachHours?.reduce((s, h) => s + (h.hours_worked || 0), 0) || 0
 
+  const kpis = [
+    { label: t('monthRevenue'), value: formatCurrency(totalMonthRevenue), accent: '#4A8C6A', bg: 'rgba(110,200,139,0.1)', border: 'rgba(110,200,139,0.25)' },
+    { label: t('activeStudents'), value: (activeStudents as any)?.toString() || '0', accent: '#C8788A', bg: 'rgba(200,120,138,0.1)', border: 'rgba(200,120,138,0.25)' },
+    { label: t('coachHours'), value: `${totalCoachHours.toFixed(1)} ${t('hours')}`, accent: '#8B6EC8', bg: 'rgba(139,110,200,0.1)', border: 'rgba(139,110,200,0.25)' },
+    { label: t('avgDailyRevenue'), value: formatCurrency(totalMonthRevenue / 30), accent: '#C8A66E', bg: 'rgba(200,166,110,0.1)', border: 'rgba(200,166,110,0.25)' },
+  ]
+
+  const card: React.CSSProperties = {
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border)',
+    borderRadius: 16,
+    padding: 24,
+  }
+
   return (
-    <div className="p-8" dir="rtl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">التقارير</h1>
-        <p className="text-white/40 text-sm mt-1">تحليل مالي وإداري شامل</p>
+    <div style={{ padding: 32, background: 'var(--bg-page)', minHeight: '100%' }}>
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>{t('title')}</h1>
+        <p style={{ fontSize: 13, color: 'var(--txt2)', marginTop: 4 }}>{t('subtitle')}</p>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'إيرادات الشهر', value: formatCurrency(totalMonthRevenue), color: 'emerald' },
-          { label: 'الطالبات النشطات', value: (activeStudents as any)?.toString() || '0', color: 'rose' },
-          { label: 'ساعات المدربات', value: `${totalCoachHours.toFixed(1)} ساعة`, color: 'violet' },
-          { label: 'متوسط الإيراد اليومي', value: formatCurrency(totalMonthRevenue / 30), color: 'amber' },
-        ].map(kpi => (
-          <div key={kpi.label} className={`bg-${kpi.color}-500/10 border border-${kpi.color}-500/20 rounded-2xl p-5`}>
-            <p className="text-white/50 text-sm mb-2">{kpi.label}</p>
-            <p className={`text-2xl font-bold text-${kpi.color}-400`}>{kpi.value}</p>
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4" style={{ marginBottom: 24 }}>
+        {kpis.map(kpi => (
+          <div key={kpi.label} style={{ background: kpi.bg, border: `1px solid ${kpi.border}`, borderRadius: 16, padding: 20 }}>
+            <p style={{ fontSize: 13, color: 'var(--txt2)', marginBottom: 8 }}>{kpi.label}</p>
+            <p style={{ fontSize: 22, fontWeight: 700, color: kpi.accent, margin: 0 }}>{kpi.value}</p>
           </div>
         ))}
       </div>
 
       {/* Revenue Chart */}
-      <div className="bg-white/5 border border-white/8 rounded-2xl p-6 mb-6">
-        <h2 className="text-white font-semibold mb-6">الإيرادات والمصروفات — آخر 30 يوم</h2>
-        <RevenueChart data={chartData} />
+      <div style={{ ...card, marginBottom: 16 }}>
+        <h2 style={{ fontWeight: 600, color: 'var(--txt1)', marginBottom: 24 }}>{t('chartTitle')}</h2>
+        <RevenueChart data={chartData} labels={
+          isRtl
+            ? { revenue: 'إيرادات', expenses: 'مصروفات', net: 'الصافي' }
+            : { revenue: 'Revenue', expenses: 'Expenses', net: 'Net' }
+        } />
       </div>
 
       {/* By Type */}
-      <div className="bg-white/5 border border-white/8 rounded-2xl p-6">
-        <h2 className="text-white font-semibold mb-5">الإيرادات حسب النوع — هذا الشهر</h2>
+      <div style={card}>
+        <h2 style={{ fontWeight: 600, color: 'var(--txt1)', marginBottom: 20 }}>{t('byTypeTitle')}</h2>
         <div className="space-y-3">
           {Object.entries(byType).sort(([, a], [, b]) => b - a).map(([type, amount]) => {
             const pct = Math.round((amount / totalMonthRevenue) * 100)
             return (
               <div key={type}>
-                <div className="flex justify-between text-sm mb-1.5">
-                  <span className="text-white/70">{typeLabels[type] || type}</span>
-                  <span className="text-white font-medium">{formatCurrency(amount)} ({pct}%)</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                  <span style={{ color: 'var(--txt2)' }}>{typeLabels[type] || type}</span>
+                  <span style={{ fontWeight: 500, color: 'var(--txt1)' }}>{formatCurrency(amount)} ({pct}%)</span>
                 </div>
-                <div className="bg-white/10 rounded-full h-2">
+                <div style={{ background: 'var(--bg2)', borderRadius: 99, height: 8 }}>
                   <div
                     className="h-2 rounded-full bg-gradient-to-r from-rose-500 to-pink-600"
                     style={{ width: `${pct}%` }}
@@ -113,7 +128,7 @@ export default async function ReportsPage() {
             )
           })}
           {Object.keys(byType).length === 0 && (
-            <p className="text-white/20 text-sm text-center py-4">لا توجد بيانات لهذا الشهر</p>
+            <p style={{ fontSize: 13, color: 'var(--txt2)', textAlign: 'center', padding: '16px 0', opacity: 0.6 }}>{tc('noDataThisMonth')}</p>
           )}
         </div>
       </div>

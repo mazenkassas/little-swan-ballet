@@ -3,7 +3,7 @@ import { format } from 'date-fns'
 import Link from 'next/link'
 import { getTranslations, getLocale } from 'next-intl/server'
 import { formatCurrency } from '@/lib/utils'
-import { Users, AlertCircle, TrendingUp, BookOpen, Clock } from 'lucide-react'
+import { Users, AlertCircle, TrendingUp, BookOpen } from 'lucide-react'
 import TransferActions from './transfers/TransferActions'
 
 export const dynamic = 'force-dynamic'
@@ -124,10 +124,10 @@ export default async function DashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 20, alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 16, alignItems: 'stretch' }}>
         {kpis.map(kpi => (
-          <Link key={kpi.label} href={kpi.href} style={{ textDecoration: 'none', display: 'block', height: '100%' }}>
-            <div style={{ ...card, padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'opacity 0.15s', height: '100%', boxSizing: 'border-box' }}
+          <Link key={kpi.label} href={kpi.href} style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ ...card, padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'opacity 0.15s', flex: 1, boxSizing: 'border-box' }}
               className="hover:opacity-90">
               {kpi.alert && (
                 <div style={{ position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, background: '#e04040' }} />
@@ -219,7 +219,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Row 3: Today's Transactions + Coach Check-in */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
         {/* Today's Transactions */}
         <div style={{ ...card, overflow: 'hidden' }}>

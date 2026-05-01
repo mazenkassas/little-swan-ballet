@@ -1,161 +1,334 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, Search, Filter } from 'lucide-react'
-import { calculateAge, getStudentStatusColor } from '@/lib/utils'
+import { Plus, ChevronLeft, ChevronRight } from 'lucide-react'
+import { calculateAge } from '@/lib/utils'
+import { getLocale } from 'next-intl/server'
+import { Suspense } from 'react'
+import StudentStatusBadge from './StudentStatusBadge'
+import StudentSearch from './StudentSearch'
+import StudentTransferButton from './StudentTransferButton'
+
+const PAGE_SIZE = 15
 
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string; level?: string }>
+  searchParams: Promise<{ search?: string; status?: string; page?: string }>
 }) {
+  const locale = await getLocale()
   const params = await searchParams
   const supabase = await createClient()
+  const isRtl = locale === 'ar'
 
-  let query = supabase
-    .from('students')
-    .select('*, level:levels(id, name, order_num)')
-    .order('enrollment_date', { ascending: false })
+  const statusFilter = params.status || ''
+  const page = Math.max(1, parseInt(params.page || '1', 10))
+  const from = (page - 1) * PAGE_SIZE
+  const to   = from + PAGE_SIZE - 1
 
-  if (params.status) query = query.eq('status', params.status)
-  if (params.level) query = query.eq('level_id', params.level)
-  if (params.search) {
-    query = query.or(`name_ar.ilike.%${params.search}%,name_en.ilike.%${params.search}%,parent_phone.ilike.%${params.search}%`)
+  const SELECT = '*, level:levels(id, name, order_num), subscriptions:subscriptions(remaining_sessions, total_sessions, status), class_enrollments:class_students(enrolled_date, class:classes(level:levels(name)))'
+
+  let students: any[] = []
+  let totalCount = 0
+
+  if (statusFilter === 'payrequired') {
+    // fetch all active then filter client-side
+    let q = supabase.from('students').select(SELECT).eq('status', 'active').order('name_ar')
+    if (params.search) q = q.or(`name_ar.ilike.%${params.search}%,name_en.ilike.%${params.search}%,parent_phone.ilike.%${params.search}%`)
+    const { data: all } = await q
+    const filtered = (all || []).filter((s: any) => {
+      const sub = s.subscriptions?.find((x: any) => x.status === 'active')
+      return !sub || sub.remaining_sessions === 0
+    })
+    totalCount = filtered.length
+    students   = filtered.slice(from, from + PAGE_SIZE)
+  } else {
+    let q = supabase.from('students').select(SELECT, { count: 'exact' }).order('name_ar')
+    if (statusFilter) q = q.eq('status', statusFilter)
+    if (params.search) q = q.or(`name_ar.ilike.%${params.search}%,name_en.ilike.%${params.search}%,parent_phone.ilike.%${params.search}%`)
+    q = q.range(from, to)
+    const { data, count } = await q
+    students   = data || []
+    totalCount = count ?? 0
   }
 
-  const { data: students } = await query
-  const { data: levels } = await supabase.from('levels').select('*').order('order_num')
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
-  const statusOptions = [
-    { value: '', label: 'الكل' },
-    { value: 'active', label: 'نشطة' },
-    { value: 'frozen', label: 'مجمدة' },
-    { value: 'inactive', label: 'غير نشطة' },
-  ]
+  function tabHref(key: string) {
+    const sp = new URLSearchParams()
+    if (key) sp.set('status', key)
+    if (params.search) sp.set('search', params.search)
+    const q = sp.toString()
+    return `/dashboard/students${q ? '?' + q : ''}`
+  }
+
+  function pageHref(p: number) {
+    const sp = new URLSearchParams()
+    if (statusFilter) sp.set('status', statusFilter)
+    if (params.search) sp.set('search', params.search)
+    if (p > 1) sp.set('page', String(p))
+    const q = sp.toString()
+    return `/dashboard/students${q ? '?' + q : ''}`
+  }
+
+  const TABS = isRtl
+    ? [{ k: '', l: 'الكل' }, { k: 'active', l: 'نشط' }, { k: 'inactive', l: 'غير نشط' }, { k: 'frozen', l: 'تجميد' }, { k: 'payrequired', l: 'مطلوب الدفع' }]
+    : [{ k: '', l: 'All' }, { k: 'active', l: 'Active' }, { k: 'inactive', l: 'Inactive' }, { k: 'frozen', l: 'Freeze' }, { k: 'payrequired', l: 'Payment Required' }]
+
+  const th: React.CSSProperties = {
+    textAlign: isRtl ? 'right' : 'left', color: 'var(--txt2)', fontSize: 11,
+    fontWeight: 600, padding: '11px 14px', borderBottom: '1px solid var(--border)',
+    background: 'var(--bg-page)', whiteSpace: 'nowrap', verticalAlign: 'middle',
+  }
+  const td: React.CSSProperties = {
+    padding: '11px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle',
+    textAlign: isRtl ? 'right' : 'left', overflow: 'hidden',
+  }
+
+  const btnBase: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+    textDecoration: 'none', whiteSpace: 'nowrap',
+  }
 
   return (
-    <div className="p-8" dir="rtl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+    <div style={{ padding: '24px 28px', background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <h1 className="text-2xl font-bold text-white">الطالبات</h1>
-          <p className="text-white/40 text-sm mt-1">{students?.length || 0} طالبة</p>
+          <p style={{ color: 'var(--txt2)', fontSize: 11, margin: '0 0 2px' }}>
+            {isRtl ? 'جميع الطالبات المسجلات' : 'All enrolled students'}
+          </p>
+          <h1 style={{ color: 'var(--txt1)', fontSize: 18, fontWeight: 700, margin: 0 }}>
+            {isRtl ? 'الطالبات' : 'Students'}
+          </h1>
         </div>
-        <Link
-          href="/dashboard/students/new"
-          className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-rose-500/25 text-sm"
-        >
-          <Plus size={18} />
-          إضافة طالبة
+        <Link href="/dashboard/students/new" style={{
+          background: '#d4667a', borderRadius: 8, padding: '7px 14px',
+          color: '#fff', fontSize: 12, fontWeight: 600, textDecoration: 'none',
+          display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+        }}>
+          <Plus size={14} />
+          {isRtl ? 'طالبة جديدة' : 'New Student'}
         </Link>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white/5 border border-white/8 rounded-2xl p-4 mb-6">
-        <form className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-48">
-            <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30" />
-            <input
-              name="search"
-              defaultValue={params.search}
-              placeholder="بحث بالاسم أو رقم الهاتف..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl pr-9 pl-4 py-2.5 text-white placeholder-white/20 focus:outline-none focus:border-rose-500/60 text-sm"
-            />
-          </div>
-          <select
-            name="status"
-            defaultValue={params.status || ''}
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white/70 focus:outline-none text-sm min-w-32"
-          >
-            {statusOptions.map(o => (
-              <option key={o.value} value={o.value} className="bg-[#1a1a2e]">{o.label}</option>
-            ))}
-          </select>
-          <select
-            name="level"
-            defaultValue={params.level || ''}
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white/70 focus:outline-none text-sm min-w-40"
-          >
-            <option value="" className="bg-[#1a1a2e]">كل المستويات</option>
-            {levels?.map(l => (
-              <option key={l.id} value={l.id} className="bg-[#1a1a2e]">{l.name}</option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="flex items-center gap-2 bg-white/8 hover:bg-white/12 border border-white/10 text-white/70 px-4 py-2.5 rounded-xl text-sm transition-colors"
-          >
-            <Filter size={15} />
-            فلترة
-          </button>
-        </form>
+      {/* ── Filter tabs + search ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        {TABS.map(f => (
+          <Link key={f.k} href={tabHref(f.k)} style={{
+            background: statusFilter === f.k ? '#d4667a' : 'transparent',
+            border: `1px solid ${statusFilter === f.k ? '#d4667a' : 'var(--border)'}`,
+            borderRadius: 8, padding: '5px 12px', textDecoration: 'none',
+            color: statusFilter === f.k ? '#fff' : 'var(--txt2)',
+            fontSize: 12, fontWeight: statusFilter === f.k ? 600 : 400, whiteSpace: 'nowrap',
+          }}>
+            {f.l}
+          </Link>
+        ))}
+        <div style={{ marginInlineStart: 'auto' }}>
+          <Suspense>
+            <StudentSearch isRtl={isRtl} />
+          </Suspense>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
-        <table className="w-full">
+      {/* ── Table ── */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.07)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '25%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '22%' }} />
+          </colgroup>
           <thead>
-            <tr className="border-b border-white/8">
-              <th className="text-right px-6 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">الطالبة</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">العمر</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">المستوى</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">الحالة</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">الهاتف</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">تاريخ التسجيل</th>
-              <th className="px-4 py-4"></th>
+            <tr>
+              <th style={th}>{isRtl ? 'ID'         : 'ID'}</th>
+              <th style={th}>{isRtl ? 'الطالبة'    : 'Student'}</th>
+              <th style={th}>{isRtl ? 'المستوى'    : 'Level'}</th>
+              <th style={th}>{isRtl ? 'السن'        : 'Age'}</th>
+              <th style={th}>{isRtl ? 'عدد المرات' : 'Sessions'}</th>
+              <th style={th}>{isRtl ? 'الحالة'     : 'Status'}</th>
+              <th style={th}>{isRtl ? 'الإجراءات' : 'Actions'}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
-            {students?.map((student: any) => (
-              <tr key={student.id} className="hover:bg-white/3 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                      {student.name_ar[0]}
+          <tbody>
+            {students.map((student: any, idx: number) => {
+              const activeSub    = student.subscriptions?.find((s: any) => s.status === 'active')
+              const remaining    = activeSub?.remaining_sessions ?? null
+              const total        = activeSub?.total_sessions ?? 4
+              const displayName  = locale === 'en' && student.name_en ? student.name_en : student.name_ar
+              const altName      = locale === 'en' ? student.name_ar : student.name_en
+              const initials     = (displayName || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+              const sortedEnrollments = ((student.class_enrollments || []) as any[])
+                .slice().sort((a: any, b: any) => new Date(b.enrolled_date || '').getTime() - new Date(a.enrolled_date || '').getTime())
+              const classLevel   = sortedEnrollments[0]?.class?.level?.name
+              const displayLevel = classLevel || student.level?.name || '—'
+              const studentNum   = from + idx + 1
+
+              return (
+                <tr key={student.id} style={{ borderBottom: '1px solid var(--border)' }}>
+
+                  {/* ID */}
+                  <td style={{ ...td, color: 'var(--txt2)', fontSize: 11, fontWeight: 600 }}>
+                    {studentNum}
+                  </td>
+
+                  {/* Student */}
+                  <td style={td}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 14,
+                        background: '#d4667a18', border: '1px solid #d4667a28',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 10, fontWeight: 700, color: '#d4667a', flexShrink: 0,
+                      }}>
+                        {initials}
+                      </div>
+                      <div>
+                        <p style={{ margin: 0, color: 'var(--txt1)', fontSize: 12, fontWeight: 600 }}>{displayName}</p>
+                        <p style={{ margin: 0, color: 'var(--txt2)', fontSize: 10 }}>{altName}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-white text-sm font-medium">{student.name_ar}</p>
-                      <p className="text-white/30 text-xs">{student.name_en}</p>
+                  </td>
+
+                  {/* Level */}
+                  <td style={{ ...td, color: 'var(--txt2)', fontSize: 12 }}>
+                    {displayLevel}
+                  </td>
+
+                  {/* Age */}
+                  <td style={{ ...td, color: 'var(--txt2)', fontSize: 12 }}>
+                    {calculateAge(student.date_of_birth)}
+                  </td>
+
+                  {/* Sessions dot bar */}
+                  <td style={td}>
+                    {student.status === 'active' && activeSub ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ display: 'flex', gap: 2 }}>
+                          {[1, 2, 3, 4].map(i => (
+                            <div key={i} style={{
+                              width: 11, height: 7, borderRadius: 2,
+                              background: i <= (remaining ?? 0) ? '#d4667a' : 'var(--border)',
+                            }} />
+                          ))}
+                        </div>
+                        <span style={{ color: remaining === 0 ? '#e04040' : 'var(--txt1)', fontSize: 11, fontWeight: 600 }}>
+                          {remaining}/{total}
+                        </span>
+                      </div>
+                    ) : (
+                      <span style={{ color: 'var(--txt2)', fontSize: 12 }}>—</span>
+                    )}
+                  </td>
+
+                  {/* Status */}
+                  <td style={td}>
+                    <StudentStatusBadge id={student.id} status={student.status} isRtl={isRtl} />
+                  </td>
+
+                  {/* Actions */}
+                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Link href={`/dashboard/students/${student.id}`} style={{
+                        background: 'transparent', border: '1px solid var(--border)',
+                        borderRadius: 8, padding: '4px 10px', color: 'var(--txt2)',
+                        fontSize: 10, fontWeight: 600, textDecoration: 'none',
+                      }}>
+                        {isRtl ? 'عرض' : 'View'}
+                      </Link>
+                      <Link href={`/dashboard/students/${student.id}/edit`} style={{
+                        background: '#d4667a12', border: '1px solid #d4667a28',
+                        borderRadius: 8, padding: '4px 10px', color: '#d4667a',
+                        fontSize: 10, fontWeight: 600, textDecoration: 'none',
+                      }}>
+                        {isRtl ? 'تعديل' : 'Edit'}
+                      </Link>
+                      <StudentTransferButton
+                        studentId={student.id}
+                        studentName={displayName}
+                        isRtl={isRtl}
+                      />
                     </div>
-                  </div>
-                </td>
-                <td className="px-4 py-4">
-                  <span className="text-white/60 text-sm">{calculateAge(student.date_of_birth)} سنة</span>
-                </td>
-                <td className="px-4 py-4">
-                  <span className="text-white/60 text-sm">{student.level?.name || '—'}</span>
-                </td>
-                <td className="px-4 py-4">
-                  <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${getStudentStatusColor(student.status)}`}>
-                    {student.status === 'active' ? 'نشطة' : student.status === 'frozen' ? 'مجمدة' : 'غير نشطة'}
-                  </span>
-                </td>
-                <td className="px-4 py-4">
-                  <span className="text-white/50 text-sm">{student.parent_phone}</span>
-                </td>
-                <td className="px-4 py-4">
-                  <span className="text-white/40 text-sm">
-                    {new Date(student.enrollment_date).toLocaleDateString('ar-EG')}
-                  </span>
-                </td>
-                <td className="px-4 py-4">
-                  <Link
-                    href={`/dashboard/students/${student.id}`}
-                    className="text-rose-400 hover:text-rose-300 text-xs font-medium transition-colors"
-                  >
-                    عرض
-                  </Link>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
-        {(!students || students.length === 0) && (
-          <div className="text-center py-16 text-white/20">
-            <p className="text-lg font-medium">لا توجد طالبات</p>
-            <p className="text-sm mt-1">ابدأ بإضافة أول طالبة</p>
+
+        {students.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--txt2)' }}>
+            <p style={{ fontSize: 14, fontWeight: 500 }}>{isRtl ? 'لا توجد نتائج' : 'No students found'}</p>
+            <p style={{ fontSize: 12, marginTop: 4, opacity: 0.7 }}>{isRtl ? 'جربي البحث أو تغيير الفلتر' : 'Try adjusting your search or filter'}</p>
           </div>
         )}
       </div>
+
+      {/* ── Pagination ── */}
+      {totalCount > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginTop: 16, flexWrap: 'wrap', gap: 8,
+        }}>
+          <span style={{ color: 'var(--txt2)', fontSize: 12 }}>
+            {isRtl
+              ? `عرض ${from + 1}–${Math.min(from + PAGE_SIZE, totalCount)} من ${totalCount}`
+              : `Showing ${from + 1}–${Math.min(from + PAGE_SIZE, totalCount)} of ${totalCount}`}
+          </span>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {page > 1 ? (
+              <Link href={pageHref(page - 1)} style={{
+                ...btnBase,
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                color: 'var(--txt1)',
+              }}>
+                {isRtl ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                {isRtl ? 'السابق' : 'Previous'}
+              </Link>
+            ) : (
+              <span style={{
+                ...btnBase,
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                color: 'var(--txt2)', opacity: 0.4, cursor: 'default',
+              }}>
+                {isRtl ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                {isRtl ? 'السابق' : 'Previous'}
+              </span>
+            )}
+
+            <span style={{ color: 'var(--txt2)', fontSize: 12, minWidth: 60, textAlign: 'center' }}>
+              {isRtl ? `${page} / ${totalPages}` : `${page} / ${totalPages}`}
+            </span>
+
+            {page < totalPages ? (
+              <Link href={pageHref(page + 1)} style={{
+                ...btnBase,
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                color: 'var(--txt1)',
+              }}>
+                {isRtl ? 'التالي' : 'Next'}
+                {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+              </Link>
+            ) : (
+              <span style={{
+                ...btnBase,
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                color: 'var(--txt2)', opacity: 0.4, cursor: 'default',
+              }}>
+                {isRtl ? 'التالي' : 'Next'}
+                {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

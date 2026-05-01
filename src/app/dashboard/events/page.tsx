@@ -1,19 +1,21 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, Star, Users } from 'lucide-react'
+import { Plus, Star, MapPin, Users } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
+import { getTranslations } from 'next-intl/server'
+import { getLocale } from 'next-intl/server'
 
-const eventTypeColors: Record<string, string> = {
-  recital: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
-  tv_show: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-  workshop: 'text-violet-400 bg-violet-500/10 border-violet-500/20',
-  competition: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-}
-const eventTypeLabels: Record<string, string> = {
-  recital: 'عرض', tv_show: 'تلفزيون', workshop: 'ورشة', competition: 'مسابقة',
+const TYPE_COLORS: Record<string, string> = {
+  recital:     '#d4667a',
+  tv_show:     '#4a90d9',
+  workshop:    '#8e5fd9',
+  competition: '#e8960a',
 }
 
 export default async function EventsPage() {
+  const locale  = await getLocale()
+  const isRtl   = locale === 'ar'
+  const t       = await getTranslations('events')
   const supabase = await createClient()
 
   const { data: events } = await supabase
@@ -21,64 +23,114 @@ export default async function EventsPage() {
     .select('*, enrollments:event_enrollments(id, payment_status)')
     .order('date', { ascending: false })
 
+  const eventTypeLabels: Record<string, string> = {
+    recital:     t('types.recital'),
+    tv_show:     t('types.tv_show'),
+    workshop:    t('types.workshop'),
+    competition: t('types.competition'),
+  }
+
   return (
-    <div className="p-8" dir="rtl">
-      <div className="flex items-center justify-between mb-8">
+    <div style={{ padding: '24px 28px', background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 className="text-2xl font-bold text-white">الفعاليات</h1>
-          <p className="text-white/40 text-sm mt-1">العروض والفعاليات والمسابقات</p>
+          <p style={{ color: 'var(--txt2)', fontSize: 11, margin: '0 0 2px' }}>{t('subtitle')}</p>
+          <h1 style={{ color: 'var(--txt1)', fontSize: 18, fontWeight: 700, margin: 0 }}>{t('title')}</h1>
         </div>
         <Link
           href="/dashboard/events/new"
-          className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-rose-500/25 text-sm"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: '#d4667a', color: '#fff',
+            padding: '8px 16px', borderRadius: 10,
+            fontSize: 13, fontWeight: 600, textDecoration: 'none',
+          }}
         >
-          <Plus size={18} />
-          إنشاء فعالية
+          <Plus size={15} />
+          {t('create')}
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {/* Events list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {events?.map((event: any) => {
           const totalEnrolled = event.enrollments?.length || 0
-          const paid = event.enrollments?.filter((e: any) => e.payment_status === 'paid').length || 0
-          const totalRevenue = paid * event.price
+          const paid          = event.enrollments?.filter((e: any) => e.payment_status === 'paid').length || 0
+          const totalRevenue  = paid * event.price
+          const typeColor     = TYPE_COLORS[event.type] || '#8e5fd9'
 
           return (
             <Link
               key={event.id}
               href={`/dashboard/events/${event.id}`}
-              className="bg-white/5 border border-white/8 hover:border-white/15 rounded-2xl p-5 transition-all hover:scale-[1.01]"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 16,
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 14, padding: '14px 18px',
+                textDecoration: 'none',
+              }}
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center flex-shrink-0">
-                  <Star size={20} className="text-white" />
-                </div>
-                <span className={`text-xs px-2.5 py-1 rounded-full border ${eventTypeColors[event.type] || 'text-white/40 bg-white/5 border-white/10'}`}>
-                  {eventTypeLabels[event.type] || event.type}
-                </span>
+              {/* Icon */}
+              <div style={{
+                width: 42, height: 42, borderRadius: 10, flexShrink: 0,
+                background: typeColor + '18', border: `1px solid ${typeColor}28`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Star size={18} color={typeColor} />
               </div>
 
-              <h3 className="text-white font-semibold mb-1">{event.name}</h3>
-              <p className="text-white/40 text-sm">{formatDate(event.date)}</p>
-              {event.venue && <p className="text-white/30 text-xs mt-0.5">{event.venue}</p>}
-
-              <div className="mt-4 pt-4 border-t border-white/8 flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-white/40 text-sm">
-                  <Users size={14} />
-                  {totalEnrolled} مسجلة
+              {/* Main info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--txt1)' }}>{event.name}</p>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, color: typeColor,
+                    background: typeColor + '18', border: `1px solid ${typeColor}28`,
+                    borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap',
+                  }}>
+                    {eventTypeLabels[event.type] || event.type}
+                  </span>
                 </div>
-                <div className="text-right">
-                  <p className="text-emerald-400 text-sm font-semibold">{formatCurrency(totalRevenue)}</p>
-                  <p className="text-white/20 text-xs">{formatCurrency(event.price)} / طالبة</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: 'var(--txt2)' }}>{formatDate(event.date)}</span>
+                  {event.venue && (
+                    <span style={{ fontSize: 12, color: 'var(--txt2)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <MapPin size={11} />
+                      {event.venue}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexShrink: 0 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--txt1)' }}>{totalEnrolled}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--txt2)' }}>
+                    {isRtl ? 'مسجلة' : t('enrolled')}
+                  </p>
+                </div>
+                <div style={{ textAlign: isRtl ? 'start' : 'end' }}>
+                  <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#3dab7e' }}>{formatCurrency(totalRevenue)}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--txt2)' }}>
+                    {formatCurrency(event.price)} / {isRtl ? 'طالبة' : t('perStudent')}
+                  </p>
                 </div>
               </div>
             </Link>
           )
         })}
+
         {(!events || events.length === 0) && (
-          <div className="col-span-3 text-center py-20 text-white/20">
-            <Star size={40} className="mx-auto mb-3 opacity-30" />
-            <p>لا توجد فعاليات</p>
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: 14, padding: '64px 24px',
+            textAlign: 'center', color: 'var(--txt2)', fontSize: 13,
+          }}>
+            <Star size={36} style={{ margin: '0 auto 12px', opacity: 0.25, display: 'block' }} color="var(--txt2)" />
+            <p style={{ margin: 0 }}>{t('noEvents')}</p>
           </div>
         )}
       </div>

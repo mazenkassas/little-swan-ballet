@@ -2,7 +2,7 @@
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
-export default function RevenueChart({ data }: { data: any[] }) {
+export default function RevenueChart({ data, labels }: { data: any[]; labels: { revenue: string; expenses: string; net: string } }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <AreaChart data={data} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
@@ -28,9 +28,9 @@ export default function RevenueChart({ data }: { data: any[] }) {
           labelStyle={{ color: 'rgba(255,255,255,0.6)' }}
         />
         <Legend wrapperStyle={{ paddingTop: '20px', color: 'rgba(255,255,255,0.5)' }} />
-        <Area type="monotone" dataKey="revenue" name="إيرادات" stroke="#f43f5e" strokeWidth={2} fill="url(#revenue)" />
-        <Area type="monotone" dataKey="expenses" name="مصروفات" stroke="#ef4444" strokeWidth={2} fill="url(#expenses)" />
-        <Area type="monotone" dataKey="net" name="الصافي" stroke="#10b981" strokeWidth={2} fill="url(#net)" />
+        <Area type="monotone" dataKey="revenue" name={labels.revenue} stroke="#f43f5e" strokeWidth={2} fill="url(#revenue)" />
+        <Area type="monotone" dataKey="expenses" name={labels.expenses} stroke="#ef4444" strokeWidth={2} fill="url(#expenses)" />
+        <Area type="monotone" dataKey="net" name={labels.net} stroke="#10b981" strokeWidth={2} fill="url(#net)" />
       </AreaChart>
     </ResponsiveContainer>
   )

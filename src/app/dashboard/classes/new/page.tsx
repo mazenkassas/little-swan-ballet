@@ -2,79 +2,156 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useLocale } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
-import { ArrowRight, Save, AlertTriangle } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 
-const DAYS = [
-  { value: 'Sunday', label: 'الأحد' },
-  { value: 'Monday', label: 'الاثنين' },
-  { value: 'Tuesday', label: 'الثلاثاء' },
-  { value: 'Wednesday', label: 'الأربعاء' },
-  { value: 'Thursday', label: 'الخميس' },
-  { value: 'Friday', label: 'الجمعة' },
-  { value: 'Saturday', label: 'السبت' },
-]
+const LABELS = {
+  en: {
+    back: 'Back', title: 'New Group', sub: 'Create a fixed weekly schedule',
+    grade: 'Grade', gradeDefault: 'Select grade',
+    term: 'Term', termDefault: 'Select term',
+    ageGroup: 'Age Group', ageGroupPlaceholder: '',
+    hall: 'Hall', hallDefault: 'Select hall',
+    coach: 'Default Coach', coachDefault: 'Select coach (optional)',
+    days: 'Week Day',
+    startTime: 'Start Time', startTimeDef: 'Select hour',
+    endTime: 'End Time', endTimeDef: 'Select hour', capacity: 'Max Capacity',
+    save: 'Save Group', saving: 'Saving…', cancel: 'Cancel',
+    conflictFix: 'Please resolve the scheduling conflict first',
+    conflict: (name: string, days: string, time: string) => `Conflict with group "${name}" (${days}) ${time}`,
+    err: {
+      grade_id:          'Grade is required',
+      term_id:           'Term is required',
+      hall_id:           'Hall is required',
+      default_coach_id:  'Coach is required',
+      days:              'Select a day',
+      start_time:        'Start time is required',
+      end_time:          'End time is required',
+      max_capacity:      'Capacity is required',
+    },
+  },
+  ar: {
+    back: 'رجوع', title: 'مجموعة جديدة', sub: 'إنشاء جدول ثابت أسبوعي',
+    grade: 'المستوى الدراسي', gradeDefault: 'اختر المستوى',
+    term: 'الفصل الدراسي', termDefault: 'اختر الفصل',
+    ageGroup: 'الفئة العمرية', ageGroupPlaceholder: '',
+    hall: 'القاعة', hallDefault: 'اختر القاعة',
+    coach: 'المدربة', coachDefault: 'اختر المدربة',
+    days: 'يوم الأسبوع',
+    startTime: 'وقت البداية', startTimeDef: 'اختر الساعة',
+    endTime: 'وقت النهاية', endTimeDef: 'اختر الساعة', capacity: 'الطاقة الاستيعابية',
+    save: 'حفظ المجموعة', saving: 'جارٍ الحفظ…', cancel: 'إلغاء',
+    conflictFix: 'يرجى إصلاح التعارض أولاً',
+    conflict: (name: string, days: string, time: string) => `تعارض مع مجموعة: "${name}" (${days}) ${time}`,
+    err: {
+      grade_id:          'المستوى الدراسي مطلوب',
+      term_id:           'الفصل الدراسي مطلوب',
+      hall_id:           'القاعة مطلوبة',
+      default_coach_id:  'المدربة مطلوبة',
+      days:              'اختر يوماً من الأسبوع',
+      start_time:        'وقت البداية مطلوب',
+      end_time:          'وقت النهاية مطلوب',
+      max_capacity:      'الطاقة الاستيعابية مطلوبة',
+    },
+  },
+}
+
+const DAYS_LABELS: Record<string, { en: string; ar: string }> = {
+  Sunday:    { en: 'Sun', ar: 'الأحد' },
+  Monday:    { en: 'Mon', ar: 'الاثنين' },
+  Tuesday:   { en: 'Tue', ar: 'الثلاثاء' },
+  Wednesday: { en: 'Wed', ar: 'الأربعاء' },
+  Thursday:  { en: 'Thu', ar: 'الخميس' },
+  Friday:    { en: 'Fri', ar: 'الجمعة' },
+  Saturday:  { en: 'Sat', ar: 'السبت' },
+}
+const DAY_KEYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+const HOURS: { value: string; en: string; ar: string }[] = []
+for (let h = 7; h <= 22; h++) {
+  const value = `${String(h).padStart(2, '0')}:00`
+  const h12   = h > 12 ? h - 12 : h
+  const suffix = h < 12 ? 'AM' : 'PM'
+  const suffixAr = h < 12 ? 'ص' : 'م'
+  HOURS.push({ value, en: `${h12} ${suffix}`, ar: `${h12} ${suffixAr}` })
+}
+
+type Errors = Partial<Record<string, string>>
 
 export default function NewClassPage() {
-  const router = useRouter()
+  const router   = useRouter()
+  const locale   = useLocale()
+  const isRtl    = locale === 'ar'
+  const L        = LABELS[isRtl ? 'ar' : 'en']
   const supabase = createClient()
-  const [loading, setLoading] = useState(false)
-  const [levels, setLevels] = useState<any[]>([])
-  const [halls, setHalls] = useState<any[]>([])
-  const [coaches, setCoaches] = useState<any[]>([])
-  const [conflict, setConflict] = useState('')
-  const [error, setError] = useState('')
+
+  const [loading,   setLoading]   = useState(false)
+  const [grades,    setGrades]    = useState<any[]>([])
+  const [terms,     setTerms]     = useState<any[]>([])
+  const [halls,     setHalls]     = useState<any[]>([])
+  const [coaches,   setCoaches]   = useState<any[]>([])
+  const [conflict,  setConflict]  = useState('')
+  const [serverErr, setServerErr] = useState('')
+  const [errors,    setErrors]    = useState<Errors>({})
+  const [submitted, setSubmitted] = useState(false)
 
   const [form, setForm] = useState({
-    name: '',
-    level_id: '',
-    age_group: '',
-    default_coach_id: '',
-    hall_id: '',
-    days_of_week: [] as string[],
-    start_time: '',
-    end_time: '',
-    max_capacity: '15',
+    grade_id: '', term_id: '', age_group: '', default_coach_id: '',
+    hall_id: '', days_of_week: [] as string[],
+    start_time: '', end_time: '', max_capacity: '15',
   })
 
   useEffect(() => {
     Promise.all([
-      supabase.from('levels').select('*').order('order_num'),
+      supabase.from('grades').select('*').order('order_num'),
+      supabase.from('terms').select('*'),
       supabase.from('halls').select('*'),
       supabase.from('coaches').select('*').eq('is_active', true).order('name_ar'),
-    ]).then(([{ data: l }, { data: h }, { data: c }]) => {
-      if (l) setLevels(l)
-      if (h) setHalls(h)
-      if (c) setCoaches(c)
+    ]).then(([{ data: g, error: ge }, { data: tr, error: te }, { data: h }, { data: c }]) => {
+      if (ge) console.error('grades error:', ge.message)
+      if (te) console.error('terms error:', te.message)
+      if (g)  setGrades(g)
+      if (tr) setTerms(tr)
+      if (h)  setHalls(h)
+      if (c)  setCoaches(c)
     })
   }, [])
 
-  // Check for scheduling conflicts
-  async function checkConflict() {
-    if (!form.hall_id || !form.start_time || !form.end_time || form.days_of_week.length === 0) return
+  function validate(f = form): Errors {
+    const e: Errors = {}
+    if (!f.grade_id)                                     e.grade_id          = L.err.grade_id
+    if (!f.term_id)                                      e.term_id           = L.err.term_id
+    if (!f.hall_id)                                      e.hall_id           = L.err.hall_id
+    if (!f.default_coach_id)                             e.default_coach_id  = L.err.default_coach_id
+    if (f.days_of_week.length === 0)                     e.days              = L.err.days
+    if (!f.start_time)                                   e.start_time        = L.err.start_time
+    if (!f.end_time)                                     e.end_time          = L.err.end_time
+    if (!f.max_capacity || parseInt(f.max_capacity) < 1) e.max_capacity      = L.err.max_capacity
+    return e
+  }
+
+  function setField<K extends keyof typeof form>(key: K, value: typeof form[K]) {
+    const next = { ...form, [key]: value }
+    setForm(next)
+    if (submitted) setErrors(validate(next))
+  }
+
+  async function checkConflict(f = form) {
+    if (!f.hall_id || !f.start_time || !f.end_time || f.days_of_week.length === 0) return
     setConflict('')
-
     const { data: existing } = await supabase
-      .from('classes')
-      .select('name, days_of_week, start_time, end_time')
-      .eq('hall_id', form.hall_id)
-      .eq('is_active', true)
-
+      .from('classes').select('name, days_of_week, start_time, end_time')
+      .eq('hall_id', f.hall_id).eq('is_active', true)
     if (!existing) return
-
     for (const cls of existing) {
-      const overlappingDays = cls.days_of_week?.filter((d: string) => form.days_of_week.includes(d))
-      if (overlappingDays?.length > 0) {
-        const existStart = cls.start_time
-        const existEnd = cls.end_time
-        const newStart = form.start_time
-        const newEnd = form.end_time
-
-        if (newStart < existEnd && newEnd > existStart) {
-          setConflict(`تعارض مع فصل: ${cls.name} (${overlappingDays.join(', ')}) ${existStart.slice(0,5)}-${existEnd.slice(0,5)}`)
-          return
-        }
+      const overlap = cls.days_of_week?.filter((d: string) => f.days_of_week.includes(d))
+      const clsStart = cls.start_time?.slice(0, 5)
+      const clsEnd   = cls.end_time?.slice(0, 5)
+      if (overlap?.length > 0 && f.start_time < clsEnd && f.end_time > clsStart) {
+        const dayLabels = overlap.map((d: string) => DAYS_LABELS[d]?.[isRtl ? 'ar' : 'en'] || d)
+        setConflict(L.conflict(cls.name, dayLabels.join(', '), `${cls.start_time.slice(0,5)}–${cls.end_time.slice(0,5)}`))
+        return
       }
     }
   }
@@ -82,142 +159,230 @@ export default function NewClassPage() {
   useEffect(() => { checkConflict() }, [form.hall_id, form.start_time, form.end_time, form.days_of_week])
 
   function toggleDay(day: string) {
-    setForm(f => ({
-      ...f,
-      days_of_week: f.days_of_week.includes(day)
-        ? f.days_of_week.filter(d => d !== day)
-        : [...f.days_of_week, day]
-    }))
+    setField('days_of_week', form.days_of_week[0] === day ? [] : [day])
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (conflict) { setError('يرجى إصلاح التعارض أولاً'); return }
-    if (form.days_of_week.length === 0) { setError('اختر يوم واحد على الأقل'); return }
-    setLoading(true); setError('')
+    setSubmitted(true)
+    const errs = validate()
+    setErrors(errs)
+    if (Object.keys(errs).length > 0) return
+    if (conflict) { setServerErr(L.conflictFix); return }
+
+    setLoading(true); setServerErr('')
+
+    // Auto-generate name from grade + term + days + time
+    const gradeName = grades.find(g => g.id === form.grade_id)?.name || ''
+    const termName  = terms.find(t => t.id === form.term_id)?.name  || ''
+    const dayStr    = form.days_of_week.map(d => DAYS_LABELS[d]?.en || d).join(', ')
+    const fmt12h = (t: string) => { const [h, m] = t.split(':').map(Number); const h12 = h % 12 || 12; const s = h < 12 ? 'AM' : 'PM'; return m === 0 ? `${h12} ${s}` : `${h12}:${String(m).padStart(2,'0')} ${s}` }
+    const timeRange = form.start_time
+      ? (form.end_time ? `${fmt12h(form.start_time)} – ${fmt12h(form.end_time)}` : fmt12h(form.start_time))
+      : ''
+    const autoName  = [gradeName, termName, dayStr, timeRange].filter(Boolean).join(' · ')
 
     const { error: err } = await supabase.from('classes').insert({
-      ...form,
-      level_id: form.level_id || null,
+      name:             autoName,
+      grade_id:         form.grade_id || null,
+      term_id:          form.term_id  || null,
+      age_group:        form.age_group,
       default_coach_id: form.default_coach_id || null,
-      max_capacity: parseInt(form.max_capacity),
+      hall_id:          form.hall_id,
+      days_of_week:     form.days_of_week,
+      start_time:       form.start_time,
+      end_time:         form.end_time,
+      max_capacity:     parseInt(form.max_capacity),
     })
 
-    if (err) { setError(err.message); setLoading(false) }
+    if (err) { setServerErr(err.message); setLoading(false) }
     else router.push('/dashboard/classes')
   }
 
-  const inputClass = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-rose-500/60 transition-all text-sm"
+  const base = (field: string): React.CSSProperties => ({
+    width: '100%', padding: '9px 12px', borderRadius: 8,
+    border: `1px solid ${errors[field] && submitted ? '#e04040' : 'var(--border)'}`,
+    background: 'var(--bg-page)', color: 'var(--txt1)',
+    fontSize: 13, outline: 'none', fontFamily: 'inherit',
+  })
+  const inp  = (field: string): React.CSSProperties => ({ ...base(field), direction: isRtl ? 'rtl' : 'ltr' })
+  const sel  = (field: string): React.CSSProperties => ({ ...base(field), direction: isRtl ? 'rtl' : 'ltr' })
+  const num  = (field: string): React.CSSProperties => ({ ...base(field), direction: 'ltr' })
+  const lbl: React.CSSProperties = {
+    display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--txt2)', marginBottom: 6,
+  }
+  const req: React.CSSProperties = { color: '#e04040', marginInlineStart: 3 }
+  const errTxt: React.CSSProperties = { margin: '4px 0 0', color: '#e04040', fontSize: 11 }
 
   return (
-    <div className="p-8 max-w-2xl" dir="rtl">
-      <div className="flex items-center gap-3 mb-8">
-        <Link href="/dashboard/classes" className="text-white/30 hover:text-white/60 transition-colors">
-          <ArrowRight size={20} />
-        </Link>
+    <div style={{ background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+
+      {/* Top bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 14, padding: '12px 28px',
+        background: 'var(--bg-card)', borderBottom: '1px solid var(--border)',
+      }}>
+        <button onClick={() => router.back()} style={{
+          background: '#d4667a', border: 'none', borderRadius: 8,
+          padding: '7px 16px', color: '#fff', fontSize: 12, fontWeight: 700,
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}>
+          {L.back}
+        </button>
+        <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
         <div>
-          <h1 className="text-2xl font-bold text-white">إضافة فصل جديد</h1>
-          <p className="text-white/40 text-sm mt-0.5">إنشاء جدول ثابت أسبوعي</p>
+          <p style={{ margin: 0, color: 'var(--txt2)', fontSize: 11 }}>{L.sub}</p>
+          <p style={{ margin: 0, color: 'var(--txt1)', fontSize: 14, fontWeight: 700 }}>{L.title}</p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="bg-white/5 border border-white/8 rounded-2xl p-6 space-y-5">
-          {/* Name */}
-          <div>
-            <label className="block text-sm text-white/60 mb-2">اسم الفصل <span className="text-rose-400">*</span></label>
-            <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="Grade-1 السبت 2م" className={inputClass} />
+      {/* Form */}
+      <div style={{ padding: '28px', maxWidth: 680 }}>
+        <form onSubmit={handleSubmit} noValidate>
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: 14, padding: 24, display: 'flex', flexDirection: 'column', gap: 18,
+          }}>
+
+            {/* Grade + Term */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label style={lbl}>{L.grade}<span style={req}>*</span></label>
+                <select value={form.grade_id} onChange={e => setField('grade_id', e.target.value)} style={sel('grade_id')}>
+                  <option value="">{L.gradeDefault}</option>
+                  {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+                {submitted && errors.grade_id && <p style={errTxt}>{errors.grade_id}</p>}
+              </div>
+              <div>
+                <label style={lbl}>{L.term}<span style={req}>*</span></label>
+                <select value={form.term_id} onChange={e => setField('term_id', e.target.value)} style={sel('term_id')}>
+                  <option value="">{L.termDefault}</option>
+                  {terms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                {submitted && errors.term_id && <p style={errTxt}>{errors.term_id}</p>}
+              </div>
+            </div>
+
+            {/* Age Group */}
+            <div>
+              <label style={lbl}>{L.ageGroup}</label>
+              <input value={form.age_group} placeholder={L.ageGroupPlaceholder}
+                onChange={e => setField('age_group', e.target.value)} style={inp('age_group')} />
+            </div>
+
+            {/* Hall + Coach */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label style={lbl}>{L.hall}<span style={req}>*</span></label>
+                <select value={form.hall_id} onChange={e => setField('hall_id', e.target.value)} style={sel('hall_id')}>
+                  <option value="">{L.hallDefault}</option>
+                  {halls.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                </select>
+                {submitted && errors.hall_id && <p style={errTxt}>{errors.hall_id}</p>}
+              </div>
+              <div>
+                <label style={lbl}>{L.coach}<span style={req}>*</span></label>
+                <select value={form.default_coach_id} onChange={e => setField('default_coach_id', e.target.value)} style={sel('default_coach_id')}>
+                  <option value="">{L.coachDefault}</option>
+                  {coaches.map(c => <option key={c.id} value={c.id}>{isRtl ? c.name_ar : c.name_en}</option>)}
+                </select>
+                {submitted && errors.default_coach_id && <p style={errTxt}>{errors.default_coach_id}</p>}
+              </div>
+            </div>
+
+            {/* Days */}
+            <div>
+              <label style={lbl}>{L.days}<span style={req}>*</span></label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {DAY_KEYS.map(day => {
+                  const selected = form.days_of_week.includes(day)
+                  return (
+                    <button key={day} type="button" onClick={() => toggleDay(day)} style={{
+                      padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      border: `1px solid ${selected ? '#d4667a' : 'var(--border)'}`,
+                      background: selected ? '#d4667a18' : 'transparent',
+                      color: selected ? '#d4667a' : 'var(--txt2)',
+                      cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
+                    }}>
+                      {DAYS_LABELS[day][isRtl ? 'ar' : 'en']}
+                    </button>
+                  )
+                })}
+              </div>
+              {submitted && errors.days && <p style={errTxt}>{errors.days}</p>}
+            </div>
+
+            {/* Times + Capacity */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+              <div>
+                <label style={lbl}>{L.startTime}<span style={req}>*</span></label>
+                <select value={form.start_time} onChange={e => setField('start_time', e.target.value)} style={sel('start_time')}>
+                  <option value="">{L.startTimeDef}</option>
+                  {HOURS.map(h => <option key={h.value} value={h.value}>{isRtl ? h.ar : h.en}</option>)}
+                </select>
+                {submitted && errors.start_time && <p style={errTxt}>{errors.start_time}</p>}
+              </div>
+              <div>
+                <label style={lbl}>{L.endTime}<span style={req}>*</span></label>
+                <select value={form.end_time} onChange={e => setField('end_time', e.target.value)} style={sel('end_time')}>
+                  <option value="">{L.endTimeDef}</option>
+                  {HOURS.map(h => <option key={h.value} value={h.value}>{isRtl ? h.ar : h.en}</option>)}
+                </select>
+                {submitted && errors.end_time && <p style={errTxt}>{errors.end_time}</p>}
+              </div>
+              <div>
+                <label style={lbl}>{L.capacity}<span style={req}>*</span></label>
+                <input type="number" min="1" value={form.max_capacity}
+                  onChange={e => setField('max_capacity', e.target.value)}
+                  style={num('max_capacity')} />
+                {submitted && errors.max_capacity && <p style={errTxt}>{errors.max_capacity}</p>}
+              </div>
+            </div>
+
+            {/* Conflict warning */}
+            {conflict && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: '#f5a62310', border: '1px solid #f5a62330',
+                borderRadius: 8, padding: '10px 14px', color: '#f5a623', fontSize: 12,
+              }}>
+                <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                {conflict}
+              </div>
+            )}
+
+            {/* Server error */}
+            {serverErr && (
+              <div style={{
+                background: '#e0404010', border: '1px solid #e0404030',
+                borderRadius: 8, padding: '10px 14px', color: '#e04040', fontSize: 12,
+              }}>
+                {serverErr}
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-white/60 mb-2">المستوى</label>
-              <select value={form.level_id} onChange={e => setForm(f => ({ ...f, level_id: e.target.value }))} className={inputClass}>
-                <option value="" className="bg-[#1a1a2e]">اختر المستوى</option>
-                {levels.map(l => <option key={l.id} value={l.id} className="bg-[#1a1a2e]">{l.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-white/60 mb-2">الفئة العمرية</label>
-              <input value={form.age_group} onChange={e => setForm(f => ({ ...f, age_group: e.target.value }))}
-                placeholder="3-5 سنوات" className={inputClass} />
-            </div>
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+            <button type="submit" disabled={loading || !!conflict} style={{
+              background: '#d4667a', border: 'none', borderRadius: 10,
+              padding: '10px 24px', color: '#fff', fontSize: 13, fontWeight: 700,
+              cursor: loading || !!conflict ? 'not-allowed' : 'pointer',
+              opacity: loading || !!conflict ? 0.6 : 1, fontFamily: 'inherit',
+            }}>
+              {loading ? L.saving : L.save}
+            </button>
+            <button type="button" onClick={() => router.back()} style={{
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: 10, padding: '10px 24px', color: 'var(--txt2)',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              {L.cancel}
+            </button>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-white/60 mb-2">القاعة <span className="text-rose-400">*</span></label>
-              <select required value={form.hall_id} onChange={e => setForm(f => ({ ...f, hall_id: e.target.value }))} className={inputClass}>
-                <option value="" className="bg-[#1a1a2e]">اختر القاعة</option>
-                {halls.map(h => <option key={h.id} value={h.id} className="bg-[#1a1a2e]">{h.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-white/60 mb-2">المدربة الافتراضية</label>
-              <select value={form.default_coach_id} onChange={e => setForm(f => ({ ...f, default_coach_id: e.target.value }))} className={inputClass}>
-                <option value="" className="bg-[#1a1a2e]">اختر المدربة</option>
-                {coaches.map(c => <option key={c.id} value={c.id} className="bg-[#1a1a2e]">{c.name_ar}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Days */}
-          <div>
-            <label className="block text-sm text-white/60 mb-2">أيام الأسبوع <span className="text-rose-400">*</span></label>
-            <div className="flex flex-wrap gap-2">
-              {DAYS.map(d => (
-                <button key={d.value} type="button" onClick={() => toggleDay(d.value)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
-                    form.days_of_week.includes(d.value)
-                      ? 'bg-rose-500/20 border-rose-500/40 text-rose-400'
-                      : 'bg-white/3 border-white/10 text-white/40 hover:bg-white/6'
-                  }`}>
-                  {d.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm text-white/60 mb-2">وقت البداية</label>
-              <input type="time" required value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="block text-sm text-white/60 mb-2">وقت النهاية</label>
-              <input type="time" required value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="block text-sm text-white/60 mb-2">الطاقة الاستيعابية</label>
-              <input type="number" value={form.max_capacity} onChange={e => setForm(f => ({ ...f, max_capacity: e.target.value }))} className={inputClass} min="1" />
-            </div>
-          </div>
-
-          {/* Conflict Warning */}
-          {conflict && (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-center gap-3 text-amber-400 text-sm">
-              <AlertTriangle size={16} />
-              {conflict}
-            </div>
-          )}
-
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-red-400 text-sm">{error}</div>
-          )}
-        </div>
-
-        <div className="flex gap-3 mt-6">
-          <button type="submit" disabled={loading || !!conflict}
-            className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-semibold px-6 py-3 rounded-xl transition-all shadow-lg shadow-rose-500/25 disabled:opacity-50">
-            <Save size={16} />
-            {loading ? 'جارٍ الحفظ...' : 'حفظ الفصل'}
-          </button>
-          <Link href="/dashboard/classes" className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 font-semibold px-6 py-3 rounded-xl transition-all">
-            إلغاء
-          </Link>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   )
 }

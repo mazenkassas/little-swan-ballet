@@ -1,21 +1,41 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Edit, SnowflakeIcon, UserCheck, UserX, MoreHorizontal } from 'lucide-react'
-import Link from 'next/link'
+import { useLocale } from 'next-intl'
+import { MoreHorizontal } from 'lucide-react'
 import type { Student } from '@/lib/types'
 
+const STATUSES = [
+  { key: 'active',   en: 'Active',   ar: 'نشط',     color: '#3dab7e' },
+  { key: 'inactive', en: 'Inactive', ar: 'غير نشط', color: '#e04040' },
+  { key: 'frozen',   en: 'Freeze',   ar: 'تجميد',   color: '#4a90d9' },
+]
+
 export default function StudentActions({ student }: { student: Student }) {
-  const [open, setOpen] = useState(false)
+  const [open,    setOpen]    = useState(false)
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const supabase = createClient()
+  const [isDark,  setIsDark]  = useState(false)
+
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains('dark'))
+    const obs = new MutationObserver(() =>
+      setIsDark(document.documentElement.classList.contains('dark'))
+    )
+    obs.observe(document.documentElement, { attributeFilter: ['class'] })
+    return () => obs.disconnect()
+  }, [])
+  const router    = useRouter()
+  const supabase  = createClient()
+  const locale    = useLocale()
+  const isRtl     = locale === 'ar'
 
   async function updateStatus(status: string) {
+    if (status === student.status) { setOpen(false); return }
     setLoading(true)
     setOpen(false)
+
     await supabase.from('students').update({ status }).eq('id', student.id)
 
     if (status === 'frozen') {
@@ -31,73 +51,83 @@ export default function StudentActions({ student }: { student: Student }) {
         .eq('student_id', student.id)
         .eq('status', 'active')
     }
+
     setLoading(false)
     router.refresh()
   }
 
   return (
-    <div className="relative">
+    <div style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 px-4 py-2.5 rounded-xl text-sm transition-all"
         disabled={loading}
+        title="Actions"
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 34, height: 34,
+          background: open ? 'var(--bg2)' : 'transparent',
+          border: '1px solid var(--border)',
+          borderRadius: 8, color: 'var(--txt2)',
+          cursor: loading ? 'default' : 'pointer',
+          opacity: loading ? 0.5 : 1,
+          transition: 'background 0.15s',
+        }}
       >
         <MoreHorizontal size={16} />
-        {loading ? 'جارٍ...' : 'إجراءات'}
       </button>
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 mt-2 w-48 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden">
-            <Link
-              href={`/dashboard/students/${student.id}/edit`}
-              className="flex items-center gap-3 px-4 py-3 text-white/70 hover:bg-white/5 text-sm transition-colors"
-              onClick={() => setOpen(false)}
-            >
-              <Edit size={15} className="text-white/40" />
-              تعديل البيانات
-            </Link>
-
-            {student.status === 'active' && (
-              <button
-                onClick={() => updateStatus('frozen')}
-                className="flex items-center gap-3 px-4 py-3 text-blue-400 hover:bg-blue-500/10 text-sm transition-colors w-full"
-              >
-                <SnowflakeIcon size={15} />
-                تجميد الطالبة
-              </button>
-            )}
-
-            {student.status === 'frozen' && (
-              <button
-                onClick={() => updateStatus('active')}
-                className="flex items-center gap-3 px-4 py-3 text-emerald-400 hover:bg-emerald-500/10 text-sm transition-colors w-full"
-              >
-                <UserCheck size={15} />
-                إلغاء التجميد
-              </button>
-            )}
-
-            {student.status === 'inactive' && (
-              <button
-                onClick={() => updateStatus('active')}
-                className="flex items-center gap-3 px-4 py-3 text-emerald-400 hover:bg-emerald-500/10 text-sm transition-colors w-full"
-              >
-                <UserCheck size={15} />
-                إعادة تفعيل
-              </button>
-            )}
-
-            {student.status === 'active' && (
-              <button
-                onClick={() => updateStatus('inactive')}
-                className="flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 text-sm transition-colors w-full"
-              >
-                <UserX size={15} />
-                تعطيل الحساب
-              </button>
-            )}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: 'absolute', insetInlineEnd: 0, top: '100%', marginTop: 6,
+            width: 180, background: isDark ? '#1e1e2e' : '#ffffff',
+            border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#EDD8DC'}`,
+            borderRadius: 12,
+            boxShadow: '0 8px 24px rgba(0,0,0,.45)', zIndex: 20, overflow: 'hidden',
+          }}>
+            <p style={{
+              fontSize: 10, fontWeight: 600, color: 'var(--txt2)',
+              padding: '10px 16px 6px', margin: 0,
+              textTransform: 'uppercase', letterSpacing: '0.05em',
+              borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#EDD8DC'}`,
+              background: isDark ? '#1e1e2e' : '#ffffff',
+            }}>
+              {isRtl ? 'الحالة' : 'Status'}
+            </p>
+            {STATUSES.map(s => {
+              const isCurrent = student.status === s.key
+              return (
+                <button
+                  key={s.key}
+                  onClick={() => updateStatus(s.key)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    width: '100%', padding: '10px 16px',
+                    background: isCurrent ? s.color + '22' : (isDark ? '#1e1e2e' : '#ffffff'),
+                    border: 'none', cursor: isCurrent ? 'default' : 'pointer',
+                    textAlign: 'start', transition: 'background 0.1s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: 4,
+                      background: s.color, flexShrink: 0,
+                    }} />
+                    <span style={{
+                      fontSize: 12,
+                      fontWeight: isCurrent ? 700 : 500,
+                      color: s.color,
+                    }}>
+                      {isRtl ? s.ar : s.en}
+                    </span>
+                  </div>
+                  {isCurrent && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: s.color }}>✓</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </>
       )}

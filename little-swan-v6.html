@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Little Swan Ballet Academy</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%;width:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fdf8f6}
+input,textarea,select,button{font-family:inherit}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#e0c8c0;border-radius:4px}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn 0.3s ease forwards}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const{createElement:h,useState,Fragment}=React;
+
+// ── TOKENS ──────────────────────────────────────────────────────
+const C={
+  bg:"#fdf8f6",surface:"#fff",border:"#f0e4de",border2:"#e0c8c0",
+  text:"#2d1a14",sub:"#7a5a52",muted:"#b89990",
+  accent:"#d4667a",accentL:"#fdf0f2",
+  green:"#3dab7e",greenL:"#edfaf4",
+  amber:"#e8960a",amberL:"#fff8e6",
+  red:"#e04040",redL:"#fff0f0",
+  blue:"#4a90d9",blueL:"#eef5fd",
+  purple:"#8e5fd9",purpleL:"#f5f0fd"
+};
+const SH="0 1px 3px rgba(45,26,20,.07),0 1px 2px rgba(45,26,20,.04)";
+
+// ── MOCK USERS ───────────────────────────────────────────────────
+const USERS=[
+  {id:"U1",email:"superadmin@littleswan.com",pass:"admin123",role:"superadmin",name:"Super Admin",nameLabel:"SUPER ADMIN"},
+  {id:"U2",email:"mariam@littleswan.com",pass:"staff123",role:"staff",name:"Mariam Saleh",nameLabel:"STAFF"},
+  {id:"U3",email:"rania@littleswan.com",pass:"staff123",role:"staff",name:"Rania Omar",nameLabel:"STAFF"},
+  {id:"U4",email:"dina@littleswan.com",pass:"coach123",role:"coach",name:"Coach Dina",nameLabel:"COACH",classes:["C001","C002","C005"]},
+  {id:"U5",email:"nadia@littleswan.com",pass:"coach123",role:"coach",name:"Coach Nadia",nameLabel:"COACH",classes:["C003","C004"]},
+];
+
+// ── SHARED DATA ──────────────────────────────────────────────────
+const STUDENTS=[
+  {id:"S001",name:"Layla Hassan",nameAr:"ليلى حسن",dob:"2018-03-12",age:7,phone:"+1 305 111 2233",level:"Level 2",status:"active",enrolled:"Jan 2025",notes:"",remaining:2,balance:0},
+  {id:"S002",name:"Nour Al-Rashidi",nameAr:"نور الراشدي",dob:"2019-07-04",age:6,phone:"+1 305 222 3344",level:"Level 1",status:"active",enrolled:"Sep 2024",notes:"",remaining:4,balance:0},
+  {id:"S003",name:"Yasmin Khalid",nameAr:"ياسمين خالد",dob:"2017-11-20",age:7,phone:"+1 305 333 4455",level:"Level 3",status:"active",enrolled:"Jan 2024",notes:"Knee sensitivity — no high jumps",remaining:1,balance:0},
+  {id:"S004",name:"Sara Al-Sabah",nameAr:"سارة الصباح",dob:"2020-02-14",age:5,phone:"+1 305 444 5566",level:"Level 1",status:"active",enrolled:"Feb 2025",notes:"",remaining:0,balance:0},
+  {id:"S005",name:"Reem Mansour",nameAr:"ريم منصور",dob:"2016-08-30",age:8,phone:"+1 305 555 6677",level:"Level 4",status:"frozen",enrolled:"Mar 2023",notes:"Traveling — returns April",remaining:3,balance:0},
+  {id:"S006",name:"Dana Al-Jaber",nameAr:"دانا الجابر",dob:"2018-12-05",age:6,phone:"+1 305 666 7788",level:"Level 2",status:"active",enrolled:"Oct 2024",notes:"",remaining:3,balance:15},
+  {id:"S007",name:"Hana Yousef",nameAr:"هنا يوسف",dob:"2021-05-22",age:3,phone:"+1 305 777 8899",level:"Level 1",status:"active",enrolled:"Apr 2025",notes:"",remaining:4,balance:0},
+  {id:"S008",name:"Mia Al-Otaibi",nameAr:"ميا العتيبي",dob:"2015-09-18",age:9,phone:"+1 305 888 9900",level:"Level 5",status:"inactive",enrolled:"Jan 2023",notes:"Left academy",remaining:0,balance:0},
+];
+const CLASSES=[
+  {id:"C001",name:"Ballet Beginners",level:"Level 1",coachId:"U4",coach:"Coach Dina",hall:"Hall 1",day:"Saturday",time:"10:00–11:00",capacity:12,enrolled:3},
+  {id:"C002",name:"Ballet Level 2",level:"Level 2",coachId:"U4",coach:"Coach Dina",hall:"Hall 1",day:"Saturday",time:"11:00–12:00",capacity:10,enrolled:2},
+  {id:"C003",name:"Ballet Level 3",level:"Level 3",coachId:"U5",coach:"Coach Nadia",hall:"Hall 2",day:"Saturday",time:"10:00–11:30",capacity:10,enrolled:1},
+  {id:"C004",name:"Ballet Level 4–5",level:"Level 4",coachId:"U5",coach:"Coach Nadia",hall:"Hall 2",day:"Monday",time:"16:00–17:30",capacity:8,enrolled:2},
+  {id:"C005",name:"Mini Ballet",level:"Level 1",coachId:"U4",coach:"Coach Dina",hall:"Hall 1",day:"Wednesday",time:"09:00–09:45",capacity:15,enrolled:2},
+];
+const ATTENDANCE=[
+  {id:"A01",studentId:"S001",student:"Layla Hassan",classId:"C002",class:"Ballet Level 2",date:"Today",staffStatus:"present",coachStatus:"present",coach:"Coach Dina"},
+  {id:"A02",studentId:"S002",student:"Nour Al-Rashidi",classId:"C001",class:"Ballet Beginners",date:"Today",staffStatus:"present",coachStatus:null,coach:"Coach Dina"},
+  {id:"A03",studentId:"S003",student:"Yasmin Khalid",classId:"C003",class:"Ballet Level 3",date:"Today",staffStatus:"absent",coachStatus:"absent",coach:"Coach Nadia"},
+  {id:"A04",studentId:"S004",student:"Sara Al-Sabah",classId:"C001",class:"Ballet Beginners",date:"Today",staffStatus:"makeup",coachStatus:null,coach:"Coach Dina"},
+  {id:"A05",studentId:"S006",student:"Dana Al-Jaber",classId:"C002",class:"Ballet Level 2",date:"Today",staffStatus:"present",coachStatus:null,coach:"Coach Dina"},
+  {id:"A06",studentId:"S007",student:"Hana Yousef",classId:"C005",class:"Mini Ballet",date:"Yesterday",staffStatus:"present",coachStatus:"present",coach:"Coach Dina"},
+  {id:"A07",studentId:"S003",student:"Yasmin Khalid",classId:"C003",class:"Ballet Level 3",date:"Yesterday",staffStatus:"present",coachStatus:"present",coach:"Coach Nadia"},
+];
+const PAYMENTS=[
+  {id:"P001",student:"Layla Hassan",type:"subscription",amount:120,paid:120,method:"Cash",date:"Today",staff:"Mariam",balance:0},
+  {id:"P002",student:"Dana Al-Jaber",type:"subscription",amount:120,paid:105,method:"InstaPay",date:"Today",staff:"Mariam",balance:15},
+  {id:"P003",student:"Yasmin Khalid",type:"exam",amount:50,paid:50,method:"Cash",date:"Yesterday",staff:"Rania",balance:0},
+  {id:"P004",student:"Nour Al-Rashidi",type:"product",amount:35,paid:35,method:"Cash",date:"Yesterday",staff:"Mariam",balance:0},
+  {id:"P005",student:"Layla Hassan",type:"private",amount:60,paid:60,method:"InstaPay",date:"28 Apr",staff:"Rania",balance:0},
+  {id:"P006",student:"Sara Al-Sabah",type:"enrollment",amount:40,paid:40,method:"Cash",date:"28 Apr",staff:"Mariam",balance:0},
+];
+const TRANSFERS=[
+  {id:"TR1",student:"Nour Al-Rashidi",from:"Ballet Beginners — Sat",to:"Mini Ballet — Wed",reason:"Better timing for family",status:"pending",submitted:"Today"},
+  {id:"TR2",student:"Layla Hassan",from:"Ballet Level 2 — Sat",to:"Ballet Level 2 — Mon",reason:"Schedule conflict",status:"approved",submitted:"Yesterday"},
+];
+const EXPENSES=[
+  {id:"EXP1",desc:"Electricity",amount:180,date:"Today",hall:"Both"},
+  {id:"EXP2",desc:"Cleaning Supplies",amount:45,date:"Yesterday",hall:"Both"},
+  {id:"EXP3",desc:"Internet",amount:60,date:"28 Apr",hall:"Both"},
+];
+const EXAMS=[
+  {id:"EX1",name:"Mid-Year Assessment",date:"10 May 2025",fee:50,level:"Level 2",results:[
+    {student:"Layla Hassan",result:"pass"},{student:"Dana Al-Jaber",result:null}
+  ]},
+  {id:"EX2",name:"End of Year Exam",date:"20 Jun 2025",fee:60,level:"Level 3",results:[
+    {student:"Yasmin Khalid",result:null}
+  ]},
+];
+const INVENTORY=[
+  {id:"I001",name:"Leotard — Pink S",size:"S",cost:12,price:28,stock:5,type:"ready"},
+  {id:"I002",name:"Leotard — Pink M",size:"M",cost:12,price:28,stock:2,type:"ready"},
+  {id:"I003",name:"Leotard — White S",size:"S",cost:14,price:32,stock:0,type:"ready"},
+  {id:"I004",name:"Leotard — Custom (Yasmin)",size:"Custom",cost:18,price:45,stock:0,type:"mto",status:"In Production",student:"Yasmin Khalid"},
+];
+const EVENTS=[
+  {id:"EV1",name:"Spring Recital 2025",type:"Recital",date:"15 Jun 2025",venue:"Miami Arts Center",price:60,enrolled:5},
+  {id:"EV2",name:"Level Assessment Workshop",type:"Workshop",date:"5 May 2025",venue:"Hall 1 & 2",price:0,enrolled:7},
+];
+const STAFF_LOG=[
+  {id:"SL1",name:"Mariam Saleh",login:"08:55",logout:"16:10",location:"valid",date:"Today"},
+  {id:"SL2",name:"Rania Omar",login:"09:12",logout:null,location:"valid",date:"Today"},
+  {id:"SL3",name:"Mariam Saleh",login:"09:40",logout:"16:00",location:"invalid",date:"Yesterday"},
+];
+const COACH_LOG=[
+  {id:"CL1",coachId:"U4",coach:"Coach Dina",class:"Ballet Beginners",date:"Today",checkIn:"09:58",checkOut:"11:03",hours:1.1,locationIn:"valid",locationOut:"valid"},
+  {id:"CL2",coachId:"U4",coach:"Coach Dina",class:"Ballet Level 2",date:"Today",checkIn:"11:05",checkOut:null,hours:null,locationIn:"valid",locationOut:null},
+  {id:"CL3",coachId:"U5",coach:"Coach Nadia",class:"Ballet Level 3",date:"Today",checkIn:"09:55",checkOut:"11:32",hours:1.6,locationIn:"valid",locationOut:"valid"},
+  {id:"CL4",coachId:"U4",coach:"Coach Dina",class:"Mini Ballet",date:"Yesterday",checkIn:"08:58",checkOut:"09:48",hours:0.8,locationIn:"invalid",locationOut:"valid"},
+];
+
+// ── PRIMITIVES ───────────────────────────────────────────────────
+function Badge({label,color,dot}){
+  return h('span',{style:{display:'inline-flex',alignItems:'center',gap:4,background:color+'18',color,fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:20,whiteSpace:'nowrap',border:`1px solid ${color}28`,flexShrink:0}},
+    dot&&h('span',{style:{width:5,height:5,borderRadius:3,background:color,flexShrink:0}}),label);
+}
+const SM={active:{l:'Active',c:C.green,d:true},frozen:{l:'Frozen',c:C.blue,d:true},inactive:{l:'Inactive',c:C.muted,d:true},present:{l:'Present',c:C.green,d:true},absent:{l:'Absent',c:C.red,d:true},makeup:{l:'Make-up',c:C.purple,d:true},pending:{l:'Pending',c:C.amber,d:true},approved:{l:'Approved',c:C.green,d:true},rejected:{l:'Rejected',c:C.red,d:true},pass:{l:'Pass ✓',c:C.green},fail:{l:'Fail ✗',c:C.red},ready:{l:'Ready Stock',c:C.green},mto:{l:'Made-to-Order',c:C.purple},valid:{l:'Valid ✓',c:C.green},invalid:{l:'Invalid ⚠',c:C.red},'In Production':{l:'In Production',c:C.amber,d:true},Delivered:{l:'Delivered',c:C.green,d:true}};
+function SB({s}){const m=SM[s]||{l:s,c:C.muted};return h(Badge,{label:m.l,color:m.c,dot:m.d});}
+function Av({name,size,color}){size=size||28;color=color||C.accent;const init=(name||'').split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();return h('div',{style:{width:size,height:size,borderRadius:size/2,background:color+'18',border:`1px solid ${color}28`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:size*0.33,fontWeight:700,color,flexShrink:0}},init);}
+function Card({children,style:st,pad}){return h('div',{style:{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:pad||'18px 20px',boxShadow:SH,...(st||{})}},children);}
+function Btn({label,primary,danger,small,onClick,disabled}){return h('button',{onClick,disabled,style:{background:primary?C.accent:danger?C.red:'transparent',border:primary||danger?'none':`1px solid ${C.border2}`,borderRadius:8,padding:small?'4px 10px':'7px 14px',color:primary||danger?'#fff':disabled?C.muted:C.sub,fontSize:small?10:12,cursor:disabled?'default':'pointer',fontWeight:600,whiteSpace:'nowrap',opacity:disabled?0.5:1}},label);}
+function PH({title,sub,actions}){return h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}},h('div',null,h('p',{style:{color:C.muted,fontSize:11,margin:'0 0 2px'}},sub),h('h1',{style:{color:C.text,fontSize:18,fontWeight:700,margin:0,letterSpacing:-0.3}},title)),h('div',{style:{display:'flex',gap:8}},actions));}
+function Th({children}){return h('th',{style:{textAlign:'left',color:C.muted,fontSize:11,fontWeight:600,padding:'10px 14px',borderBottom:`1px solid ${C.border}`,background:C.bg,whiteSpace:'nowrap'}},children);}
+function Td({children,bold,color,nowrap}){return h('td',{style:{padding:'11px 14px',borderBottom:`1px solid ${C.border}`,color:color||(bold?C.text:C.sub),fontSize:12,fontWeight:bold?600:400,verticalAlign:'middle',whiteSpace:nowrap?'nowrap':'normal'}},children);}
+function IR({l,v,last}){return h('div',{style:{display:'flex',justifyContent:'space-between',padding:'9px 0',borderBottom:last?'none':`1px solid ${C.border}`,gap:12}},h('span',{style:{color:C.muted,fontSize:12,flexShrink:0}},l),h('span',{style:{color:C.text,fontSize:12,fontWeight:500,textAlign:'right'}},v));}
+function KPI({icon,label,value,sub,color,alert}){color=color||C.accent;return h(Card,{style:{flex:1,minWidth:0,position:'relative',overflow:'hidden'}},alert&&h('div',{style:{position:'absolute',top:10,right:10,width:8,height:8,borderRadius:4,background:C.red}}),h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}},h('span',{style:{color:C.sub,fontSize:12,fontWeight:500}},label),h('div',{style:{width:32,height:32,borderRadius:8,background:color+'14',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15}},icon)),h('p',{style:{color:C.text,fontSize:22,fontWeight:700,margin:'0 0 4px',letterSpacing:-0.5}},value),sub&&h('p',{style:{color:C.muted,fontSize:11,margin:0}},sub));}
+
+// ── SIDEBAR ──────────────────────────────────────────────────────
+function Sidebar({active,setActive,user,onLogout,navGroups}){
+  const roleColor={superadmin:C.accent,staff:C.purple,coach:C.blue}[user.role]||C.accent;
+  return h('div',{style:{width:220,background:C.surface,borderRight:`1px solid ${C.border}`,display:'flex',flexDirection:'column',flexShrink:0}},
+    h('div',{style:{padding:'18px 16px 14px',borderBottom:`1px solid ${C.border}`}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:10}},
+        h('div',{style:{width:34,height:34,borderRadius:10,background:`linear-gradient(135deg,${C.accent},#c04060)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}},'🦢'),
+        h('div',null,
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:0,letterSpacing:-0.2}},'Little Swan'),
+          h('p',{style:{color:roleColor,fontSize:9,fontWeight:600,margin:0,letterSpacing:0.5}},'MIAMI BRANCH')
+        )
+      )
+    ),
+    h('div',{style:{flex:1,padding:'10px 8px',overflowY:'auto'}},
+      navGroups.map((g,gi)=>h('div',{key:gi,style:{marginBottom:6}},
+        h('p',{style:{color:C.muted,fontSize:9,fontWeight:600,letterSpacing:0.8,padding:'8px 10px 4px',margin:0}},g.label),
+        g.items.map(item=>h('div',{key:item.key,onClick:()=>setActive(item.key),
+          style:{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:8,marginBottom:1,cursor:'pointer',background:active===item.key?C.accentL:'transparent'}},
+          h('span',{style:{fontSize:13,color:active===item.key?C.accent:C.muted,width:16,textAlign:'center'}},item.icon),
+          h('span',{style:{color:active===item.key?C.accent:C.sub,fontSize:12,fontWeight:active===item.key?600:400,flex:1}},item.label),
+          item.badge>0&&h('div',{style:{background:C.red,borderRadius:10,minWidth:16,height:16,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}},
+            h('span',{style:{color:'#fff',fontSize:9,fontWeight:700}},item.badge))
+        ))
+      ))
+    ),
+    h('div',{style:{padding:'12px 14px',borderTop:`1px solid ${C.border}`}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:8}},
+        h(Av,{name:user.name,size:28,color:roleColor}),
+        h('div',null,
+          h('p',{style:{color:C.text,fontSize:11,fontWeight:600,margin:0}},user.name),
+          h('p',{style:{color:roleColor,fontSize:10,margin:0,fontWeight:600}},user.nameLabel)
+        )
+      ),
+      h('button',{onClick:onLogout,style:{width:'100%',background:'none',border:`1px solid ${C.border2}`,borderRadius:7,padding:'5px',color:C.sub,fontSize:11,cursor:'pointer',fontWeight:600}},'↩ Logout')
+    )
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUPER ADMIN SCREENS
+// ═══════════════════════════════════════════════════════════════
+
+function SA_Overview({setActive}){
+  const activeS=STUDENTS.filter(s=>s.status==='active').length;
+  const payReq=STUDENTS.filter(s=>s.remaining===0&&s.status==='active').length;
+  const todayRev=PAYMENTS.filter(p=>p.date==='Today').reduce((a,p)=>a+(p.paid||p.amount),0);
+  const todayExp=EXPENSES.filter(e=>e.date==='Today').reduce((a,e)=>a+e.amount,0);
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Overview',sub:'Little Swan Ballet Academy — Super Admin Dashboard',actions:[h(Btn,{key:'r',label:'↻ Refresh'})]}),
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:20}},
+      h(KPI,{icon:'🩰',label:'Active Students',value:activeS,sub:`${STUDENTS.length} total`,color:C.accent}),
+      h(KPI,{icon:'🚨',label:'Payment Required',value:payReq,sub:'sessions = 0',color:C.red,alert:payReq>0}),
+      h(KPI,{icon:'💰',label:"Today's Net Revenue",value:`$${todayRev-todayExp}`,sub:`$${todayRev} in — $${todayExp} exp`,color:C.green}),
+      h(KPI,{icon:'📅',label:'Active Classes',value:CLASSES.length,sub:'Hall 1 & Hall 2',color:C.purple}),
+    ),
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}},
+      h(Card,null,
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:0}},'🚨 Payment Required'),
+          h(Btn,{label:'All Students',small:true,onClick:()=>setActive('students')})
+        ),
+        STUDENTS.filter(s=>s.remaining===0&&s.status==='active').map(s=>
+          h('div',{key:s.id,style:{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:`1px solid ${C.border}`}},
+            h(Av,{name:s.name,size:26}),
+            h('div',{style:{flex:1}},
+              h('p',{style:{color:C.text,fontSize:12,fontWeight:600,margin:0}},s.name),
+              h('p',{style:{color:C.muted,fontSize:11,margin:0}},s.level)
+            ),
+            h(Badge,{label:'0 sessions left',color:C.red})
+          )
+        )
+      ),
+      h(Card,null,
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:0}},'⇄ Pending Transfers'),
+          h(Btn,{label:'All',small:true,onClick:()=>setActive('transfers')})
+        ),
+        TRANSFERS.filter(t=>t.status==='pending').length===0
+          ?h('p',{style:{color:C.muted,fontSize:12,textAlign:'center',padding:'12px 0'}},'No pending transfers ✓')
+          :TRANSFERS.filter(t=>t.status==='pending').map(t=>
+            h('div',{key:t.id,style:{padding:'10px 0',borderBottom:`1px solid ${C.border}`}},
+              h('p',{style:{color:C.text,fontSize:12,fontWeight:600,margin:'0 0 2px'}},t.student),
+              h('p',{style:{color:C.sub,fontSize:11,margin:'0 0 6px'}},`${t.from} → ${t.to}`),
+              h('div',{style:{display:'flex',gap:6}},h(Btn,{label:'Approve',primary:true,small:true}),h(Btn,{label:'Reject',danger:true,small:true}))
+            )
+          )
+      )
+    ),
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
+      h(Card,null,
+        h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 12px'}},"Today's Transactions"),
+        h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+          h('thead',null,h('tr',null,h(Th,null,'Student'),h(Th,null,'Type'),h(Th,null,'Paid'),h(Th,null,'Method'))),
+          h('tbody',null,PAYMENTS.filter(p=>p.date==='Today').map(p=>
+            h('tr',{key:p.id},
+              h(Td,{bold:true},p.student),
+              h(Td,null,h(Badge,{label:p.type,color:C.accent})),
+              h(Td,{color:C.green,bold:true},`$${p.paid}`),
+              h(Td,null,p.method)
+            )
+          ))
+        )
+      ),
+      h(Card,null,
+        h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 12px'}},'Coach Check-in Status'),
+        COACH_LOG.filter(l=>l.date==='Today').map(l=>
+          h('div',{key:l.id,style:{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:`1px solid ${C.border}`}},
+            h(Av,{name:l.coach,size:26,color:C.blue}),
+            h('div',{style:{flex:1}},
+              h('p',{style:{color:C.text,fontSize:12,fontWeight:600,margin:0}},l.coach),
+              h('p',{style:{color:C.muted,fontSize:11,margin:0}},l.class)
+            ),
+            h('div',{style:{textAlign:'right'}},
+              h('p',{style:{color:C.text,fontSize:11,fontWeight:600,margin:0}},`IN ${l.checkIn}`),
+              l.checkOut?h('p',{style:{color:C.muted,fontSize:10,margin:0}},`OUT ${l.checkOut}`):h(Badge,{label:'Active',color:C.green})
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
+function SA_Students(){
+  const[sel,setSel]=useState(null);
+  const[filter,setFilter]=useState('all');
+  const[q,setQ]=useState('');
+  const filters=[{k:'all',l:'All'},{k:'active',l:'Active'},{k:'frozen',l:'Frozen'},{k:'inactive',l:'Inactive'},{k:'payrequired',l:'Pay Required'}];
+  const fl=STUDENTS.filter(s=>{
+    const qm=(s.name+s.level+s.nameAr).toLowerCase().includes(q.toLowerCase());
+    if(filter==='payrequired') return s.remaining===0&&s.status==='active'&&qm;
+    if(filter==='all') return qm;
+    return s.status===filter&&qm;
+  });
+  if(sel){
+    const s=STUDENTS.find(x=>x.id===sel);
+    return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+      h('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:20}},
+        h('button',{onClick:()=>setSel(null),style:{background:'none',border:`1px solid ${C.border}`,borderRadius:8,padding:'6px 12px',cursor:'pointer',color:C.sub,fontSize:12,fontWeight:600}},'← Back'),
+        h('h1',{style:{color:C.text,fontSize:18,fontWeight:700,margin:0}},s.name),
+        h('span',{style:{color:C.sub,fontSize:14}},' / '+s.nameAr),
+        h(SB,{s:s.status})
+      ),
+      s.remaining===0&&s.status==='active'&&h('div',{style:{background:C.redL,border:`1px solid ${C.red}30`,borderRadius:10,padding:'10px 14px',marginBottom:14,display:'flex',gap:8}},h('span',{style:{fontSize:16}},'🚨'),h('p',{style:{color:C.red,fontSize:12,fontWeight:600,margin:0}},'Sessions exhausted — payment required')),
+      s.balance>0&&h('div',{style:{background:C.amberL,border:`1px solid ${C.amber}30`,borderRadius:10,padding:'10px 14px',marginBottom:14,display:'flex',gap:8}},h('span',{style:{fontSize:16}},'⚠️'),h('p',{style:{color:C.amber,fontSize:12,fontWeight:600,margin:0}},`Outstanding balance: $${s.balance}`)),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
+        h(Card,null,
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'Student Profile'),
+          h(IR,{l:'Full Name (EN)',v:s.name}),
+          h(IR,{l:'Full Name (AR)',v:s.nameAr}),
+          h(IR,{l:'Date of Birth',v:s.dob}),
+          h(IR,{l:'Age',v:`${s.age} years`}),
+          h(IR,{l:'Parent Phone',v:s.phone}),
+          h(IR,{l:'Ballet Level',v:s.level}),
+          h(IR,{l:'Enrolled',v:s.enrolled}),
+          h(IR,{l:'Notes',v:s.notes||'—',last:true})
+        ),
+        h('div',{style:{display:'flex',flexDirection:'column',gap:14}},
+          h(Card,null,
+            h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 10px'}},'Subscription'),
+            h('div',{style:{display:'flex',gap:3,marginBottom:8}},
+              [1,2,3,4].map(i=>h('div',{key:i,style:{flex:1,height:10,borderRadius:3,background:i<=s.remaining?C.accent:C.border}}))
+            ),
+            h(IR,{l:'Sessions Remaining',v:`${s.remaining} / 4`}),
+            h(IR,{l:'Balance',v:s.balance>0?`$${s.balance} due`:'Cleared',last:true})
+          ),
+          h(Card,null,
+            h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 10px'}},'Admin Actions'),
+            h('div',{style:{display:'flex',flexDirection:'column',gap:6}},
+              h(Btn,{label:'Record Payment',primary:true}),
+              s.status==='active'&&h(Btn,{label:'Freeze Student'}),
+              s.status==='frozen'&&h(Btn,{label:'Reactivate',primary:true}),
+              s.status!=='inactive'&&h(Btn,{label:'Set Inactive',danger:true}),
+              s.status==='inactive'&&h(Btn,{label:'Reactivate',primary:true}),
+              h(Btn,{label:'Transfer Class'}),
+              h(Btn,{label:'Edit Profile'})
+            )
+          )
+        )
+      )
+    );
+  }
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Students',sub:'All enrolled students — Miami Branch',actions:[h(Btn,{key:'a',label:'+ New Student',primary:true})]}),
+    h('div',{style:{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}},
+      filters.map(f=>h('button',{key:f.k,onClick:()=>setFilter(f.k),
+        style:{background:filter===f.k?C.accent:'transparent',border:`1px solid ${filter===f.k?C.accent:C.border2}`,borderRadius:8,padding:'5px 12px',cursor:'pointer'}},
+        h('span',{style:{color:filter===f.k?'#fff':C.sub,fontSize:12,fontWeight:filter===f.k?600:400}},f.l)
+      )),
+      h('input',{value:q,onChange:e=>setQ(e.target.value),placeholder:'Search...',style:{marginLeft:'auto',padding:'6px 12px',border:`1px solid ${C.border2}`,borderRadius:8,fontSize:12,color:C.text,width:200,outline:'none'}})
+    ),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Student'),h(Th,null,'Level'),h(Th,null,'Age'),h(Th,null,'Sessions'),h(Th,null,'Balance'),h(Th,null,'Status'),h(Th,null,''))),
+        h('tbody',null,fl.map(s=>h('tr',{key:s.id,onClick:()=>setSel(s.id),style:{cursor:'pointer'}},
+          h(Td,{bold:true},h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Av,{name:s.name,size:26}),h('div',null,h('p',{style:{margin:0,color:C.text,fontSize:12,fontWeight:600}},s.name),h('p',{style:{margin:0,color:C.muted,fontSize:10}},s.nameAr)))),
+          h(Td,null,s.level),
+          h(Td,null,`${s.age}y`),
+          h(Td,null,s.status==='active'?h('div',{style:{display:'flex',alignItems:'center',gap:6}},h('div',{style:{display:'flex',gap:2}},[1,2,3,4].map(i=>h('div',{key:i,style:{width:10,height:6,borderRadius:2,background:i<=s.remaining?C.accent:C.border}}))),h('span',{style:{color:s.remaining===0?C.red:C.text,fontSize:11,fontWeight:600}},`${s.remaining}/4`)):h('span',{style:{color:C.muted}},'—')),
+          h(Td,null,s.balance>0?h(Badge,{label:`$${s.balance}`,color:C.amber}):h('span',{style:{color:C.green,fontSize:11}},'✓')),
+          h(Td,null,h(SB,{s:s.status})),
+          h(Td,null,h(Btn,{label:'View',small:true,onClick:e=>{e.stopPropagation();setSel(s.id);}}))
+        )))
+      )
+    )
+  );
+}
+
+function SA_Classes(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Classes & Halls',sub:'Fixed weekly schedule — Hall 1 & Hall 2',actions:[h(Btn,{key:'a',label:'+ New Class',primary:true})]}),
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:16}},
+      ['Hall 1','Hall 2'].map(hall=>h(Card,{key:hall,style:{borderTop:`3px solid ${hall==='Hall 1'?C.accent:C.purple}`}},
+        h('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:12}},
+          h('div',{style:{width:10,height:10,borderRadius:5,background:hall==='Hall 1'?C.accent:C.purple}}),
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:0}},hall),
+          h(Badge,{label:`${CLASSES.filter(c=>c.hall===hall).length} classes`,color:hall==='Hall 1'?C.accent:C.purple})
+        ),
+        CLASSES.filter(c=>c.hall===hall).map(c=>h('div',{key:c.id,style:{padding:'9px 0',borderBottom:`1px solid ${C.border}`}},
+          h('div',{style:{display:'flex',justifyContent:'space-between'}},
+            h('div',null,h('p',{style:{color:C.text,fontSize:12,fontWeight:600,margin:'0 0 2px'}},c.name),h('p',{style:{color:C.muted,fontSize:11,margin:0}},`${c.day} · ${c.time} · ${c.coach}`)),
+            h('div',{style:{textAlign:'right'}},h(Badge,{label:c.level,color:C.accent}),h('p',{style:{color:c.enrolled>=c.capacity?C.red:C.green,fontSize:10,fontWeight:600,margin:'4px 0 0'}},`${c.enrolled}/${c.capacity}`))
+          )
+        ))
+      ))
+    ),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Name'),h(Th,null,'Level'),h(Th,null,'Hall'),h(Th,null,'Day & Time'),h(Th,null,'Coach'),h(Th,null,'Capacity'),h(Th,null,''))),
+        h('tbody',null,CLASSES.map(c=>h('tr',{key:c.id},
+          h(Td,{bold:true},c.name),
+          h(Td,null,h(Badge,{label:c.level,color:C.accent})),
+          h(Td,null,h(Badge,{label:c.hall,color:c.hall==='Hall 1'?C.accent:C.purple})),
+          h(Td,{nowrap:true},`${c.day} · ${c.time}`),
+          h(Td,null,c.coach),
+          h(Td,null,h('span',{style:{color:c.enrolled>=c.capacity?C.red:C.text,fontWeight:600,fontSize:12}},`${c.enrolled}/${c.capacity}`)),
+          h(Td,null,h(Btn,{label:'Edit',small:true}))
+        )))
+      )
+    )
+  );
+}
+
+function SA_Attendance(){
+  const[date,setDate]=useState('Today');
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Attendance',sub:'Staff entry vs Coach confirmation — cross-validated',actions:[h(Btn,{key:'a',label:'+ Mark Attendance',primary:true})]}),
+    h('div',{style:{display:'flex',gap:6,marginBottom:14}},
+      ['Today','Yesterday'].map(d=>h('button',{key:d,onClick:()=>setDate(d),style:{background:date===d?C.accent:'transparent',border:`1px solid ${date===d?C.accent:C.border2}`,borderRadius:8,padding:'5px 14px',cursor:'pointer',color:date===d?'#fff':C.sub,fontSize:12,fontWeight:date===d?600:400}},d))
+    ),
+    h(Card,{pad:'0'},
+      h('div',{style:{padding:'12px 16px',borderBottom:`1px solid ${C.border}`,display:'flex',gap:12,alignItems:'center'}},
+        h('p',{style:{color:C.text,fontSize:12,fontWeight:600,margin:0}},'Attendance Records'),
+        h(Badge,{label:'Staff entry',color:C.accent}),
+        h(Badge,{label:'Coach confirmation',color:C.blue}),
+        h('span',{style:{color:C.muted,fontSize:11}}),'— discrepancies flagged automatically'
+      ),
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Student'),h(Th,null,'Class'),h(Th,null,'Staff Entry'),h(Th,null,'Coach Confirmed'),h(Th,null,'Match'),h(Th,null,''))),
+        h('tbody',null,ATTENDANCE.filter(a=>a.date===date).map(a=>{
+          const match=a.coachStatus===null||a.staffStatus===a.coachStatus;
+          return h('tr',{key:a.id},
+            h(Td,{bold:true},h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Av,{name:a.student,size:24}),a.student)),
+            h(Td,null,a.class),
+            h(Td,null,h(SB,{s:a.staffStatus})),
+            h(Td,null,a.coachStatus?h(SB,{s:a.coachStatus}):h(Badge,{label:'Pending',color:C.muted})),
+            h(Td,null,a.coachStatus===null?h(Badge,{label:'Awaiting',color:C.muted}):match?h(Badge,{label:'✓ Match',color:C.green}):h(Badge,{label:'⚠ Mismatch',color:C.red})),
+            h(Td,null,h(Btn,{label:'Edit',small:true}))
+          );
+        }))
+      )
+    )
+  );
+}
+
+function SA_Payments(){
+  const todayRev=PAYMENTS.filter(p=>p.date==='Today').reduce((a,p)=>a+(p.paid||p.amount),0);
+  const todayExp=EXPENSES.filter(e=>e.date==='Today').reduce((a,e)=>a+e.amount,0);
+  const typeColor={subscription:C.accent,product:C.green,event:C.purple,private:C.blue,exam:C.amber,enrollment:C.rose};
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Payments & Revenue',sub:'All financial transactions',actions:[h(Btn,{key:'a',label:'+ Record Payment',primary:true}),h(Btn,{key:'e',label:'⬇ Export'})]}),
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:16}},
+      h(KPI,{icon:'💵',label:"Today's Revenue",value:`$${todayRev}`,sub:'All payment types',color:C.green}),
+      h(KPI,{icon:'📉',label:"Today's Expenses",value:`$${todayExp}`,sub:'Operational',color:C.red}),
+      h(KPI,{icon:'📊',label:'Net Revenue',value:`$${todayRev-todayExp}`,sub:'After expenses',color:C.accent}),
+    ),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'#'),h(Th,null,'Student'),h(Th,null,'Type'),h(Th,null,'Amount'),h(Th,null,'Paid'),h(Th,null,'Balance'),h(Th,null,'Method'),h(Th,null,'Date'),h(Th,null,'Staff'))),
+        h('tbody',null,PAYMENTS.map(p=>h('tr',{key:p.id},
+          h(Td,null,p.id),
+          h(Td,{bold:true},p.student),
+          h(Td,null,h(Badge,{label:p.type,color:typeColor[p.type]||C.muted})),
+          h(Td,null,`$${p.amount}`),
+          h(Td,{color:C.green,bold:true},`$${p.paid}`),
+          h(Td,null,p.balance>0?h(Badge,{label:`$${p.balance} due`,color:C.amber}):h('span',{style:{color:C.green,fontSize:11}},'✓ Cleared')),
+          h(Td,null,p.method),
+          h(Td,null,p.date),
+          h(Td,null,p.staff)
+        )))
+      )
+    )
+  );
+}
+
+function SA_Coaches(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Coaches & Payroll',sub:'Hours, check-ins, and monthly payroll calculation',actions:[h(Btn,{key:'a',label:'+ Add Coach',primary:true})]}),
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:16}},
+      [{name:'Coach Dina',rate:25,hours:48,payroll:1200},{name:'Coach Nadia',rate:28,hours:36,payroll:1008},{name:'Coach Lara',rate:22,hours:10,payroll:220}].map((co,i)=>
+        h(Card,{key:i,style:{borderTop:`3px solid ${C.blue}`}},
+          h('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:12}},
+            h(Av,{name:co.name,size:34,color:C.blue}),
+            h('div',null,h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:0}},co.name),h('p',{style:{color:C.muted,fontSize:11,margin:0}},'$'+co.rate+'/hr'))
+          ),
+          h(IR,{l:'Hours This Month',v:`${co.hours}h`}),
+          h(IR,{l:'Payroll',v:`$${co.payroll}`,last:true})
+        )
+      )
+    ),
+    h(Card,null,
+      h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'Today\'s Coach Check-in Log'),
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Coach'),h(Th,null,'Class'),h(Th,null,'Check In'),h(Th,null,'Check Out'),h(Th,null,'Hours'),h(Th,null,'Location'))),
+        h('tbody',null,COACH_LOG.filter(l=>l.date==='Today').map(l=>h('tr',{key:l.id},
+          h(Td,{bold:true},h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Av,{name:l.coach,size:24,color:C.blue}),l.coach)),
+          h(Td,null,l.class),
+          h(Td,null,l.checkIn),
+          h(Td,null,l.checkOut||h(Badge,{label:'Active',color:C.green})),
+          h(Td,null,l.hours?`${l.hours}h`:h(Badge,{label:'In Progress',color:C.amber})),
+          h(Td,null,h(SB,{s:l.locationIn}))
+        )))
+      )
+    )
+  );
+}
+
+function SA_Transfers(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Transfer Requests',sub:'Staff requests — Admin approval required',actions:[]}),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Student'),h(Th,null,'From'),h(Th,null,'To'),h(Th,null,'Reason'),h(Th,null,'Submitted'),h(Th,null,'Status'),h(Th,null,'Actions'))),
+        h('tbody',null,TRANSFERS.map(t=>h('tr',{key:t.id},
+          h(Td,{bold:true},h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Av,{name:t.student,size:24}),t.student)),
+          h(Td,null,t.from),
+          h(Td,null,h('span',{style:{color:C.accent,fontWeight:600}},t.to)),
+          h(Td,null,t.reason),
+          h(Td,null,t.submitted),
+          h(Td,null,h(SB,{s:t.status})),
+          h(Td,null,t.status==='pending'?h('div',{style:{display:'flex',gap:4}},h(Btn,{label:'Approve',primary:true,small:true}),h(Btn,{label:'Reject',danger:true,small:true})):h(Badge,{label:'Done',color:C.muted}))
+        )))
+      )
+    )
+  );
+}
+
+function SA_Exams(){
+  const[sel,setSel]=useState(null);
+  if(sel){
+    const ex=EXAMS.find(e=>e.id===sel);
+    return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+      h('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:20}},
+        h('button',{onClick:()=>setSel(null),style:{background:'none',border:`1px solid ${C.border}`,borderRadius:8,padding:'6px 12px',cursor:'pointer',color:C.sub,fontSize:12,fontWeight:600}},'← Back'),
+        h('h1',{style:{color:C.text,fontSize:18,fontWeight:700,margin:0}},ex.name)
+      ),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 2fr',gap:16}},
+        h(Card,null,h(IR,{l:'Date',v:ex.date}),h(IR,{l:'Level',v:ex.level}),h(IR,{l:'Fee',v:`$${ex.fee}`,last:true})),
+        h(Card,null,
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 12px'}},'Results'),
+          h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+            h('thead',null,h('tr',null,h(Th,null,'Student'),h(Th,null,'Result'),h(Th,null,'Actions'))),
+            h('tbody',null,ex.results.map((r,i)=>h('tr',{key:i},
+              h(Td,{bold:true},h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Av,{name:r.student,size:24}),r.student)),
+              h(Td,null,r.result?h(SB,{s:r.result}):h(Badge,{label:'Pending',color:C.muted})),
+              h(Td,null,!r.result&&h('div',{style:{display:'flex',gap:4}},h(Btn,{label:'Pass ✓',primary:true,small:true}),h(Btn,{label:'Fail ✗',danger:true,small:true})))
+            )))
+          )
+        )
+      )
+    );
+  }
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Exams & Level Promotion',sub:'Auto-promotes students on Pass',actions:[h(Btn,{key:'a',label:'+ Create Exam',primary:true})]}),
+    h('div',{style:{display:'flex',gap:6,alignItems:'center',marginBottom:16,padding:'12px 14px',background:C.surface,borderRadius:12,border:`1px solid ${C.border}`}},
+      h('span',{style:{color:C.muted,fontSize:11,fontWeight:600,marginRight:4}},'LEVEL ORDER:'),
+      ['Level 1','Level 2','Level 3','Level 4','Level 5'].map((l,i,arr)=>h(Fragment,{key:l},
+        h(Badge,{label:l,color:C.accent}),
+        i<arr.length-1&&h('span',{style:{color:C.muted,fontSize:12,margin:'0 4px'}},'→')
+      ))
+    ),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Exam'),h(Th,null,'Date'),h(Th,null,'Level'),h(Th,null,'Fee'),h(Th,null,'Students'),h(Th,null,''))),
+        h('tbody',null,EXAMS.map(ex=>h('tr',{key:ex.id},
+          h(Td,{bold:true},ex.name),
+          h(Td,null,ex.date),
+          h(Td,null,h(Badge,{label:ex.level,color:C.accent})),
+          h(Td,null,`$${ex.fee}`),
+          h(Td,null,`${ex.results.length} enrolled`),
+          h(Td,null,h(Btn,{label:'View & Score',small:true,onClick:()=>setSel(ex.id)}))
+        )))
+      )
+    )
+  );
+}
+
+function SA_Inventory(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Leotard Inventory',sub:'Ready stock and made-to-order tracking',actions:[h(Btn,{key:'s',label:'+ Sale',primary:true}),h(Btn,{key:'m',label:'+ MTO Order'})]}),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Item'),h(Th,null,'Type'),h(Th,null,'Size'),h(Th,null,'Cost'),h(Th,null,'Price'),h(Th,null,'Stock / Status'),h(Th,null,''))),
+        h('tbody',null,INVENTORY.map(item=>h('tr',{key:item.id},
+          h(Td,{bold:true},item.name),
+          h(Td,null,h(SB,{s:item.type})),
+          h(Td,null,item.size),
+          h(Td,null,`$${item.cost}`),
+          h(Td,{bold:true,color:C.accent},`$${item.price}`),
+          h(Td,null,item.type==='ready'?h('span',{style:{color:item.stock===0?C.red:item.stock<=2?C.amber:C.green,fontWeight:600,fontSize:12}},item.stock===0?'Out of Stock':`${item.stock} in stock`):h(SB,{s:item.status})),
+          h(Td,null,h(Btn,{label:'Edit',small:true}))
+        )))
+      )
+    )
+  );
+}
+
+function SA_Events(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Events & Activities',sub:'Recitals, workshops, TV shows',actions:[h(Btn,{key:'a',label:'+ Create Event',primary:true})]}),
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14}},
+      EVENTS.map(ev=>{
+        const tc={Recital:C.rose,Workshop:C.blue,'TV Show':C.purple}[ev.type]||C.muted;
+        return h(Card,{key:ev.id,style:{borderTop:`3px solid ${tc}`}},
+          h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:10}},h(Badge,{label:ev.type,color:tc}),h('span',{style:{color:C.muted,fontSize:11}},ev.date)),
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 4px'}},ev.name),
+          h('p',{style:{color:C.muted,fontSize:11,margin:'0 0 12px'}},ev.venue),
+          h(IR,{l:'Fee',v:ev.price>0?`$${ev.price}`:'Free'}),
+          h(IR,{l:'Enrolled',v:`${ev.enrolled} students`,last:true}),
+          h('div',{style:{marginTop:10}},h(Btn,{label:'Manage Enrollment',primary:true,small:true}))
+        );
+      })
+    )
+  );
+}
+
+function SA_StaffLog(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Staff Attendance Log',sub:'Login/logout tracking with GPS validation',actions:[h(Btn,{key:'e',label:'⬇ Export'})]}),
+    h('div',{style:{background:C.amberL,border:`1px solid ${C.amber}40`,borderRadius:10,padding:'10px 14px',marginBottom:14,display:'flex',gap:8}},
+      h('span',{style:{fontSize:16}},'📍'),
+      h('p',{style:{color:C.amber,fontSize:12,fontWeight:600,margin:0}},'GPS validation: 100m radius from academy — soft validation (flag only, no blocking)')
+    ),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Staff'),h(Th,null,'Date'),h(Th,null,'Login'),h(Th,null,'Logout'),h(Th,null,'Hours'),h(Th,null,'Location Flag'))),
+        h('tbody',null,STAFF_LOG.map(sl=>h('tr',{key:sl.id},
+          h(Td,{bold:true},h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Av,{name:sl.name,size:24}),sl.name)),
+          h(Td,null,sl.date),
+          h(Td,null,sl.login),
+          h(Td,null,sl.logout||h(Badge,{label:'Active',color:C.green})),
+          h(Td,null,sl.logout?`~${((parseInt(sl.logout.replace(':',''))-parseInt(sl.login.replace(':','')))/100).toFixed(1)}h`:'—'),
+          h(Td,null,h(SB,{s:sl.location}))
+        )))
+      )
+    )
+  );
+}
+
+function SA_Settings(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'System Settings',sub:'Super Admin — full configuration control',actions:[h(Btn,{key:'s',label:'Save All Changes',primary:true})]}),
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
+      h(Card,null,h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'Subscription Plans'),h(IR,{l:'Sessions per Cycle',v:'4 sessions'}),h(IR,{l:'Price per Cycle',v:'$120'}),h(IR,{l:'Partial Payment Min',v:'$50',last:true})),
+      h(Card,null,h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'Freeze & Absence Rules'),h(IR,{l:'Max Freeze Days / Month',v:'30 days'}),h(IR,{l:'Absence Auto-hide After',v:'5 consecutive absences',last:true})),
+      h(Card,null,h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'Exam Fees'),h(IR,{l:'Mid-Year Assessment',v:'$50'}),h(IR,{l:'End of Year Exam',v:'$60',last:true})),
+      h(Card,null,h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'GPS Validation'),h(IR,{l:'Academy Lat',v:'25.7617° N'}),h(IR,{l:'Academy Lng',v:'80.1918° W'}),h(IR,{l:'Allowed Radius',v:'100 meters'}),h(IR,{l:'Mode',v:'Soft flag (no blocking)',last:true})),
+      h(Card,null,h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'Ballet Level Order'),h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',padding:'8px 0'}},['Level 1','Level 2','Level 3','Level 4','Level 5'].map((l,i,arr)=>h(Fragment,{key:l},h(Badge,{label:l,color:C.accent}),i<arr.length-1&&h('span',{style:{color:C.muted,margin:'0 4px'}},'→'))))),
+      h(Card,null,h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'User Accounts'),h('div',{style:{display:'flex',flexDirection:'column',gap:6}},h(Btn,{label:'Manage Staff Accounts'}),h(Btn,{label:'Manage Coach Accounts'}),h(Btn,{label:'+ Create New Account',primary:true})))
+    )
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STAFF SCREENS
+// ═══════════════════════════════════════════════════════════════
+
+function ST_Overview({setActive}){
+  const payReq=STUDENTS.filter(s=>s.remaining===0&&s.status==='active').length;
+  const todayPay=PAYMENTS.filter(p=>p.date==='Today').reduce((a,p)=>a+(p.paid||p.amount),0);
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Daily Dashboard',sub:'Staff view — Daily operations',actions:[h(Btn,{key:'r',label:'↻ Refresh'})]}),
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:20}},
+      h(KPI,{icon:'🚨',label:'Payment Required',value:payReq,sub:'Students with 0 sessions',color:C.red,alert:payReq>0}),
+      h(KPI,{icon:'💵',label:"Today's Collected",value:`$${todayPay}`,sub:'Cash + InstaPay',color:C.green}),
+      h(KPI,{icon:'📅',label:'Active Classes Today',value:CLASSES.filter(c=>c.day==='Saturday').length,sub:'Saturday schedule',color:C.accent}),
+    ),
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}},
+      h(Card,null,
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:0}},'🚨 Collect Payment'),
+          h(Btn,{label:'Record',primary:true,small:true,onClick:()=>setActive('payments')})
+        ),
+        STUDENTS.filter(s=>s.remaining===0&&s.status==='active').length===0
+          ?h('p',{style:{color:C.muted,fontSize:12,textAlign:'center',padding:'12px 0'}},'All students paid up ✓')
+          :STUDENTS.filter(s=>s.remaining===0&&s.status==='active').map(s=>h('div',{key:s.id,style:{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:`1px solid ${C.border}`}},
+            h(Av,{name:s.name,size:26}),
+            h('div',{style:{flex:1}},h('p',{style:{color:C.text,fontSize:12,fontWeight:600,margin:0}},s.name),h('p',{style:{color:C.muted,fontSize:11,margin:0}},s.level)),
+            h(Btn,{label:'Collect',primary:true,small:true})
+          ))
+      ),
+      h(Card,null,
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:0}},"Today's Attendance"),
+          h(Btn,{label:'Mark',primary:true,small:true,onClick:()=>setActive('attendance')})
+        ),
+        ATTENDANCE.filter(a=>a.date==='Today').map(a=>h('div',{key:a.id,style:{display:'flex',alignItems:'center',gap:8,padding:'7px 0',borderBottom:`1px solid ${C.border}`}},
+          h(Av,{name:a.student,size:24}),
+          h('div',{style:{flex:1}},h('p',{style:{color:C.text,fontSize:12,fontWeight:600,margin:0}},a.student),h('p',{style:{color:C.muted,fontSize:10,margin:0}},a.class)),
+          h(SB,{s:a.staffStatus})
+        ))
+      )
+    ),
+    h(Card,null,
+      h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 12px'}},'Quick Actions'),
+      h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}},
+        [{label:'+ New Student',screen:'students',icon:'🩰'},{label:'Record Payment',screen:'payments',icon:'💳'},{label:'Mark Attendance',screen:'attendance',icon:'✓'},{label:'Leotard Sale',screen:'inventory',icon:'👗'}].map(a=>
+          h('button',{key:a.label,onClick:()=>setActive(a.screen),style:{background:C.accentL,border:`1px solid ${C.accent}30`,borderRadius:10,padding:'12px',cursor:'pointer',textAlign:'center'}},
+            h('p',{style:{fontSize:18,margin:'0 0 4px'}}),a.icon,
+            h('p',{style:{color:C.accent,fontSize:11,fontWeight:600,margin:0}},a.label)
+          )
+        )
+      )
+    )
+  );
+}
+
+function ST_Students(){
+  const[sel,setSel]=useState(null);
+  const[q,setQ]=useState('');
+  const fl=STUDENTS.filter(s=>s.status!=='inactive'&&(s.name+s.level).toLowerCase().includes(q.toLowerCase()));
+  if(sel){
+    const s=STUDENTS.find(x=>x.id===sel);
+    return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+      h('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:20}},
+        h('button',{onClick:()=>setSel(null),style:{background:'none',border:`1px solid ${C.border}`,borderRadius:8,padding:'6px 12px',cursor:'pointer',color:C.sub,fontSize:12,fontWeight:600}},'← Back'),
+        h('h1',{style:{color:C.text,fontSize:18,fontWeight:700,margin:0}},s.name),h('span',{style:{color:C.sub,fontSize:14}},' / '+s.nameAr),h(SB,{s:s.status})
+      ),
+      s.remaining===0&&s.status==='active'&&h('div',{style:{background:C.redL,border:`1px solid ${C.red}30`,borderRadius:10,padding:'10px 14px',marginBottom:14,display:'flex',gap:8}},h('span',{style:{fontSize:16}},'🚨'),h('p',{style:{color:C.red,fontSize:12,fontWeight:600,margin:0}},'Sessions exhausted — collect payment now')),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
+        h(Card,null,
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'Student Profile'),
+          h(IR,{l:'Name (EN)',v:s.name}),h(IR,{l:'Name (AR)',v:s.nameAr}),h(IR,{l:'Age',v:`${s.age} years`}),h(IR,{l:'Phone',v:s.phone}),h(IR,{l:'Level',v:s.level}),h(IR,{l:'Enrolled',v:s.enrolled}),h(IR,{l:'Notes',v:s.notes||'—',last:true})
+        ),
+        h('div',{style:{display:'flex',flexDirection:'column',gap:14}},
+          h(Card,null,
+            h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 10px'}},'Subscription'),
+            h('div',{style:{display:'flex',gap:3,marginBottom:8}},[1,2,3,4].map(i=>h('div',{key:i,style:{flex:1,height:10,borderRadius:3,background:i<=s.remaining?C.accent:C.border}}))),
+            h(IR,{l:'Sessions Left',v:`${s.remaining} / 4`}),
+            h(IR,{l:'Balance',v:s.balance>0?`$${s.balance} due`:'✓ Cleared',last:true})
+          ),
+          h(Card,null,
+            h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 10px'}},'Actions'),
+            h('div',{style:{display:'flex',flexDirection:'column',gap:6}},
+              h(Btn,{label:'Record Payment',primary:true}),
+              h(Btn,{label:'Mark Attendance'}),
+              h(Btn,{label:'Assign Make-up Session'}),
+              s.status==='active'&&h(Btn,{label:'Freeze Student'}),
+              s.status==='frozen'&&h(Btn,{label:'Reactivate',primary:true}),
+              h(Btn,{label:'Request Transfer'}),
+              h(Btn,{label:'Edit Profile'})
+            )
+          )
+        )
+      )
+    );
+  }
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Students',sub:'Active and frozen students',actions:[h(Btn,{key:'a',label:'+ New Student',primary:true})]}),
+    h('div',{style:{marginBottom:14}},h('input',{value:q,onChange:e=>setQ(e.target.value),placeholder:'Search students...',style:{padding:'7px 12px',border:`1px solid ${C.border2}`,borderRadius:8,fontSize:12,color:C.text,width:250,outline:'none'}})),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Student'),h(Th,null,'Level'),h(Th,null,'Age'),h(Th,null,'Sessions Left'),h(Th,null,'Balance'),h(Th,null,'Status'),h(Th,null,''))),
+        h('tbody',null,fl.map(s=>h('tr',{key:s.id,onClick:()=>setSel(s.id),style:{cursor:'pointer'}},
+          h(Td,{bold:true},h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Av,{name:s.name,size:26}),h('div',null,h('p',{style:{margin:0,color:C.text,fontSize:12,fontWeight:600}},s.name),h('p',{style:{margin:0,color:C.muted,fontSize:10}},s.nameAr)))),
+          h(Td,null,s.level),h(Td,null,`${s.age}y`),
+          h(Td,null,s.status==='active'?h('div',{style:{display:'flex',alignItems:'center',gap:6}},h('div',{style:{display:'flex',gap:2}},[1,2,3,4].map(i=>h('div',{key:i,style:{width:10,height:6,borderRadius:2,background:i<=s.remaining?C.accent:C.border}}))),h('span',{style:{color:s.remaining===0?C.red:C.text,fontSize:11,fontWeight:600}},`${s.remaining}/4`)):h('span',{style:{color:C.muted}},'—')),
+          h(Td,null,s.balance>0?h(Badge,{label:`$${s.balance}`,color:C.amber}):h('span',{style:{color:C.green,fontSize:11}},'✓')),
+          h(Td,null,h(SB,{s:s.status})),
+          h(Td,null,h(Btn,{label:'View',small:true,onClick:e=>{e.stopPropagation();setSel(s.id);}}))
+        )))
+      )
+    )
+  );
+}
+
+function ST_Attendance(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Mark Attendance',sub:"Today's sessions",actions:[h(Btn,{key:'a',label:'+ Mark Session',primary:true})]}),
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:14}},
+      [{l:'Present',v:ATTENDANCE.filter(a=>a.date==='Today'&&a.staffStatus==='present').length,c:C.green},
+       {l:'Absent',v:ATTENDANCE.filter(a=>a.date==='Today'&&a.staffStatus==='absent').length,c:C.red},
+       {l:'Make-up',v:ATTENDANCE.filter(a=>a.date==='Today'&&a.staffStatus==='makeup').length,c:C.purple}
+      ].map((s,i)=>h('div',{key:i,style:{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:'12px 14px',boxShadow:SH}},
+        h('p',{style:{color:C.muted,fontSize:10,margin:'0 0 4px'}},s.l),h('p',{style:{color:s.c,fontSize:22,fontWeight:700,margin:0}},s.v)
+      ))
+    ),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Student'),h(Th,null,'Class'),h(Th,null,'Coach'),h(Th,null,'Status'),h(Th,null,'Actions'))),
+        h('tbody',null,ATTENDANCE.filter(a=>a.date==='Today').map(a=>h('tr',{key:a.id},
+          h(Td,{bold:true},h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Av,{name:a.student,size:24}),a.student)),
+          h(Td,null,a.class),h(Td,null,a.coach),
+          h(Td,null,h(SB,{s:a.staffStatus})),
+          h(Td,null,h('div',{style:{display:'flex',gap:4}},
+            h(Btn,{label:'Present',primary:true,small:true}),
+            h(Btn,{label:'Absent',danger:true,small:true}),
+            h(Btn,{label:'Make-up',small:true})
+          ))
+        )))
+      )
+    )
+  );
+}
+
+function ST_Payments(){
+  const typeColor={subscription:C.accent,product:C.green,event:C.purple,private:C.blue,exam:C.amber,enrollment:C.rose};
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Record Payments',sub:'All payment types — Cash & InstaPay',actions:[h(Btn,{key:'a',label:'+ Record Payment',primary:true})]}),
+    h('div',{style:{background:C.blueL,border:`1px solid ${C.blue}30`,borderRadius:10,padding:'10px 14px',marginBottom:14,display:'flex',gap:8}},
+      h('span',{style:{fontSize:16}},'💡'),
+      h('p',{style:{color:C.blue,fontSize:12,fontWeight:500,margin:0}},'Payment types: Subscription · Product · Event · Private Session · Exam Fee · New Enrollment')
+    ),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Student'),h(Th,null,'Type'),h(Th,null,'Amount'),h(Th,null,'Paid'),h(Th,null,'Balance'),h(Th,null,'Method'),h(Th,null,'Date'))),
+        h('tbody',null,PAYMENTS.map(p=>h('tr',{key:p.id},
+          h(Td,{bold:true},p.student),
+          h(Td,null,h(Badge,{label:p.type,color:typeColor[p.type]||C.muted})),
+          h(Td,null,`$${p.amount}`),
+          h(Td,{color:C.green,bold:true},`$${p.paid}`),
+          h(Td,null,p.balance>0?h(Badge,{label:`$${p.balance} due`,color:C.amber}):h('span',{style:{color:C.green,fontSize:11}},'✓')),
+          h(Td,null,p.method),h(Td,null,p.date)
+        )))
+      )
+    )
+  );
+}
+
+function ST_Transfers(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Transfer Requests',sub:'Submit for Admin approval',actions:[h(Btn,{key:'a',label:'+ New Request',primary:true})]}),
+    h('div',{style:{background:C.amberL,border:`1px solid ${C.amber}30`,borderRadius:10,padding:'10px 14px',marginBottom:14,display:'flex',gap:8}},
+      h('span',{style:{fontSize:16}},'ℹ️'),
+      h('p',{style:{color:C.amber,fontSize:12,fontWeight:500,margin:0}},'Transfer requests require Admin approval. Student remains in original class until approved.')
+    ),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Student'),h(Th,null,'From'),h(Th,null,'To'),h(Th,null,'Reason'),h(Th,null,'Submitted'),h(Th,null,'Status'))),
+        h('tbody',null,TRANSFERS.map(t=>h('tr',{key:t.id},
+          h(Td,{bold:true},h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Av,{name:t.student,size:24}),t.student)),
+          h(Td,null,t.from),h(Td,null,h('span',{style:{color:C.accent,fontWeight:600}},t.to)),
+          h(Td,null,t.reason),h(Td,null,t.submitted),
+          h(Td,null,h(SB,{s:t.status}))
+        )))
+      )
+    )
+  );
+}
+
+function ST_Inventory(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Leotard Sales',sub:'Record sales and track made-to-order',actions:[h(Btn,{key:'s',label:'+ Record Sale',primary:true}),h(Btn,{key:'m',label:'+ MTO Order'})]}),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Item'),h(Th,null,'Type'),h(Th,null,'Size'),h(Th,null,'Price'),h(Th,null,'Available'),h(Th,null,''))),
+        h('tbody',null,INVENTORY.map(item=>h('tr',{key:item.id},
+          h(Td,{bold:true},item.name),
+          h(Td,null,h(SB,{s:item.type})),
+          h(Td,null,item.size),
+          h(Td,{bold:true,color:C.accent},`$${item.price}`),
+          h(Td,null,item.type==='ready'?h('span',{style:{color:item.stock===0?C.red:item.stock<=2?C.amber:C.green,fontWeight:600,fontSize:12}},item.stock===0?'Out of Stock':`${item.stock} in stock`):h(SB,{s:item.status})),
+          h(Td,null,item.type==='ready'&&item.stock>0?h(Btn,{label:'Sell',primary:true,small:true}):h(Btn,{label:'Order',small:true}))
+        )))
+      )
+    )
+  );
+}
+
+function ST_Expenses(){
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Daily Expenses',sub:'Record operational costs',actions:[h(Btn,{key:'a',label:'+ Add Expense',primary:true})]}),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Description'),h(Th,null,'Amount'),h(Th,null,'Hall'),h(Th,null,'Date'))),
+        h('tbody',null,EXPENSES.map(e=>h('tr',{key:e.id},
+          h(Td,{bold:true},e.desc),
+          h(Td,{color:C.red,bold:true},`$${e.amount}`),
+          h(Td,null,e.hall),
+          h(Td,null,e.date)
+        )))
+      )
+    )
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COACH SCREENS
+// ═══════════════════════════════════════════════════════════════
+
+function CO_Overview({user}){
+  const myClasses=CLASSES.filter(c=>c.coachId===user.id);
+  const myLog=COACH_LOG.filter(l=>l.coachId===user.id&&l.date==='Today');
+  const checkedIn=myLog.some(l=>l.checkIn&&!l.checkOut);
+  const monthHours={U4:48,U5:36}[user.id]||0;
+  const monthRate={U4:25,U5:28}[user.id]||0;
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:`Welcome, ${user.name}`,sub:'Your coaching dashboard — Miami Branch',actions:[]}),
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:20}},
+      h(KPI,{icon:'📅',label:'My Classes',value:myClasses.length,sub:'This week',color:C.blue}),
+      h(KPI,{icon:'⏱',label:'Hours This Month',value:`${monthHours}h`,sub:`$${monthHours*monthRate} payroll`,color:C.green}),
+      h(KPI,{icon:'📍',label:'Status',value:checkedIn?'Checked In':'Available',sub:checkedIn?'Session active':'Ready to check in',color:checkedIn?C.green:C.muted}),
+    ),
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
+      h(Card,null,
+        h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'Today\'s Sessions'),
+        myLog.length===0
+          ?h('p',{style:{color:C.muted,fontSize:12,textAlign:'center',padding:'16px 0'}},'No sessions today')
+          :myLog.map(l=>h('div',{key:l.id,style:{padding:'10px 0',borderBottom:`1px solid ${C.border}`}},
+            h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}},
+              h('div',null,
+                h('p',{style:{color:C.text,fontSize:13,fontWeight:600,margin:'0 0 3px'}},l.class),
+                h('p',{style:{color:C.muted,fontSize:11,margin:0}},`Check-in: ${l.checkIn}`)
+              ),
+              h('div',{style:{textAlign:'right'}},
+                l.checkOut
+                  ?h(Badge,{label:`${l.hours}h completed`,color:C.green})
+                  :h(Badge,{label:'Session Active',color:C.green,dot:true})
+              )
+            ),
+            !l.checkOut&&h('div',{style:{marginTop:8}},h(Btn,{label:'Check Out Now',primary:true,small:true}))
+          ))
+      ),
+      h(Card,null,
+        h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 14px'}},'My Classes This Week'),
+        myClasses.map(c=>h('div',{key:c.id,style:{padding:'9px 0',borderBottom:`1px solid ${C.border}`}},
+          h('div',{style:{display:'flex',justifyContent:'space-between'}},
+            h('div',null,h('p',{style:{color:C.text,fontSize:12,fontWeight:600,margin:'0 0 2px'}},c.name),h('p',{style:{color:C.muted,fontSize:11,margin:0}},`${c.day} · ${c.time} · ${c.hall}`)),
+            h(Badge,{label:c.level,color:C.blue})
+          )
+        ))
+      )
+    )
+  );
+}
+
+function CO_CheckIn({user}){
+  const[checkedIn,setCheckedIn]=useState(false);
+  const[time,setTime]=useState('');
+  const myLog=COACH_LOG.filter(l=>l.coachId===user.id&&l.date==='Today');
+  const myClasses=CLASSES.filter(c=>c.coachId===user.id);
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Check In / Out',sub:'GPS-verified session attendance',actions:[]}),
+    h('div',{style:{background:C.amberL,border:`1px solid ${C.amber}40`,borderRadius:10,padding:'10px 14px',marginBottom:16,display:'flex',gap:8}},
+      h('span',{style:{fontSize:16}},'📍'),
+      h('p',{style:{color:C.amber,fontSize:12,fontWeight:500,margin:0}},'Your GPS location will be recorded on check-in and check-out. You will NOT be blocked even if outside range — admin reviews flagged entries.')
+    ),
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}},
+      myClasses.map(c=>{
+        const log=myLog.find(l=>l.class===c.name);
+        return h(Card,{key:c.id,style:{borderTop:`3px solid ${C.blue}`}},
+          h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 4px'}},c.name),
+          h('p',{style:{color:C.muted,fontSize:11,margin:'0 0 12px'}},`${c.day} · ${c.time} · ${c.hall}`),
+          log
+            ?h('div',null,
+              h(IR,{l:'Checked In',v:log.checkIn}),
+              h(IR,{l:'Checked Out',v:log.checkOut||'—'}),
+              h(IR,{l:'Hours',v:log.hours?`${log.hours}h`:'In progress',last:true}),
+              !log.checkOut&&h('div',{style:{marginTop:10}},h(Btn,{label:'✓ Check Out Now',primary:true}))
+            )
+            :h('div',null,
+              h('p',{style:{color:C.muted,fontSize:11,margin:'0 0 10px'}},'Not yet checked in'),
+              h(Btn,{label:'📍 Check In',primary:true})
+            )
+        );
+      })
+    ),
+    h(Card,null,
+      h('p',{style:{color:C.text,fontSize:13,fontWeight:700,margin:'0 0 12px'}},'My Check-in History'),
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Class'),h(Th,null,'Date'),h(Th,null,'In'),h(Th,null,'Out'),h(Th,null,'Hours'),h(Th,null,'GPS'))),
+        h('tbody',null,COACH_LOG.filter(l=>l.coachId===user.id).map(l=>h('tr',{key:l.id},
+          h(Td,{bold:true},l.class),
+          h(Td,null,l.date),
+          h(Td,null,l.checkIn),
+          h(Td,null,l.checkOut||h(Badge,{label:'Active',color:C.green})),
+          h(Td,null,l.hours?`${l.hours}h`:h(Badge,{label:'In Progress',color:C.amber})),
+          h(Td,null,h(SB,{s:l.locationIn}))
+        )))
+      )
+    )
+  );
+}
+
+function CO_Attendance({user}){
+  const myClassIds=CLASSES.filter(c=>c.coachId===user.id).map(c=>c.id);
+  const myAttendance=ATTENDANCE.filter(a=>myClassIds.includes(a.classId));
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'Confirm Attendance',sub:'Cross-validate with staff entry',actions:[]}),
+    h('div',{style:{background:C.blueL,border:`1px solid ${C.blue}30`,borderRadius:10,padding:'10px 14px',marginBottom:14,display:'flex',gap:8}},
+      h('span',{style:{fontSize:16}},'ℹ️'),
+      h('p',{style:{color:C.blue,fontSize:12,fontWeight:500,margin:0}},'Confirm or correct the staff-marked attendance for your classes. Discrepancies are flagged for Admin review.')
+    ),
+    h(Card,{pad:'0'},
+      h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        h('thead',null,h('tr',null,h(Th,null,'Student'),h(Th,null,'Class'),h(Th,null,'Date'),h(Th,null,'Staff Entry'),h(Th,null,'My Confirmation'),h(Th,null,''))),
+        h('tbody',null,myAttendance.map(a=>h('tr',{key:a.id},
+          h(Td,{bold:true},h('div',{style:{display:'flex',alignItems:'center',gap:8}},h(Av,{name:a.student,size:24}),a.student)),
+          h(Td,null,a.class),
+          h(Td,null,a.date),
+          h(Td,null,h(SB,{s:a.staffStatus})),
+          h(Td,null,a.coachStatus?h(SB,{s:a.coachStatus}):h(Badge,{label:'Pending',color:C.amber})),
+          h(Td,null,!a.coachStatus&&h('div',{style:{display:'flex',gap:4}},
+            h(Btn,{label:'Confirm ✓',primary:true,small:true}),
+            h(Btn,{label:'Correct',small:true})
+          ))
+        )))
+      )
+    )
+  );
+}
+
+function CO_Schedule({user}){
+  const myClasses=CLASSES.filter(c=>c.coachId===user.id);
+  return h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg},className:'fade-in'},
+    h(PH,{title:'My Schedule',sub:'Weekly timetable',actions:[]}),
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:14}},
+      myClasses.map(c=>{
+        const students=STUDENTS.filter(s=>s.status==='active');
+        return h(Card,{key:c.id,style:{borderTop:`3px solid ${C.blue}`}},
+          h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}},
+            h('div',null,h('p',{style:{color:C.text,fontSize:14,fontWeight:700,margin:'0 0 4px'}},c.name),h('p',{style:{color:C.muted,fontSize:11,margin:0}},`${c.day} · ${c.time}`)),
+            h('div',{style:{textAlign:'right'}},h(Badge,{label:c.hall,color:C.blue}),h('p',{style:{color:C.muted,fontSize:10,margin:'4px 0 0'}},c.level))
+          ),
+          h(IR,{l:'Default Coach',v:c.coach}),
+          h(IR,{l:'Capacity',v:`${c.enrolled}/${c.capacity} enrolled`}),
+          h(IR,{l:'Hall',v:c.hall,last:true})
+        );
+      })
+    )
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// YAWMIYA — Daily Sheet (shared: Admin + Staff)
+// ═══════════════════════════════════════════════════════════════
+
+// Yawmiya data
+const GROUPS_TODAY=[
+  {id:'G1',nameAr:'جروب 5–7',term:'Grade 4 • Term 1',level:'Group Level',coach:'Coach Dina',hall:'Hall 1',time:'10:00–11:00',capacity:12,
+   students:[
+    {id:'GS001',name:'نور رأفت',    sub:500,sessionsLeft:3,status:'ساري',        att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS002',name:'لارين عز',   sub:500,sessionsLeft:2,status:'ساري',        att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS003',name:'هنا ياسر',   sub:500,sessionsLeft:1,status:'ساري',        att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS004',name:'كارما السيد',sub:500,sessionsLeft:0,status:'مطلوب الدفع', att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS005',name:'لوجين',      sub:500,sessionsLeft:0,status:'مطلوب الدفع', att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS006',name:'مايلي مينا', sub:500,sessionsLeft:0,status:'مطلوب الدفع', att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS007',name:'رودينا حسن', sub:650,sessionsLeft:4,status:'ساري',        att:null,makeup:false,mkFrom:'',notes:''},
+  ]},
+  {id:'G2',nameAr:'جروب 7–9',term:'Grade 2 • Term 2',level:'Group Level',coach:'Coach Nadia',hall:'Hall 2',time:'11:00–12:30',capacity:12,
+   students:[
+    {id:'GS008',name:'رودينا أحمد',sub:500,sessionsLeft:3,status:'ساري',        att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS009',name:'آيه جمال',   sub:500,sessionsLeft:2,status:'ساري',        att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS010',name:'ندا أحمد',   sub:500,sessionsLeft:0,status:'مطلوب الدفع', att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS011',name:'رودينا حسام',sub:500,sessionsLeft:0,status:'مطلوب الدفع', att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS012',name:'مروه محمد',  sub:500,sessionsLeft:4,status:'ساري',        att:null,makeup:false,mkFrom:'',notes:''},
+    {id:'GS013',name:'هلور حسني',  sub:500,sessionsLeft:1,status:'ساري',        att:null,makeup:false,mkFrom:'',notes:''},
+  ]},
+];
+const DAYS_AR=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+
+// Yawmiya CSS injected once
+(function(){
+  if(document.getElementById('yw-css')) return;
+  const s=document.createElement('style');
+  s.id='yw-css';
+  s.textContent=`
+.yw{direction:rtl}
+.yw table{border-collapse:collapse;width:100%}
+.yw th,.yw td{border:1px solid #d0dbe8;padding:5px 8px;font-size:12px;text-align:right}
+.yw thead th{background:#1a6fa3;color:#fff;font-weight:600;font-size:11px;white-space:nowrap}
+.yw tbody tr:nth-child(even){background:#f8fbff}
+.yw input[type=text],.yw input[type=number],.yw select{width:100%;border:1px solid #c8d4e0;border-radius:4px;padding:3px 6px;font-size:11px;background:#fff;font-family:inherit;direction:rtl}
+.yw input:focus,.yw select:focus{outline:none;border-color:#1a6fa3}
+.yw-sec{background:#1a6fa3;color:#fff;padding:7px 12px;font-weight:700;font-size:13px;border-radius:6px 6px 0 0;margin-top:14px}
+.yw-card{background:#fff;border:1px solid #d0dbe8;border-radius:0 0 8px 8px;overflow:hidden}
+.yw-tot td{background:#e8f4fd!important;font-weight:700}
+.yw-grp-hdr{background:#e8f0f8;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-top:3px solid #1a6fa3}
+@media print{.noprint{display:none!important}}
+  `;
+  document.head.appendChild(s);
+})();
+
+function YwPayModal({sid,students,onConfirm,onClose}){
+  const s=students.find(x=>x.id===sid)||{};
+  const[form,setForm]=useState({type:'اشتراك',amount:'500',method:'كاش'});
+  return h('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center'}},
+    h('div',{style:{background:'#fff',borderRadius:14,padding:'22px',width:340,direction:'rtl',boxShadow:'0 8px 32px rgba(0,0,0,.2)'}},
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}},
+        h('p',{style:{fontWeight:700,fontSize:14,margin:0,color:C.text}},'💳 تسجيل دفع — '+s.name),
+        h('button',{onClick:onClose,style:{background:'none',border:'none',fontSize:18,cursor:'pointer',color:C.muted}},'×')
+      ),
+      [{l:'نوع الدفع',f:'type',t:'select',opts:['اشتراك','برايفيت','امتحان','منتج','تسجيل']},
+       {l:'المبلغ',f:'amount',t:'number'},
+       {l:'طريقة الدفع',f:'method',t:'select',opts:['كاش','انستاباي']}
+      ].map(fld=>h('div',{key:fld.f,style:{marginBottom:10}},
+        h('label',{style:{display:'block',color:C.sub,fontSize:11,fontWeight:600,marginBottom:3}},fld.l),
+        fld.t==='select'
+          ?h('select',{value:form[fld.f],onChange:e=>setForm(p=>({...p,[fld.f]:e.target.value})),style:{width:'100%',padding:'7px 10px',border:'1px solid '+C.border2,borderRadius:8,fontSize:13,direction:'rtl'}},
+              fld.opts.map(o=>h('option',{key:o},o)))
+          :h('input',{type:'number',value:form[fld.f],onChange:e=>setForm(p=>({...p,[fld.f]:e.target.value})),style:{width:'100%',padding:'7px 10px',border:'1px solid '+C.border2,borderRadius:8,fontSize:13}})
+      )),
+      h('div',{style:{display:'flex',gap:8,marginTop:14}},
+        h('button',{onClick:()=>onConfirm(sid,form),style:{flex:1,background:'#1a8a4a',color:'#fff',border:'none',borderRadius:8,padding:'10px',fontWeight:700,cursor:'pointer',fontSize:13}},'✓ تأكيد الدفع'),
+        h('button',{onClick:onClose,style:{flex:1,background:'#f0f4f8',color:C.sub,border:'none',borderRadius:8,padding:'10px',fontWeight:600,cursor:'pointer',fontSize:13}},'إلغاء')
+      )
+    )
+  );
+}
+
+function Yawmiya(){
+  const today=new Date();
+  const todayAr=DAYS_AR[today.getDay()];
+  const todayDate=today.toLocaleDateString('ar-EG');
+
+  const[groups,setGroups]=useState(GROUPS_TODAY);
+  const[cashRows,setCashRows]=useState([
+    {id:'C1',name:'فريدة علاء',amount:500,type:'اشتراك'},
+    {id:'C2',name:'مايلي مينا',amount:500,type:'اشتراك'},
+  ]);
+  const[instaRows,setInstaRows]=useState([]);
+  const[expenses,setExpenses]=useState([
+    {id:'E1',desc:'كهرباء',amount:180},
+    {id:'E2',desc:'نظافة',amount:45},
+  ]);
+  const[privates,setPrivates]=useState([{id:'P1',coach:'',student:'',duration:'ساعة',notes:''}]);
+  const[payModal,setPayModal]=useState(null);
+
+  const markAtt=(gid,sid,val)=>setGroups(gs=>gs.map(g=>g.id!==gid?g:{...g,students:g.students.map(s=>s.id!==sid?s:{...s,att:s.att===val?null:val,makeup:val!=='absent'?false:s.makeup})}));
+  const setMk=(gid,sid,field,val)=>setGroups(gs=>gs.map(g=>g.id!==gid?g:{...g,students:g.students.map(s=>s.id!==sid?s:{...s,[field]:val})}));
+  const setNote=(gid,sid,val)=>setGroups(gs=>gs.map(g=>g.id!==gid?g:{...g,students:g.students.map(s=>s.id!==sid?s:{...s,notes:val})}));
+
+  const confirmPay=(sid,form)=>{
+    const allSt=groups.flatMap(g=>g.students);
+    const st=allSt.find(s=>s.id===sid);
+    const amount=parseFloat(form.amount)||0;
+    const newRow={id:'R'+Date.now(),name:st.name,amount,type:form.type};
+    if(form.method==='كاش') setCashRows(p=>[...p,newRow]);
+    else setInstaRows(p=>[...p,newRow]);
+    // update student sessions
+    setGroups(gs=>gs.map(g=>({...g,students:g.students.map(s=>{
+      if(s.id!==sid) return s;
+      if(form.type==='اشتراك') return {...s,status:'تم الدفع',sessionsLeft:4};
+      return s;
+    })})));
+    setPayModal(null);
+  };
+
+  const cashTotal=cashRows.reduce((a,r)=>a+(parseFloat(r.amount)||0),0);
+  const instaTotal=instaRows.reduce((a,r)=>a+(parseFloat(r.amount)||0),0);
+  const expTotal=expenses.reduce((a,e)=>a+(parseFloat(e.amount)||0),0);
+  const totalRev=cashTotal+instaTotal;
+  const netCash=cashTotal-expTotal;
+
+  const allSt=groups.flatMap(g=>g.students);
+  const presentN=allSt.filter(s=>s.att==='present').length;
+  const absentN=allSt.filter(s=>s.att==='absent').length;
+  const payReqSt=allSt.filter(s=>s.status==='مطلوب الدفع');
+
+  return h('div',{className:'yw',style:{flex:1,overflowY:'auto',background:'#f5f7fa'}},
+
+    // top bar
+    h('div',{style:{background:'linear-gradient(135deg,#1a6fa3,#0d4a75)',padding:'10px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:50}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:10}},
+        h('span',{style:{fontSize:20}},'🦢'),
+        h('div',null,
+          h('p',{style:{color:'#fff',fontSize:13,fontWeight:800,margin:0}},'Little Swan — اليومية'),
+          h('p',{style:{color:'#a8d4f0',fontSize:10,margin:0}},todayAr+' '+todayDate+' — Miami Branch')
+        )
+      ),
+      h('div',null)
+    ),
+
+    h('div',{style:{maxWidth:1200,margin:'0 auto',padding:'14px 18px'}},
+
+      // stats row
+      h('div',{style:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:8,marginBottom:14}},
+        [{l:'اليوم',v:todayAr,c:C.accent,bg:C.accentL},
+         {l:'حضور',v:presentN,c:C.green,bg:C.greenL},
+         {l:'غياب',v:absentN,c:C.red,bg:C.redL},
+         {l:'مطلوب دفع',v:payReqSt.length,c:C.amber,bg:C.amberL},
+         {l:'إيراد اليوم',v:totalRev+' ج',c:C.blue,bg:C.blueL},
+         {l:'صافي كاش',v:netCash+' ج',c:netCash>=0?C.green:C.red,bg:netCash>=0?C.greenL:C.redL},
+        ].map((s,i)=>h('div',{key:i,style:{background:s.bg,border:'1px solid '+s.c+'22',borderRadius:10,padding:'8px 10px',textAlign:'center'}},
+          h('p',{style:{color:C.muted,fontSize:10,fontWeight:600,margin:'0 0 2px'}},s.l),
+          h('p',{style:{color:s.c,fontSize:15,fontWeight:800,margin:0}},s.v)
+        ))
+      ),
+
+      // pay-required alert
+      payReqSt.length>0&&h('div',{style:{background:C.amberL,border:'1px solid '+C.amber+'40',borderRadius:10,padding:'10px 14px',marginBottom:14}},
+        h('p',{style:{color:C.amber,fontWeight:700,fontSize:12,margin:'0 0 8px'}},'⚠️ طالبات مطلوب منهم الدفع قبل الحصة'),
+        h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+          payReqSt.map(s=>h('div',{key:s.id,style:{background:'#fff',border:'1px solid '+C.amber+'60',borderRadius:8,padding:'6px 10px',display:'flex',alignItems:'center',gap:8}},
+            h('span',{style:{fontWeight:700,fontSize:12,color:C.text}},s.name),
+            h('button',{onClick:()=>setPayModal(s.id),style:{background:C.green,color:'#fff',border:'none',borderRadius:5,padding:'3px 10px',fontSize:11,fontWeight:700,cursor:'pointer'}},'💳 دفع')
+          ))
+        )
+      ),
+
+      // attendance section
+      h('div',{className:'yw-sec'},'📋 كشف الحضور والغياب'),
+      h('div',{className:'yw-card'},
+        groups.map(g=>{
+          const pN=g.students.filter(s=>s.att==='present').length;
+          const aN=g.students.filter(s=>s.att==='absent').length;
+          return h('div',{key:g.id},
+            h('div',{className:'yw-grp-hdr'},
+              h('div',{style:{display:'flex',alignItems:'center',gap:8}},
+                h('span',{style:{fontWeight:700,color:C.text,fontSize:13}},g.nameAr),
+                h('span',{style:{background:'#1a6fa3',color:'#fff',borderRadius:10,padding:'1px 8px',fontSize:10,fontWeight:700}},g.term),
+                h('span',{style:{background:C.amber,color:'#fff',borderRadius:10,padding:'1px 8px',fontSize:10,fontWeight:700}},g.level)
+              ),
+              h('div',{style:{color:'#4a6070',fontSize:11,display:'flex',gap:12}},
+                h('span',null,'🕐 '+g.time),
+                h('span',null,'📍 '+g.hall),
+                h('span',null,'👩‍🏫 '+g.coach)
+              )
+            ),
+            h('div',{style:{overflowX:'auto'}},
+              h('table',null,
+                h('thead',null,h('tr',null,
+                  h('th',{style:{width:26}},'#'),
+                  h('th',{style:{minWidth:110}},'اسم البنت'),
+                  h('th',{style:{width:76}},'الحضور'),
+                  h('th',{style:{width:55}},'الاشتراك'),
+                  h('th',{style:{width:90}},'عدد المرات'),
+                  h('th',{style:{width:100}},'حالة الاشتراك'),
+                  h('th',{style:{minWidth:90}},'ملاحظات'),
+                  h('th',{style:{width:68},className:'noprint'},'')
+                )),
+                h('tbody',null,
+                  g.students.map((s,i)=>{
+                    const isPay=s.status==='مطلوب الدفع';
+                    const isPaid=s.status==='تم الدفع';
+                    const statusLabel=isPay?'مطلوب الدفع':isPaid?'تم الدفع':'ساري';
+                    const statusColor=isPay?C.red:isPaid?C.green:C.green;
+                    return h('tr',{key:s.id,style:{background:isPay?'#fff8e8':isPaid?'#edfaf4':s.att==='absent'?'#fff5f5':''}},
+                      h('td',{style:{textAlign:'center',color:C.muted,fontSize:11}},i+1),
+                      h('td',null,
+                        h('div',{style:{display:'flex',alignItems:'center',gap:6}},
+                          h('span',{style:{fontWeight:600,fontSize:12,color:C.text}},s.name),
+                          isPay&&h('span',{style:{background:'#fff3cd',color:'#856404',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:700,border:'1px solid #ffc107'}},'💳 دفع')
+                        )
+                      ),
+                      h('td',{style:{textAlign:'center'}},
+                        h('div',{style:{display:'flex',gap:3,justifyContent:'center'}},
+                          h('button',{onClick:()=>markAtt(g.id,s.id,'present'),style:{background:s.att==='present'?C.green:'#e8edf2',color:s.att==='present'?'#fff':'#4a6070',border:'none',borderRadius:5,padding:'3px 10px',fontSize:10,fontWeight:700,cursor:'pointer'}},'✓'),
+                          h('button',{onClick:()=>markAtt(g.id,s.id,'absent'),style:{background:s.att==='absent'?C.red:'#e8edf2',color:s.att==='absent'?'#fff':'#4a6070',border:'none',borderRadius:5,padding:'3px 10px',fontSize:10,fontWeight:700,cursor:'pointer'}},'✗')
+                        )
+                      ),
+                      h('td',{style:{textAlign:'center',fontWeight:600,color:'#1a6fa3'}},s.sub),
+                      h('td',{style:{textAlign:'center'}},
+                        h('div',{style:{display:'flex',gap:2,justifyContent:'center',alignItems:'center'}},
+                          [1,2,3,4].map(j=>h('div',{key:j,style:{width:11,height:7,borderRadius:2,background:j<=(s.sessionsLeft||0)?'#1a6fa3':'#e0e8f0'}})),
+                          h('span',{style:{fontSize:10,fontWeight:700,color:(s.sessionsLeft||0)===0?C.red:'#1a6fa3',marginRight:3}},(s.sessionsLeft||0)+'/4')
+                        )
+                      ),
+                      h('td',{style:{textAlign:'center'}},
+                        h('span',{style:{color:statusColor,fontWeight:700,fontSize:11,background:statusColor+'18',borderRadius:10,padding:'2px 8px',whiteSpace:'nowrap'}},statusLabel)
+                      ),
+                      h('td',null,h('input',{type:'text',value:s.notes,onChange:e=>setNote(g.id,s.id,e.target.value),placeholder:'ملاحظة...'})),
+                      h('td',{className:'noprint'},
+                        h('button',{onClick:()=>setPayModal(s.id),style:{background:'#1a6fa3',color:'#fff',border:'none',borderRadius:5,padding:'3px 8px',fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}},'💳 دفع')
+                      )
+                    );
+                  }),
+                  Array.from({length:2}).map((_,i)=>
+                    h('tr',{key:'e'+i,style:{height:26}},
+                      h('td',{style:{color:C.muted,textAlign:'center',fontSize:10}},g.students.length+i+1),
+                      h('td',null),h('td',null),h('td',null),h('td',null),h('td',null),h('td',null),h('td',null)
+                    )
+                  ),
+                  h('tr',{className:'noprint',style:{background:'#f0f6fb'}},
+                    h('td',{colSpan:8,style:{padding:6,textAlign:'center'}},
+                      h('button',{onClick:()=>setGroups(gs=>gs.map(grp=>grp.id!==g.id?grp:{...grp,students:[...grp.students,{id:'GS'+Date.now(),name:'',sub:500,sessionsLeft:4,status:'ساري',att:null,makeup:false,mkFrom:'',notes:''}]})),style:{background:C.accent,color:'#fff',border:'none',borderRadius:6,padding:'4px 14px',fontSize:11,fontWeight:700,cursor:'pointer'}},'+ إضافة طالبة')
+                    )
+                  ),
+                  h('tr',{className:'yw-tot'},
+                    h('td',{colSpan:2,style:{textAlign:'right',fontSize:11,color:'#1a6fa3'}},'📊 إجمالي الجروب'),
+                    h('td',{style:{textAlign:'center'}},
+                      h('div',{style:{fontSize:10,lineHeight:1.7}},
+                        h('div',{style:{color:C.green,fontWeight:700}},'حضر: '+pN),
+                        h('div',{style:{color:C.red,fontWeight:700}},'غاب: '+aN)
+                      )
+                    ),
+                    h('td',{colSpan:5})
+                  )
+                )
+              )
+            ),
+            // ── MAKEUPS section per group ──
+            h('div',{style:{background:'#fff8f0',border:'1px solid #e8a030',borderRadius:'0 0 6px 6px',padding:'8px 12px',borderTop:'2px dashed #e8a030'}},
+              h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}},
+                h('p',{style:{fontWeight:700,fontSize:12,color:'#7a4a00',margin:0}},'🔄 تعويضات — '+g.nameAr),
+                h('button',{
+                  className:'noprint',
+                  onClick:()=>setGroups(gs=>gs.map(grp=>grp.id!==g.id?grp:{...grp,makeups:[...(grp.makeups||[]),{id:'MK'+Date.now(),name:'',origGroup:''}]})),
+                  style:{background:'#e8a030',color:'#fff',border:'none',borderRadius:5,padding:'3px 12px',fontSize:10,fontWeight:700,cursor:'pointer'}
+                },'+ إضافة تعويض')
+              ),
+              (g.makeups||[]).length===0
+                ?h('p',{style:{color:'#b8860b',fontSize:11,margin:0,textAlign:'center'}},'لا يوجد تعويضات لهذا الجروب')
+                :h('table',null,
+                    h('thead',null,h('tr',null,
+                      h('th',{style:{width:26,background:'#c87020'}},'#'),
+                      h('th',{style:{background:'#c87020'}},'اسم البنت'),
+                      h('th',{style:{background:'#c87020'}},'الجروب الأصلي'),
+                      h('th',{style:{width:24,background:'#c87020'},className:'noprint'},'')
+                    )),
+                    h('tbody',null,
+                      (g.makeups||[]).map((mk,i)=>h('tr',{key:mk.id},
+                        h('td',{style:{textAlign:'center',color:C.muted,fontSize:10}},i+1),
+                        h('td',null,h('select',{value:mk.name,onChange:ev=>{const v=ev.target.value;const origGrp=GROUPS_TODAY.find(grp=>grp.students.some(s=>s.name===v));setGroups(gs=>gs.map(grp=>grp.id!==g.id?grp:{...grp,makeups:(grp.makeups||[]).map((m,j)=>j===i?{...m,name:v,origGroup:origGrp?origGrp.nameAr:''}:m)}));},style:{fontSize:11}},
+                          h('option',{value:''},'-- اختاري البنت --'),
+                          GROUPS_TODAY.flatMap(grp=>grp.students).filter(s=>s.status!=='inactive').map(s=>h('option',{key:s.id,value:s.name},s.name))
+                        )),
+                        h('td',null,h('input',{type:'text',value:mk.origGroup||'',readOnly:true,style:{background:'#f5f5f5',fontSize:11},placeholder:'يتحدد تلقائياً'})),
+                        h('td',{className:'noprint',style:{textAlign:'center'}},
+                          h('button',{onClick:()=>setGroups(gs=>gs.map(grp=>grp.id!==g.id?grp:{...grp,makeups:(grp.makeups||[]).filter((_,j)=>j!==i)})),style:{background:'none',border:'none',color:C.red,cursor:'pointer',fontSize:14}},'×')
+                        )
+                      ))
+                    )
+                  )
+            )
+          );
+        })
+      ),
+
+      // cash+insta tables
+      h('div',{className:'yw-sec'},'💳 تحصيلات اليوم'),
+      h('div',{className:'yw-card'},
+        h('div',{style:{display:'flex'}},
+          // cash
+          h('div',{style:{flex:1,borderLeft:'2px solid #d0dbe8'}},
+            h('table',null,
+              h('thead',null,h('tr',null,
+                h('th',{style:{width:24,background:'#1a8a4a'}},'#'),
+                h('th',{style:{background:'#1a8a4a'}},'اسم البنت'),
+                h('th',{style:{width:65,background:'#1a8a4a'}},'المبلغ'),
+                h('th',{style:{width:110,background:'#1a8a4a'}},'السبب'),
+                h('th',{style:{width:24,background:'#1a8a4a'},className:'noprint'},'')
+              )),
+              h('tbody',null,
+                cashRows.map((r,i)=>h('tr',{key:r.id},
+                  h('td',{style:{textAlign:'center',color:C.muted,fontSize:10}},i+1),
+                  h('td',null,h('input',{type:'text',value:r.name,onChange:ev=>{const v=ev.target.value;setCashRows(p=>p.map((row,j)=>j===i?{...row,name:v}:row));},style:{fontWeight:600}})),
+                  h('td',null,h('input',{type:'number',value:r.amount,onChange:ev=>{const v=ev.target.value;setCashRows(p=>p.map((row,j)=>j===i?{...row,amount:v}:row));},style:{textAlign:'center'}})),
+                  h('td',null,h('select',{value:r.reason||'اشتراك',onChange:ev=>{const v=ev.target.value;setCashRows(p=>p.map((row,j)=>j===i?{...row,reason:v}:row));},style:{fontSize:11}},
+                    ['اشتراك','برايفيت','امتحان','منتج','تسجيل',...EVENTS.map(e=>e.name)].map(o=>h('option',{key:o},o))
+                  )),
+                  h('td',{className:'noprint',style:{textAlign:'center'}},
+                    h('button',{onClick:()=>setCashRows(p=>p.filter((_,j)=>j!==i)),style:{background:'none',border:'none',color:C.red,cursor:'pointer',fontSize:14}},'×')
+                  )
+                )),
+                h('tr',{className:'noprint'},h('td',{colSpan:5,style:{padding:5,textAlign:'center'}},
+                  h('button',{onClick:()=>setCashRows(p=>[...p,{id:'C'+Date.now(),name:'',amount:'',reason:'اشتراك'}]),style:{background:'#1a8a4a',color:'#fff',border:'none',borderRadius:5,padding:'3px 10px',fontSize:10,fontWeight:700,cursor:'pointer'}},'+ إضافة')
+                )),
+                h('tr',null,
+                  h('td',{colSpan:2,style:{textAlign:'right',fontWeight:700,fontSize:11,background:'#e8f4fd'}},'إجمالي الكاش'),
+                  h('td',{style:{background:C.amber,color:'#fff',fontWeight:700,textAlign:'center',fontSize:13}},cashTotal+' ج'),
+                  h('td',{colSpan:2,style:{background:'#e8f4fd'}})
+                )
+              )
+            )
+          ),
+          // insta
+          h('div',{style:{flex:1}},
+            h('table',null,
+              h('thead',null,h('tr',null,
+                h('th',{style:{width:24,background:'#155d8a'}},'#'),
+                h('th',{style:{background:'#155d8a'}},'اسم البنت'),
+                h('th',{style:{width:65,background:'#155d8a'}},'المبلغ'),
+                h('th',{style:{width:110,background:'#155d8a'}},'السبب'),
+                h('th',{style:{width:24,background:'#155d8a'},className:'noprint'},'')
+              )),
+              h('tbody',null,
+                instaRows.map((r,i)=>h('tr',{key:r.id},
+                  h('td',{style:{textAlign:'center',color:C.muted,fontSize:10}},i+1),
+                  h('td',null,h('input',{type:'text',value:r.name,onChange:ev=>{const v=ev.target.value;setInstaRows(p=>p.map((row,j)=>j===i?{...row,name:v}:row));},style:{fontWeight:600}})),
+                  h('td',null,h('input',{type:'number',value:r.amount,onChange:ev=>{const v=ev.target.value;setInstaRows(p=>p.map((row,j)=>j===i?{...row,amount:v}:row));},style:{textAlign:'center'}})),
+                  h('td',null,h('select',{value:r.reason||'اشتراك',onChange:ev=>{const v=ev.target.value;setInstaRows(p=>p.map((row,j)=>j===i?{...row,reason:v}:row));},style:{fontSize:11}},
+                    ['اشتراك','برايفيت','امتحان','منتج','تسجيل',...EVENTS.map(e=>e.name)].map(o=>h('option',{key:o},o))
+                  )),
+                  h('td',{className:'noprint',style:{textAlign:'center'}},
+                    h('button',{onClick:()=>setInstaRows(p=>p.filter((_,j)=>j!==i)),style:{background:'none',border:'none',color:C.red,cursor:'pointer',fontSize:14}},'×')
+                  )
+                )),
+                h('tr',{className:'noprint'},h('td',{colSpan:5,style:{padding:5,textAlign:'center'}},
+                  h('button',{onClick:()=>setInstaRows(p=>[...p,{id:'I'+Date.now(),name:'',amount:'',reason:'اشتراك'}]),style:{background:'#155d8a',color:'#fff',border:'none',borderRadius:5,padding:'3px 10px',fontSize:10,fontWeight:700,cursor:'pointer'}},'+ إضافة')
+                )),
+                h('tr',null,
+                  h('td',{colSpan:2,style:{textAlign:'right',fontWeight:700,fontSize:11,background:'#e8f0f8'}},'إجمالي الانستاباي'),
+                  h('td',{style:{background:C.amber,color:'#fff',fontWeight:700,textAlign:'center',fontSize:13}},instaTotal+' ج'),
+                  h('td',{colSpan:2,style:{background:'#e8f0f8'}})
+                )
+              )
+            )
+          )
+        ),
+        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',borderTop:'2px solid #1a6fa3'}},
+          h('div',{style:{padding:'8px 14px',display:'flex',justifyContent:'space-between',borderLeft:'1px solid #d0dbe8'}},
+            h('span',{style:{fontWeight:700,fontSize:12,color:C.text}},'إجمالي إيراد اليوم'),
+            h('span',{style:{fontWeight:800,fontSize:17,color:C.green}},totalRev+' ج')
+          ),
+          h('div',{style:{padding:'8px 14px',display:'flex',justifyContent:'space-between'}},
+            h('span',{style:{fontWeight:700,fontSize:12,color:C.text}},'صافي إيراد كاش'),
+            h('span',{style:{fontWeight:800,fontSize:17,color:C.amber}},netCash+' ج')
+          )
+        )
+      ),
+
+      // expenses only
+      h('div',{style:{marginTop:2}},
+        h('div',{className:'yw-sec',style:{background:C.red}},'📉 مصروفات اليوم'),
+        h('div',{className:'yw-card'},
+          h('table',null,
+            h('thead',null,h('tr',null,
+              h('th',{style:{width:24,background:'#c02020'}},'#'),
+              h('th',{style:{background:'#c02020'}},'البند'),
+              h('th',{style:{width:80,background:'#c02020'}},'المبلغ'),
+              h('th',{style:{width:24,background:'#c02020'},className:'noprint'},'')
+            )),
+            h('tbody',null,
+              expenses.map((e,i)=>h('tr',{key:e.id},
+                h('td',{style:{textAlign:'center',color:C.muted,fontSize:10}},i+1),
+                h('td',null,h('input',{type:'text',value:e.desc,onChange:ev=>{const v=ev.target.value;setExpenses(p=>p.map((r,j)=>j===i?{...r,desc:v}:r));}})),
+                h('td',null,h('input',{type:'number',value:e.amount,onChange:ev=>{const v=ev.target.value;setExpenses(p=>p.map((r,j)=>j===i?{...r,amount:v}:r));},style:{textAlign:'center'}})),
+                h('td',{className:'noprint',style:{textAlign:'center'}},
+                  h('button',{onClick:()=>setExpenses(p=>p.filter((_,j)=>j!==i)),style:{background:'none',border:'none',color:C.red,cursor:'pointer',fontSize:14}},'×')
+                )
+              )),
+              h('tr',{className:'noprint'},h('td',{colSpan:4,style:{padding:5,textAlign:'center'}},
+                h('button',{onClick:()=>setExpenses(p=>[...p,{id:'E'+Date.now(),desc:'',amount:''}]),style:{background:C.red,color:'#fff',border:'none',borderRadius:5,padding:'3px 10px',fontSize:10,fontWeight:700,cursor:'pointer'}},'+ إضافة')
+              )),
+              h('tr',null,
+                h('td',{colSpan:2,style:{textAlign:'right',fontWeight:700,fontSize:11,background:'#e8f4fd'}},'إجمالي المصروفات'),
+                h('td',{style:{background:'#1a6fa3',color:'#fff',fontWeight:700,textAlign:'center'}},expTotal+' ج'),
+                h('td',{className:'noprint'})
+              )
+            )
+          )
+        )
+      ),
+
+      // final summary
+      h('div',{style:{marginTop:14,background:C.surface,border:'2px solid #1a6fa3',borderRadius:10,overflow:'hidden',boxShadow:SH}},
+        h('div',{style:{background:'#1a6fa3',padding:'7px 14px'}},
+          h('p',{style:{color:'#fff',fontWeight:700,fontSize:13,margin:0}},'📊 ملخص اليومية النهائي')
+        ),
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)'}},
+          [{l:'إجمالي الكاش',v:cashTotal+' ج',bg:'#1a8a4a'},
+           {l:'إجمالي الانستاباي',v:instaTotal+' ج',bg:'#155d8a'},
+           {l:'إجمالي إيراد اليوم',v:totalRev+' ج',bg:C.amber},
+           {l:'صافي إيراد كاش',v:netCash+' ج',bg:netCash>=0?'#0d6e38':'#c02020'},
+          ].map((s,i)=>h('div',{key:i,style:{background:s.bg,padding:'10px 14px',textAlign:'center',borderLeft:i>0?'1px solid rgba(255,255,255,.2)':'none',direction:'rtl'}},
+            h('p',{style:{color:'rgba(255,255,255,.75)',fontSize:10,fontWeight:600,margin:'0 0 3px'}},s.l),
+            h('p',{style:{color:'#fff',fontSize:18,fontWeight:800,margin:0}},s.v)
+          ))
+        )
+      ),
+
+      // privates — at bottom
+      h('div',{style:{marginTop:14}},
+        h('div',{className:'yw-sec',style:{background:C.purple}},'🎯 البرايفيت'),
+        h('div',{className:'yw-card'},
+          h('table',null,
+            h('thead',null,h('tr',null,
+              h('th',{style:{width:24,background:'#5d2a80'}},'#'),
+              h('th',{style:{background:'#5d2a80'}},'المدربة'),
+              h('th',{style:{background:'#5d2a80'}},'البنت'),
+              h('th',{style:{width:75,background:'#5d2a80'}},'المدة'),
+              h('th',{style:{background:'#5d2a80'}},'ملاحظات'),
+              h('th',{style:{width:24,background:'#5d2a80'},className:'noprint'},'')
+            )),
+            h('tbody',null,
+              privates.map((p,i)=>h('tr',{key:p.id},
+                h('td',{style:{textAlign:'center',color:C.muted,fontSize:10}},i+1),
+                h('td',null,h('select',{value:p.coach,onChange:e=>{const v=e.target.value;setPrivates(pr=>pr.map((r,j)=>j===i?{...r,coach:v}:r));},style:{fontSize:11}},
+                  h('option',{value:''},'-- اختاري مدربة --'),
+                  USERS.filter(u=>u.role==='coach').map(u=>h('option',{key:u.id,value:u.name},u.name))
+                )),
+                h('td',null,h('input',{type:'text',value:p.student,onChange:e=>{const v=e.target.value;setPrivates(pr=>pr.map((r,j)=>j===i?{...r,student:v}:r));},placeholder:'اسم البنت'})),
+                h('td',null,h('select',{value:p.duration,onChange:e=>{const v=e.target.value;setPrivates(pr=>pr.map((r,j)=>j===i?{...r,duration:v}:r));},style:{fontSize:11}},
+                  ['ساعة','ساعتين','3 ساعات','4 ساعات'].map(o=>h('option',{key:o},o))
+                )),
+                h('td',null,h('input',{type:'text',value:p.notes,onChange:e=>{const v=e.target.value;setPrivates(pr=>pr.map((r,j)=>j===i?{...r,notes:v}:r));},placeholder:'ملاحظة'})),
+                h('td',{className:'noprint',style:{textAlign:'center'}},
+                  h('button',{onClick:()=>setPrivates(pr=>pr.filter((_,j)=>j!==i)),style:{background:'none',border:'none',color:C.red,cursor:'pointer',fontSize:14}},'×')
+                )
+              )),
+              h('tr',{className:'noprint'},h('td',{colSpan:6,style:{padding:5,textAlign:'center'}},
+                h('button',{onClick:()=>setPrivates(p=>[...p,{id:'P'+Date.now(),coach:'',student:'',duration:'ساعة',notes:''}]),style:{background:C.purple,color:'#fff',border:'none',borderRadius:5,padding:'3px 10px',fontSize:10,fontWeight:700,cursor:'pointer'}},'+ إضافة')
+              ))
+            )
+          )
+        )
+      ),
+      h('div',{style:{height:24}})
+    ),
+
+    // pay modal
+    payModal&&h(YwPayModal,{
+      sid:payModal,
+      students:groups.flatMap(g=>g.students),
+      onConfirm:confirmPay,
+      onClose:()=>setPayModal(null)
+    })
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOGIN — fixed: quick buttons login directly (no second click)
+// ═══════════════════════════════════════════════════════════════
+function Login({onLogin}){
+  const[email,setEmail]=useState('');
+  const[pass,setPass]=useState('');
+  const[err,setErr]=useState('');
+  const[loading,setLoading]=useState(false);
+
+  const doLogin=(em,pw)=>{
+    const e=em??email, p=pw??pass;
+    if(!e||!p){setErr('ادخل الإيميل وكلمة المرور');return;}
+    setLoading(true);setErr('');
+    setTimeout(()=>{
+      const u=USERS.find(x=>x.email===e&&x.pass===p);
+      if(u){onLogin(u);}else{setErr('الإيميل أو كلمة المرور غلط');setLoading(false);}
+    },400);
+  };
+
+  const DEMO=[
+    {label:'Super Admin',sub:'كل الصلاحيات',color:C.accent,u:USERS[0]},
+    {label:'Staff — مريم',sub:'العمليات اليومية',color:C.purple,u:USERS[1]},
+    {label:'Coach Dina',sub:'المدربة',color:C.blue,u:USERS[3]},
+  ];
+
+  return h('div',{style:{display:'flex',width:'100vw',height:'100vh',background:`linear-gradient(135deg,#fdf8f6 0%,#fde8ec 50%,#f8e0f0 100%)`,alignItems:'center',justifyContent:'center'}},
+    h('div',{style:{width:440}},
+      h('div',{style:{textAlign:'center',marginBottom:26}},
+        h('div',{style:{width:60,height:60,borderRadius:18,background:`linear-gradient(135deg,${C.accent},#c04060)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 12px',boxShadow:`0 8px 24px ${C.accent}40`}},'🦢'),
+        h('h1',{style:{color:C.text,fontSize:22,fontWeight:800,margin:'0 0 4px',letterSpacing:-0.5}},'Little Swan Ballet Academy'),
+        h('p',{style:{color:C.muted,fontSize:13,margin:0}},'Miami Branch — Management System')
+      ),
+      h(Card,{style:{boxShadow:`0 8px 32px rgba(212,102,122,0.12)`}},
+        h('p',{style:{color:C.text,fontSize:15,fontWeight:700,margin:'0 0 16px',textAlign:'center'}},'تسجيل الدخول'),
+        h('div',{style:{marginBottom:12}},
+          h('label',{style:{display:'block',color:C.sub,fontSize:11,fontWeight:600,marginBottom:4,letterSpacing:0.3}},'البريد الإلكتروني'),
+          h('input',{value:email,onChange:e=>setEmail(e.target.value),placeholder:'your@email.com',type:'email',
+            style:{width:'100%',padding:'9px 12px',border:`1px solid ${C.border2}`,borderRadius:8,fontSize:13,color:C.text,outline:'none'}})
+        ),
+        h('div',{style:{marginBottom:16}},
+          h('label',{style:{display:'block',color:C.sub,fontSize:11,fontWeight:600,marginBottom:4,letterSpacing:0.3}},'كلمة المرور'),
+          h('input',{value:pass,onChange:e=>setPass(e.target.value),placeholder:'Password',type:'password',
+            onKeyDown:e=>e.key==='Enter'&&doLogin(),
+            style:{width:'100%',padding:'9px 12px',border:`1px solid ${C.border2}`,borderRadius:8,fontSize:13,color:C.text,outline:'none'}})
+        ),
+        err&&h('p',{style:{color:C.red,fontSize:12,fontWeight:600,margin:'-8px 0 12px',textAlign:'center'}},err),
+        h('button',{onClick:()=>doLogin(),disabled:loading,
+          style:{width:'100%',background:`linear-gradient(135deg,${C.accent},#c04060)`,border:'none',borderRadius:9,padding:'11px',color:'#fff',fontSize:13,fontWeight:700,cursor:loading?'default':'pointer',opacity:loading?0.8:1}},
+          loading?'جاري الدخول…':'دخول ←')
+      ),
+      h('div',{style:{marginTop:12}},
+        h('p',{style:{color:C.muted,fontSize:10,textAlign:'center',marginBottom:8,fontWeight:600,letterSpacing:0.5}},'اضغط للدخول مباشرة'),
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}},
+          DEMO.map(q=>h('button',{key:q.label,
+            onClick:()=>doLogin(q.u.email,q.u.pass),
+            style:{background:q.color+'12',border:`1px solid ${q.color}35`,borderRadius:9,padding:'10px 6px',cursor:'pointer',textAlign:'center'}},
+            h('p',{style:{color:q.color,fontSize:11,fontWeight:700,margin:'0 0 2px'}},q.label),
+            h('p',{style:{color:C.muted,fontSize:9,margin:0}},q.sub)
+          ))
+        )
+      )
+    )
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// APP SHELL — ROLE ROUTING (with Yawmiya added)
+// ═══════════════════════════════════════════════════════════════
+function App(){
+  const[user,setUser]=useState(null);
+  const[active,setActive]=useState('yawmiya');
+
+  const handleLogin=(u)=>{setUser(u);setActive(u.role==='coach'?'overview':'yawmiya');};
+  const handleLogout=()=>{setUser(null);setActive('yawmiya');};
+
+  if(!user) return h(Login,{onLogin:handleLogin});
+
+  const ywScreen=h('div',{style:{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}},
+    h('div',{style:{flex:1,overflowY:'auto'}},h(Yawmiya,null)));
+
+  // ── SUPER ADMIN ────────────────────────────────────────────
+  if(user.role==='superadmin'){
+    const payReq=STUDENTS.filter(s=>s.remaining===0&&s.status==='active').length;
+    const pendingTr=TRANSFERS.filter(t=>t.status==='pending').length;
+    const lowStock=INVENTORY.filter(i=>i.type==='ready'&&i.stock===0).length;
+    const navGroups=[
+      {label:'ACADEMY',items:[{key:'overview',icon:'❀',label:'Overview'},{key:'yawmiya',icon:'📋',label:'اليومية'},{key:'students',icon:'🩰',label:'Students',badge:payReq},{key:'classes',icon:'🗓',label:'Classes & Halls'},{key:'attendance',icon:'✓',label:'Attendance'}]},
+      {label:'FINANCE',items:[{key:'payments',icon:'💳',label:'Payments & Revenue'},{key:'expenses',icon:'📋',label:'Expenses'}]},
+      {label:'OPERATIONS',items:[{key:'coaches',icon:'👩‍🏫',label:'Coaches & Payroll'},{key:'transfers',icon:'⇄',label:'Transfers',badge:pendingTr},{key:'exams',icon:'📝',label:'Exams & Levels'},{key:'inventory',icon:'👗',label:'Leotards',badge:lowStock},{key:'events',icon:'🎭',label:'Events'}]},
+      {label:'SYSTEM',items:[{key:'stafflog',icon:'📍',label:'Staff Log'},{key:'settings',icon:'⚙',label:'Settings'}]},
+    ];
+    const screens={
+      yawmiya:ywScreen,
+      overview:h(SA_Overview,{setActive}),students:h(SA_Students,null),classes:h(SA_Classes,null),
+      attendance:h(SA_Attendance,null),payments:h(SA_Payments,null),
+      expenses:h('div',{style:{flex:1,overflowY:'auto',padding:'24px 28px',background:C.bg}},h(PH,{title:'Expenses',sub:'Daily operational costs',actions:[h(Btn,{key:'a',label:'+ Add Expense',primary:true})]}),h(Card,{pad:'0'},h('table',{style:{width:'100%',borderCollapse:'collapse'}},h('thead',null,h('tr',null,h(Th,null,'Description'),h(Th,null,'Amount'),h(Th,null,'Hall'),h(Th,null,'Date'))),h('tbody',null,EXPENSES.map(e=>h('tr',{key:e.id},h(Td,{bold:true},e.desc),h(Td,{color:C.red,bold:true},'$'+e.amount),h(Td,null,e.hall),h(Td,null,e.date))))))),
+      coaches:h(SA_Coaches,null),transfers:h(SA_Transfers,null),exams:h(SA_Exams,null),
+      inventory:h(SA_Inventory,null),events:h(SA_Events,null),
+      stafflog:h(SA_StaffLog,null),settings:h(SA_Settings,null),
+    };
+    return h('div',{style:{display:'flex',width:'100vw',height:'100vh',background:C.bg,overflow:'hidden'}},
+      h(Sidebar,{active,setActive,user,onLogout:handleLogout,navGroups}),
+      h('div',{style:{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}},screens[active]||ywScreen)
+    );
+  }
+
+  // ── STAFF ──────────────────────────────────────────────────
+  if(user.role==='staff'){
+    const payReq=STUDENTS.filter(s=>s.remaining===0&&s.status==='active').length;
+    const navGroups=[
+      {label:'اليومية',items:[{key:'yawmiya',icon:'📋',label:'اليومية'}]},
+      {label:'STUDENTS',items:[{key:'students',icon:'🩰',label:'Students',badge:payReq},{key:'attendance',icon:'✓',label:'Mark Attendance'},{key:'payments',icon:'💳',label:'Record Payments'}]},
+      {label:'MORE',items:[{key:'transfers',icon:'⇄',label:'Transfer Requests'},{key:'inventory',icon:'👗',label:'Leotard Sales'},{key:'expenses',icon:'📋',label:'Expenses'}]},
+    ];
+    const screens={
+      yawmiya:ywScreen,
+      students:h(ST_Students,null),attendance:h(ST_Attendance,null),
+      payments:h(ST_Payments,null),transfers:h(ST_Transfers,null),
+      inventory:h(ST_Inventory,null),expenses:h(ST_Expenses,null),
+    };
+    return h('div',{style:{display:'flex',width:'100vw',height:'100vh',background:C.bg,overflow:'hidden'}},
+      h(Sidebar,{active,setActive,user,onLogout:handleLogout,navGroups}),
+      h('div',{style:{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}},screens[active]||ywScreen)
+    );
+  }
+
+  // ── COACH ──────────────────────────────────────────────────
+  if(user.role==='coach'){
+    const navGroups=[
+      {label:'MY SESSIONS',items:[{key:'overview',icon:'❀',label:'Dashboard'},{key:'schedule',icon:'🗓',label:'My Schedule'},{key:'checkin',icon:'📍',label:'Check In / Out'}]},
+      {label:'STUDENTS',items:[{key:'attendance',icon:'✓',label:'Confirm Attendance'}]},
+    ];
+    const screens={
+      overview:h(CO_Overview,{user}),schedule:h(CO_Schedule,{user}),
+      checkin:h(CO_CheckIn,{user}),attendance:h(CO_Attendance,{user}),
+    };
+    return h('div',{style:{display:'flex',width:'100vw',height:'100vh',background:C.bg,overflow:'hidden'}},
+      h(Sidebar,{active,setActive,user,onLogout:handleLogout,navGroups}),
+      h('div',{style:{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}},screens[active]||screens.overview)
+    );
+  }
+
+  return null;
+}
+
+ReactDOM.render(h(App,null),document.getElementById('root'));
+</script>
+</body>
+</html>

@@ -1,7 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import SettingsForm from './SettingsForm'
+import { getLocale } from 'next-intl/server'
+
+export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
+  const locale   = await getLocale()
   const supabase = await createClient()
 
   const [
@@ -12,7 +16,7 @@ export default async function SettingsPage() {
   ] = await Promise.all([
     supabase.from('system_settings').select('*'),
     supabase.from('levels').select('*').order('order_num'),
-    supabase.from('subscription_plans').select('*').eq('is_active', true),
+    supabase.from('subscription_plans').select('*').order('price'),
     supabase.from('halls').select('*'),
   ])
 
@@ -20,18 +24,12 @@ export default async function SettingsPage() {
   settings?.forEach(s => { settingsMap[s.key] = s.value })
 
   return (
-    <div className="p-8" dir="rtl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">الإعدادات</h1>
-        <p className="text-white/40 text-sm mt-1">إعدادات النظام — للمشرف العام فقط</p>
-      </div>
-
-      <SettingsForm
-        settings={settingsMap}
-        levels={levels || []}
-        plans={plans || []}
-        halls={halls || []}
-      />
-    </div>
+    <SettingsForm
+      settings={settingsMap}
+      levels={levels || []}
+      plans={plans  || []}
+      halls={halls  || []}
+      locale={locale}
+    />
   )
 }

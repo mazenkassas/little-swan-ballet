@@ -1,17 +1,29 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, TrendingUp, CreditCard, Banknote } from 'lucide-react'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { getLocale } from 'next-intl/server'
 import { format } from 'date-fns'
+import { formatCurrency } from '@/lib/utils'
+import ExamFeesList from './ExamFeesList'
+
+const TYPE_COLORS: Record<string, string> = {
+  subscription: '#d4667a',
+  product:      '#3dab7e',
+  event:        '#8e5fd9',
+  private:      '#4a90d9',
+  exam:         '#e8960a',
+  enrollment:   '#d4667a',
+}
 
 export default async function PaymentsPage({
   searchParams,
 }: {
   searchParams: Promise<{ date?: string; type?: string }>
 }) {
-  const params = await searchParams
+  const locale  = await getLocale()
+  const isRtl   = locale === 'ar'
+  const params  = await searchParams
   const supabase = await createClient()
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const today   = format(new Date(), 'yyyy-MM-dd')
   const selectedDate = params.date || today
 
   let query = supabase
@@ -19,151 +31,237 @@ export default async function PaymentsPage({
     .select('*, student:students(name_ar, name_en), staff:staff(name)')
     .eq('date', selectedDate)
     .order('created_at', { ascending: false })
-
   if (params.type) query = query.eq('type', params.type)
   const { data: payments } = await query
 
   const { data: expenses } = await supabase
-    .from('expenses')
-    .select('*')
-    .eq('date', selectedDate)
+    .from('expenses').select('*').eq('date', selectedDate)
 
-  const totalRevenue = payments?.reduce((s, p) => s + p.amount_paid, 0) || 0
-  const totalExpenses = expenses?.reduce((s, e) => s + e.amount, 0) || 0
-  const netRevenue = totalRevenue - totalExpenses
+  // Pending exam fees: enrolled students whose exam payment_deadline <= selectedDate and fee not yet paid
+  const { data: allPendingExamFees } = await supabase
+    .from('student_exams')
+    .select('id, student_id, exam_id, student:students(id, name_ar, name_en), exam:exams(id, name, fee, payment_deadline)')
+    .eq('exam_fee_paid', false)
+    .not('exam', 'is', null)
 
-  const paymentTypes = [
-    { value: '', label: 'الكل' },
-    { value: 'subscription', label: 'اشتراك' },
-    { value: 'product', label: 'منتج' },
-    { value: 'event', label: 'فعالية' },
-    { value: 'private', label: 'برايفيت' },
-    { value: 'exam', label: 'امتحان' },
-    { value: 'enrollment', label: 'تسجيل جديد' },
-  ]
+  const pendingExamFees = (allPendingExamFees ?? []).filter(
+    (r: any) => r.exam?.payment_deadline && r.exam.payment_deadline <= selectedDate
+  ) as any[]
 
-  const typeLabels: Record<string, string> = {
-    subscription: 'اشتراك', product: 'منتج', event: 'فعالية',
-    private: 'برايفيت', exam: 'امتحان', enrollment: 'تسجيل جديد',
+  const totalRevenue  = payments?.reduce((s, p) => s + (p.amount_paid ?? 0), 0) || 0
+  const totalExpenses = expenses?.reduce((s, e) => s + (e.amount ?? 0), 0) || 0
+  const netRevenue    = totalRevenue - totalExpenses
+
+  const L = isRtl ? {
+    title: 'المدفوعات',
+    sub: 'سجل المعاملات المالية',
+    revenue: 'إجمالي الإيرادات',
+    revSub: 'جميع أنواع المدفوعات',
+    expensesLbl: 'إجمالي المصروفات',
+    expSub: 'المصروفات التشغيلية',
+    net: 'صافي الإيرادات',
+    netSub: 'بعد خصم المصروفات',
+    all: 'الكل',
+    noPayments: 'لا توجد مدفوعات في هذا اليوم',
+    col: { num: '#', student: 'الطالبة', type: 'النوع', due: 'المبلغ', paid: 'المدفوع', method: 'طريقة الدفع', date: 'التاريخ', staff: 'الموظفة' },
+    types: { subscription: 'اشتراك', product: 'منتج', event: 'فعالية', private: 'خاص', exam: 'اختبار', enrollment: 'تسجيل' },
+    methods: { cash: 'كاش', instapay: 'إنستاباي' },
+  } : {
+    title: 'Payments & Revenue',
+    sub: 'All financial transactions',
+    revenue: "Today's Revenue",
+    revSub: 'All payment types',
+    expensesLbl: "Today's Expenses",
+    expSub: 'Operational',
+    net: 'Net Revenue',
+    netSub: 'After expenses',
+    all: 'All',
+    noPayments: 'No payments for this day',
+    col: { num: '#', student: 'Student', type: 'Type', due: 'Amount Due', paid: 'Paid', method: 'Method', date: 'Date', staff: 'Staff' },
+    types: { subscription: 'Subscription', product: 'Product', event: 'Event', private: 'Private', exam: 'Exam', enrollment: 'Enrollment' },
+    methods: { cash: 'Cash', instapay: 'Instapay' },
   }
 
+  const typeFilters = [
+    { value: '',             label: L.all },
+    { value: 'subscription', label: L.types.subscription },
+    { value: 'product',      label: L.types.product },
+    { value: 'event',        label: L.types.event },
+    { value: 'private',      label: L.types.private },
+    { value: 'exam',         label: L.types.exam },
+    { value: 'enrollment',   label: L.types.enrollment },
+  ]
+
+  const cols = [L.col.num, L.col.student, L.col.type, L.col.due, L.col.paid, L.col.method, L.col.date, L.col.staff]
+
   return (
-    <div className="p-8" dir="rtl">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-white">المدفوعات</h1>
-          <p className="text-white/40 text-sm mt-1">تسجيل ومتابعة جميع المعاملات المالية</p>
-        </div>
-        <Link
-          href="/dashboard/payments/new"
-          className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-rose-500/25 text-sm"
-        >
-          <Plus size={18} />
-          إضافة دفعة
-        </Link>
+    <div style={{ padding: '24px 28px', background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <p style={{ color: 'var(--txt2)', fontSize: 11, margin: '0 0 2px' }}>{L.sub}</p>
+        <h1 style={{ color: 'var(--txt1)', fontSize: 18, fontWeight: 700, margin: 0 }}>{L.title}</h1>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <TrendingUp size={18} className="text-emerald-400" />
-            <span className="text-white/60 text-sm">إجمالي الإيرادات</span>
+      {/* KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
+        <div style={{ background: '#3dab7e12', border: '1px solid #3dab7e22', borderRadius: 14, padding: '18px 20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+            <span style={{ color: 'var(--txt2)', fontSize: 12, fontWeight: 500 }}>{L.revenue}</span>
+            <span style={{ fontSize: 18 }}>💵</span>
           </div>
-          <p className="text-2xl font-bold text-emerald-400">{formatCurrency(totalRevenue)}</p>
+          <p style={{ color: '#3dab7e', fontSize: 22, fontWeight: 700, margin: '0 0 4px', letterSpacing: -0.5 }}>{formatCurrency(totalRevenue)}</p>
+          <p style={{ color: 'var(--txt2)', fontSize: 11, margin: 0 }}>{L.revSub}</p>
         </div>
-        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <Banknote size={18} className="text-red-400" />
-            <span className="text-white/60 text-sm">إجمالي المصروفات</span>
+        <div style={{ background: '#e0404012', border: '1px solid #e0404022', borderRadius: 14, padding: '18px 20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+            <span style={{ color: 'var(--txt2)', fontSize: 12, fontWeight: 500 }}>{L.expensesLbl}</span>
+            <span style={{ fontSize: 18 }}>📉</span>
           </div>
-          <p className="text-2xl font-bold text-red-400">{formatCurrency(totalExpenses)}</p>
+          <p style={{ color: '#e04040', fontSize: 22, fontWeight: 700, margin: '0 0 4px', letterSpacing: -0.5 }}>{formatCurrency(totalExpenses)}</p>
+          <p style={{ color: 'var(--txt2)', fontSize: 11, margin: 0 }}>{L.expSub}</p>
         </div>
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <CreditCard size={18} className="text-white/60" />
-            <span className="text-white/60 text-sm">الصافي</span>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: '18px 20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+            <span style={{ color: 'var(--txt2)', fontSize: 12, fontWeight: 500 }}>{L.net}</span>
+            <span style={{ fontSize: 18 }}>📊</span>
           </div>
-          <p className={`text-2xl font-bold ${netRevenue >= 0 ? 'text-white' : 'text-red-400'}`}>{formatCurrency(netRevenue)}</p>
+          <p style={{ color: netRevenue >= 0 ? 'var(--txt1)' : '#e04040', fontSize: 22, fontWeight: 700, margin: '0 0 4px', letterSpacing: -0.5 }}>{formatCurrency(netRevenue)}</p>
+          <p style={{ color: 'var(--txt2)', fontSize: 11, margin: 0 }}>{L.netSub}</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white/5 border border-white/8 rounded-2xl p-4 mb-6">
-        <form className="flex flex-wrap gap-3">
+      {/* Filters bar */}
+      <div style={{
+        background: 'var(--bg-card)', border: '1px solid var(--border)',
+        borderRadius: 14, padding: '12px 16px', marginBottom: 20,
+        display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+      }}>
+        {/* Date picker */}
+        <form style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {params.type && <input type="hidden" name="type" value={params.type} />}
           <input
             type="date"
             name="date"
             defaultValue={selectedDate}
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white/70 text-sm focus:outline-none focus:border-rose-500/60"
+            style={{
+              background: 'var(--bg-page)', border: '1px solid var(--border)',
+              borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--txt1)',
+              outline: 'none', fontFamily: 'inherit',
+            }}
           />
-          <select
-            name="type"
-            defaultValue={params.type || ''}
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white/70 text-sm focus:outline-none min-w-36"
-          >
-            {paymentTypes.map(t => (
-              <option key={t.value} value={t.value} className="bg-[#1a1a2e]">{t.label}</option>
-            ))}
-          </select>
-          <button type="submit" className="bg-white/8 hover:bg-white/12 border border-white/10 text-white/70 px-4 py-2.5 rounded-xl text-sm transition-colors">
-            فلترة
-          </button>
         </form>
+
+        {/* Type chips */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {typeFilters.map(f => {
+            const active = (params.type || '') === f.value
+            return (
+              <Link
+                key={f.value}
+                href={`/dashboard/payments?date=${selectedDate}${f.value ? `&type=${f.value}` : ''}`}
+                style={{
+                  background: active ? '#d4667a' : 'var(--bg-page)',
+                  border: `1px solid ${active ? '#d4667a' : 'var(--border)'}`,
+                  borderRadius: 20, padding: '4px 12px',
+                  fontSize: 11, fontWeight: 600,
+                  color: active ? '#fff' : 'var(--txt2)',
+                  textDecoration: 'none', whiteSpace: 'nowrap',
+                }}
+              >
+                {f.label}
+              </Link>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Payments Table */}
-      <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
-        <table className="w-full">
+      {/* Pending Exam Fees */}
+      <ExamFeesList rows={pendingExamFees} isRtl={isRtl} selectedDate={selectedDate} />
+
+      {/* Table */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr className="border-b border-white/8">
-              <th className="text-right px-6 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">الطالبة</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">النوع</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">المطلوب</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">المدفوع</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">الرصيد</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">طريقة الدفع</th>
-              <th className="text-right px-4 py-4 text-white/40 text-xs font-medium uppercase tracking-wider">الموظف</th>
+            <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
+              {cols.map(col => (
+                <th key={col} style={{
+                  textAlign: isRtl ? 'right' : 'left', color: 'var(--txt2)',
+                  fontSize: 11, fontWeight: 600, padding: '10px 14px',
+                  whiteSpace: 'nowrap', letterSpacing: '0.03em',
+                }}>
+                  {col}
+                </th>
+              ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
-            {payments?.map((p: any) => (
-              <tr key={p.id} className="hover:bg-white/3 transition-colors">
-                <td className="px-6 py-4">
-                  <Link href={`/dashboard/students/${p.student_id}`} className="hover:text-rose-400 transition-colors">
-                    <p className="text-white text-sm font-medium">{p.student?.name_ar}</p>
-                    <p className="text-white/30 text-xs">{p.student?.name_en}</p>
-                  </Link>
-                </td>
-                <td className="px-4 py-4">
-                  <span className="text-xs px-2.5 py-1 rounded-full border text-violet-400 bg-violet-500/10 border-violet-500/20">
-                    {typeLabels[p.type] || p.type}
-                  </span>
-                </td>
-                <td className="px-4 py-4 text-white/60 text-sm">{formatCurrency(p.amount_due)}</td>
-                <td className="px-4 py-4 text-emerald-400 text-sm font-medium">{formatCurrency(p.amount_paid)}</td>
-                <td className="px-4 py-4">
-                  <span className={`text-sm font-medium ${p.remaining_balance > 0 ? 'text-amber-400' : 'text-white/30'}`}>
-                    {formatCurrency(p.remaining_balance)}
-                  </span>
-                </td>
-                <td className="px-4 py-4">
-                  <span className={`text-xs px-2 py-1 rounded-full border ${
-                    p.payment_method === 'cash'
-                      ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                      : 'text-blue-400 bg-blue-500/10 border-blue-500/20'
-                  }`}>
-                    {p.payment_method === 'cash' ? 'كاش' : 'إنستاباي'}
-                  </span>
-                </td>
-                <td className="px-4 py-4 text-white/30 text-sm">{p.staff?.name || '—'}</td>
-              </tr>
-            ))}
+          <tbody>
+            {payments?.map((p: any, idx: number) => {
+              const typeColor  = TYPE_COLORS[p.type] || '#b89990'
+              const typeName   = L.types[p.type as keyof typeof L.types] || p.type
+              const methodName = L.methods[p.payment_method as keyof typeof L.methods] || p.payment_method
+              const isCash     = p.payment_method === 'cash'
+              const displayDate = p.date
+                ? new Date(p.date).toLocaleDateString(isRtl ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short' })
+                : '—'
+              return (
+                <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  {/* # */}
+                  <td style={{ padding: '11px 14px', color: 'var(--txt2)', fontSize: 12 }}>{idx + 1}</td>
+                  {/* Student */}
+                  <td style={{ padding: '11px 14px' }}>
+                    <Link href={`/dashboard/students/${p.student_id}`} style={{ textDecoration: 'none' }}>
+                      <p style={{ margin: 0, color: 'var(--txt1)', fontSize: 13, fontWeight: 600 }}>{p.student?.name_ar || '—'}</p>
+                      {p.student?.name_en && (
+                        <p style={{ margin: 0, color: 'var(--txt2)', fontSize: 11 }}>{p.student.name_en}</p>
+                      )}
+                    </Link>
+                  </td>
+                  {/* Type */}
+                  <td style={{ padding: '11px 14px' }}>
+                    <span style={{
+                      display: 'inline-block',
+                      background: typeColor + '18', color: typeColor,
+                      border: `1px solid ${typeColor}28`,
+                      borderRadius: 20, padding: '2px 10px',
+                      fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+                    }}>
+                      {typeName}
+                    </span>
+                  </td>
+                  {/* Amount Due */}
+                  <td style={{ padding: '11px 14px', color: 'var(--txt2)', fontSize: 12 }}>
+                    {formatCurrency(p.amount_due)}
+                  </td>
+                  {/* Paid */}
+                  <td style={{ padding: '11px 14px', color: '#3dab7e', fontSize: 13, fontWeight: 700 }}>
+                    {formatCurrency(p.amount_paid)}
+                  </td>
+                  {/* Method */}
+                  <td style={{ padding: '11px 14px' }}>
+                    <span style={{
+                      display: 'inline-block',
+                      background: isCash ? '#3dab7e18' : '#4a90d918',
+                      color: isCash ? '#3dab7e' : '#4a90d9',
+                      border: `1px solid ${isCash ? '#3dab7e28' : '#4a90d928'}`,
+                      borderRadius: 20, padding: '2px 10px',
+                      fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+                    }}>
+                      {methodName}
+                    </span>
+                  </td>
+                  {/* Date */}
+                  <td style={{ padding: '11px 14px', color: 'var(--txt2)', fontSize: 12 }}>{displayDate}</td>
+                  {/* Staff */}
+                  <td style={{ padding: '11px 14px', color: 'var(--txt2)', fontSize: 12 }}>{p.staff?.name || '—'}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
         {(!payments || payments.length === 0) && (
-          <div className="text-center py-16 text-white/20">
-            <p className="text-sm">لا توجد مدفوعات لهذا اليوم</p>
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--txt2)', fontSize: 13 }}>
+            {L.noPayments}
           </div>
         )}
       </div>

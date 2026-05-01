@@ -18,6 +18,7 @@
     "events": "Events",
     "private": "Private",
     "settings": "Settings",
+    "roles": "Roles",
     "logout": "Sign Out"
   },
   "common": {

@@ -1,58 +1,89 @@
 import { createClient } from '@/lib/supabase/server'
-import Link from 'next/link'
-import { Plus, Dumbbell } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import NewPrivateSessionForm from './NewPrivateSessionForm'
+import { getTranslations, getLocale } from 'next-intl/server'
 
 export default async function PrivatePage() {
+  const locale  = await getLocale()
+  const isRtl   = locale === 'ar'
+  const t       = await getTranslations('private')
   const supabase = await createClient()
 
   const { data: sessions } = await supabase
     .from('private_sessions')
-    .select('*, student:students(name_ar), coach:coaches(name_ar)')
+    .select('*, student:students(name_ar, name_en), coach:coaches(name_ar, name_en)')
     .order('date', { ascending: false })
-    .limit(20)
+    .limit(30)
 
-  const { data: students } = await supabase.from('students').select('id, name_ar').eq('status', 'active').order('name_ar')
-  const { data: coaches } = await supabase.from('coaches').select('id, name_ar').eq('is_active', true).order('name_ar')
+  const { data: students } = await supabase
+    .from('students').select('id, name_ar, name_en').eq('status', 'active').order('name_ar')
+  const { data: coaches } = await supabase
+    .from('coaches').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
 
   const totalRevenue = sessions?.reduce((s, p) => s + p.fee, 0) || 0
 
+  const L = isRtl ? {
+    sub:    'جلسات التدريب الخاص',
+    with:   'مع',
+    hours:  'ساعة',
+    noSessions: 'لا توجد جلسات مسجلة',
+    total:  'إجمالي الإيرادات',
+  } : {
+    sub:    'One-on-one training sessions',
+    with:   'with',
+    hours:  'hr',
+    noSessions: 'No sessions recorded yet',
+    total:  'Total Revenue',
+  }
+
   return (
-    <div className="p-8" dir="rtl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">الجلسات الخاصة</h1>
-        <p className="text-white/40 text-sm mt-1">إدارة البرايفيت وتتبع الإيرادات</p>
+    <div style={{ padding: '24px 28px', background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <p style={{ color: 'var(--txt2)', fontSize: 11, margin: '0 0 2px' }}>{L.sub}</p>
+        <h1 style={{ color: 'var(--txt1)', fontSize: 18, fontWeight: 700, margin: 0 }}>{t('title')}</h1>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* New session form */}
-        <NewPrivateSessionForm students={students || []} coaches={coaches || []} />
+      <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: 20, alignItems: 'start' }}>
 
-        {/* Sessions list */}
-        <div className="bg-white/5 border border-white/8 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/8 flex justify-between items-center">
-            <h2 className="text-white font-semibold">آخر الجلسات</h2>
-            <span className="text-emerald-400 text-sm font-semibold">{formatCurrency(totalRevenue)}</span>
+        {/* Form */}
+        <NewPrivateSessionForm students={students || []} coaches={coaches || []} isRtl={isRtl} />
+
+        {/* Sessions history */}
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{
+            padding: '14px 18px', borderBottom: '1px solid var(--border)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--txt1)' }}>{t('lastSessions')}</p>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#3dab7e' }}>{formatCurrency(totalRevenue)}</span>
           </div>
-          <div className="divide-y divide-white/5">
-            {sessions?.map(s => (
-              <div key={s.id} className="flex items-center justify-between px-5 py-4">
+
+          {sessions && sessions.length > 0 ? sessions.map((s: any) => {
+            const studentName = isRtl ? s.student?.name_ar : (s.student?.name_en || s.student?.name_ar)
+            const coachName   = isRtl ? s.coach?.name_ar   : (s.coach?.name_en   || s.coach?.name_ar)
+            return (
+              <div key={s.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '13px 18px', borderBottom: '1px solid var(--border)',
+              }}>
                 <div>
-                  <p className="text-white text-sm font-medium">{s.student?.name_ar}</p>
-                  <p className="text-white/30 text-xs mt-0.5">
-                    مع {s.coach?.name_ar} • {s.duration_hours} ساعة • {formatDate(s.date)}
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--txt1)' }}>{studentName}</p>
+                  <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--txt2)' }}>
+                    {L.with} {coachName} · {s.duration_hours} {L.hours} · {formatDate(s.date)}
                   </p>
                 </div>
-                <span className="text-emerald-400 font-semibold text-sm">{formatCurrency(s.fee)}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#3dab7e', flexShrink: 0 }}>
+                  {formatCurrency(s.fee)}
+                </span>
               </div>
-            ))}
-            {(!sessions || sessions.length === 0) && (
-              <div className="text-center py-12 text-white/20 text-sm">
-                لا توجد جلسات خاصة
-              </div>
-            )}
-          </div>
+            )
+          }) : (
+            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--txt2)', fontSize: 13 }}>
+              {L.noSessions}
+            </div>
+          )}
         </div>
       </div>
     </div>
