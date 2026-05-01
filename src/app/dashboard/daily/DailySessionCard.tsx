@@ -29,6 +29,7 @@ export default function DailySessionCard({
   const [confirmPayFor,   setConfirmPayFor]   = useState<any>(null)
   const [paying,          setPaying]          = useState(false)
   const [paidStudentIds,  setPaidStudentIds]  = useState<Set<string>>(new Set())
+  const [payMethod,       setPayMethod]       = useState<'cash' | 'instapay'>('cash')
   const [selectedCoachId, setSelectedCoachId] = useState<string>(session.coach_id || '')
 
   useEffect(() => {
@@ -117,7 +118,7 @@ export default function DailySessionCard({
     await supabase.from('payments').insert({
       student_id: student.id, type: 'subscription',
       amount_due: plan?.price ?? 0, amount_paid: plan?.price ?? 0,
-      payment_method: 'cash', date: new Date().toISOString().split('T')[0],
+      payment_method: payMethod, date: new Date().toISOString().split('T')[0],
     })
     if (sub) await supabase.from('subscriptions').update({ status: 'expired' }).eq('id', sub.id)
     await supabase.from('subscriptions').insert({
@@ -129,15 +130,17 @@ export default function DailySessionCard({
     setPaying(false)
     setConfirmPayFor(null)
     setPaidStudentIds(prev => new Set([...prev, student.id]))
+    setPayMethod('cash')
     router.refresh()
   }
 
-  const visibleStudents   = students.filter((s: any) => !paidStudentIds.has(s.id))
+  const visibleStudents   = students   // paid students stay in the list
   const presentCount      = Object.values(attendance).filter(v => v === 'present').length
   const absentCount       = Object.values(attendance).filter(v => v === 'absent').length
   const markedCount       = Object.values(attendance).filter(v => v !== null).length
 
   const payRequiredCount  = visibleStudents.filter((s: any) => {
+    if (paidStudentIds.has(s.id)) return false
     const sub = getActiveSub(s)
     const subStarted = !sub?.start_date || session.date >= sub.start_date
     return !!sub && subStarted && sub.remaining_sessions === 0
@@ -250,14 +253,15 @@ export default function DailySessionCard({
                 </td>
               </tr>
             ) : visibleStudents.map((student: any, i: number) => {
-              const sub        = getActiveSub(student)
-              const status     = attendance[student.id] ?? null
-              const remaining  = sub?.remaining_sessions ?? 0
-              const total      = sub?.total_sessions ?? 4
-              const subStarted = !sub?.start_date || session.date >= sub.start_date
-              const isPending  = !!sub && !subStarted
-              const isPay      = !!sub && subStarted && remaining === 0
-              const noSub      = !sub
+              const sub           = getActiveSub(student)
+              const status        = attendance[student.id] ?? null
+              const remaining     = sub?.remaining_sessions ?? 0
+              const total         = sub?.total_sessions ?? 4
+              const subStarted    = !sub?.start_date || session.date >= sub.start_date
+              const isPending     = !!sub && !subStarted
+              const isLocallyPaid = paidStudentIds.has(student.id)
+              const isPay         = !isLocallyPaid && !!sub && subStarted && remaining === 0
+              const noSub         = !sub
 
               function fmtDate(d: string) {
                 return new Date(d + 'T00:00:00').toLocaleDateString(
@@ -267,14 +271,16 @@ export default function DailySessionCard({
               }
 
               const statusLabel =
-                isPending ? (locale === 'ar' ? `يبدأ ${fmtDate(sub!.start_date)}` : `Starts ${fmtDate(sub!.start_date)}`)
-                : isPay   ? (locale === 'ar' ? 'مطلوب الدفع' : 'Payment Required')
-                : noSub   ? (locale === 'ar' ? 'بدون اشتراك' : 'No Subscription')
-                :           (locale === 'ar' ? 'ساري' : 'Active')
-              const statusClr = isPending ? '#4a90d9' : isPay ? '#e04040' : noSub ? '#888' : '#3dab7e'
+                isLocallyPaid ? (locale === 'ar' ? '✓ تم الدفع' : '✓ Paid')
+                : isPending   ? (locale === 'ar' ? `يبدأ ${fmtDate(sub!.start_date)}` : `Starts ${fmtDate(sub!.start_date)}`)
+                : isPay       ? (locale === 'ar' ? 'مطلوب الدفع' : 'Payment Required')
+                : noSub       ? (locale === 'ar' ? 'بدون اشتراك' : 'No Subscription')
+                :               (locale === 'ar' ? 'ساري' : 'Active')
+              const statusClr = isLocallyPaid ? '#3dab7e' : isPending ? '#4a90d9' : isPay ? '#e04040' : noSub ? '#888' : '#3dab7e'
 
-              const rowBg = isPay
-                ? '#e8960a08'
+              const rowBg = isLocallyPaid
+                ? '#3dab7e06'
+                : isPay       ? '#e8960a08'
                 : status === 'absent' ? '#e0404006'
                 : i % 2 === 1 ? 'var(--bg-page)' : 'transparent'
 
@@ -287,8 +293,13 @@ export default function DailySessionCard({
                   <td style={{ ...td(), textAlign: 'center', fontSize: 11 }}>{i + 1}</td>
 
                   <td style={td(true)}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <span>{locale === 'en' && student.name_en ? student.name_en : student.name_ar}</span>
+                      {isLocallyPaid && (
+                        <span style={{ background: '#3dab7e15', color: '#3dab7e', border: '1px solid #3dab7e30', borderRadius: 10, padding: '1px 7px', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                          ✓ {locale === 'ar' ? 'مدفوع' : 'Paid'}
+                        </span>
+                      )}
                       {isPay && (
                         <span style={{ background: '#e8960a15', color: '#e8960a', border: '1px solid #e8960a30', borderRadius: 10, padding: '1px 7px', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
                           💳 {locale === 'ar' ? 'دفع' : 'Pay'}
@@ -364,7 +375,7 @@ export default function DailySessionCard({
                   <td style={{ ...td(), textAlign: 'center' }}>
                     {isPay ? (
                       <button
-                        onClick={() => setConfirmPayFor(student)}
+                        onClick={() => { setPayMethod('cash'); setConfirmPayFor(student) }}
                         style={{
                           background: '#d4667a', color: '#fff', border: 'none',
                           borderRadius: 6, padding: '4px 14px', fontSize: 11,
@@ -473,7 +484,7 @@ export default function DailySessionCard({
                   : `Confirm that ${confirmPayFor.name_en || confirmPayFor.name_ar} has paid the subscription fee`}
               </p>
             </div>
-            <div style={{ padding: '16px 24px' }}>
+            <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {getActiveSub(confirmPayFor)?.plan && (
                 <div style={{ background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 13, color: 'var(--txt2)', fontWeight: 500 }}>
@@ -484,6 +495,24 @@ export default function DailySessionCard({
                   </span>
                 </div>
               )}
+              {/* Payment method selector */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['cash', 'instapay'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setPayMethod(m)}
+                    style={{
+                      flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      border: `1px solid ${payMethod === m ? '#d4667a' : 'var(--border)'}`,
+                      background: payMethod === m ? '#d4667a18' : 'var(--bg-page)',
+                      color: payMethod === m ? '#d4667a' : 'var(--txt2)',
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {m === 'cash' ? (locale === 'ar' ? '💵 كاش' : '💵 Cash') : '📱 Instapay'}
+                  </button>
+                ))}
+              </div>
             </div>
             <div style={{ padding: '0 24px 20px', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button
