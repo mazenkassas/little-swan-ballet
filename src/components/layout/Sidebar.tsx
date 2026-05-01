@@ -209,7 +209,7 @@ return (
               {user.initials}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt1)', margin: 0, truncate: true, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt1)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user.displayName}
               </p>
               <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0, marginTop: 1 }}>
