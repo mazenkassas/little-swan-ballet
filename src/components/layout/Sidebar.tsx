@@ -145,6 +145,7 @@ return (
         )}
         <button
           onClick={() => setCollapsed(c => !c)}
+          aria-label={collapsed ? t('expandSidebar') : t('collapseSidebar')}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
             color: 'var(--txt2)', padding: 4, borderRadius: 6,
@@ -219,6 +220,7 @@ return (
             <button
               onClick={handleLogout}
               title={t('logout')}
+              aria-label={t('logout')}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 color: 'var(--txt2)', padding: 4, borderRadius: 6,
@@ -243,6 +245,7 @@ return (
             <button
               onClick={handleLogout}
               title={t('logout')}
+              aria-label={t('logout')}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 color: 'var(--txt2)', padding: 2, borderRadius: 6,

@@ -19,7 +19,9 @@
     "private": "Private",
     "settings": "Settings",
     "roles": "Roles",
-    "logout": "Sign Out"
+    "logout": "Sign Out",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar"
   },
   "common": {
     "add": "Add",

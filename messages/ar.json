@@ -19,7 +19,9 @@
     "private": "البرايفيت",
     "settings": "الإعدادات",
     "roles": "الأدوار",
-    "logout": "تسجيل الخروج"
+    "logout": "تسجيل الخروج",
+    "expandSidebar": "توسيع الشريط الجانبي",
+    "collapseSidebar": "طي الشريط الجانبي"
   },
   "common": {
     "add": "إضافة",
