@@ -185,7 +185,7 @@ export default async function ClassesPage({
     <div style={{ background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
 
       {/* Header */}
-      <div style={{ padding: '24px 28px 0' }}>
+      <div className="page-body" style={{ paddingBottom: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
             <p style={{ color: 'var(--txt2)', fontSize: 11, margin: '0 0 2px' }}>{L.sub}</p>
@@ -227,7 +227,7 @@ export default async function ClassesPage({
 
       {/* ── Groups Tab ── */}
       {tab === 'groups' && (
-        <div style={{ padding: '24px 28px' }}>
+        <div className="page-body">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
             {classes?.map((cls: any) => {
               const enrolled = cls.enrolled_count?.[0]?.count || 0
@@ -297,7 +297,7 @@ export default async function ClassesPage({
 
       {/* ── Weekly Schedule Tab ── */}
       {tab === 'sessions' && (
-        <div style={{ padding: '24px 28px' }}>
+        <div className="page-body">
 
           {/* Week nav */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -321,7 +321,8 @@ export default async function ClassesPage({
           </div>
 
           {/* Week grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10, marginBottom: selectedDay ? 28 : 0 }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: selectedDay ? 28 : 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(110px, 1fr))', gap: 10, minWidth: 700 }}>
             {days.map(day => {
               const dateStr     = format(day, 'yyyy-MM-dd')
               const daySessions = grouped[dateStr] || []
@@ -381,6 +382,7 @@ export default async function ClassesPage({
                 </div>
               )
             })}
+          </div>
           </div>
 
           {/* ── Day Detail Panel ── */}

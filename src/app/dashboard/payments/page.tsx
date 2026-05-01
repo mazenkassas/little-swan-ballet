@@ -95,7 +95,7 @@ export default async function PaymentsPage({
   const cols = [L.col.num, L.col.student, L.col.type, L.col.due, L.col.paid, L.col.method, L.col.date, L.col.staff]
 
   return (
-    <div style={{ padding: '24px 28px', background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+    <div className="page-body" style={{ background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
 
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
@@ -104,7 +104,7 @@ export default async function PaymentsPage({
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
+      <div className="kpi-grid-3" style={{ marginBottom: 20 }}>
         <div style={{ background: '#3dab7e12', border: '1px solid #3dab7e22', borderRadius: 14, padding: '18px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
             <span style={{ color: 'var(--txt2)', fontSize: 12, fontWeight: 500 }}>{L.revenue}</span>
@@ -180,7 +180,8 @@ export default async function PaymentsPage({
       <ExamFeesList rows={pendingExamFees} isRtl={isRtl} selectedDate={selectedDate} />
 
       {/* Table */}
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+      <div className="tbl-outer">
+        <div className="tbl-scroll">
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
@@ -259,6 +260,7 @@ export default async function PaymentsPage({
             })}
           </tbody>
         </table>
+        </div>
         {(!payments || payments.length === 0) && (
           <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--txt2)', fontSize: 13 }}>
             {L.noPayments}

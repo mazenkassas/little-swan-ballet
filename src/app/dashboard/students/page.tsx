@@ -91,7 +91,7 @@ export default async function StudentsPage({
   }
 
   return (
-    <div style={{ padding: '24px 28px', background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+    <div className="page-body" style={{ background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -134,7 +134,8 @@ export default async function StudentsPage({
       </div>
 
       {/* ── Table ── */}
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.07)' }}>
+      <div className="tbl-outer">
+        <div className="tbl-scroll">
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: '5%' }} />
@@ -262,6 +263,7 @@ export default async function StudentsPage({
           </tbody>
         </table>
 
+        </div>
         {students.length === 0 && (
           <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--txt2)' }}>
             <p style={{ fontSize: 14, fontWeight: 500 }}>{isRtl ? 'لا توجد نتائج' : 'No students found'}</p>

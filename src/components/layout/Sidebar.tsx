@@ -15,7 +15,7 @@ import {
 
 type UserInfo = { displayName: string; role: string; email: string; initials: string }
 
-export default function Sidebar({ user }: { user: UserInfo }) {
+export default function Sidebar({ user, mobileOpen = false }: { user: UserInfo; mobileOpen?: boolean }) {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
@@ -101,17 +101,20 @@ export default function Sidebar({ user }: { user: UserInfo }) {
 
 
 return (
-    <aside style={{
-      width: collapsed ? 56 : 210,
-      minHeight: '100vh',
-      flexShrink: 0,
-      background: 'var(--surface)',
-      borderLeft: '1px solid var(--border)',
-      display: 'flex',
-      flexDirection: 'column',
-      transition: 'width 0.2s ease',
-      overflow: 'hidden',
-    }}>
+    <aside
+      className={`sidebar${mobileOpen ? ' mob-open' : ''}`}
+      style={{
+        width: collapsed ? 56 : 210,
+        minHeight: '100vh',
+        flexShrink: 0,
+        background: 'var(--surface)',
+        borderLeft: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'width 0.2s ease',
+        overflow: 'hidden',
+      }}
+    >
 
       {/* Logo + collapse toggle */}
       <div style={{

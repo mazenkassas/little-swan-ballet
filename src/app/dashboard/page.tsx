@@ -113,7 +113,7 @@ export default async function DashboardPage() {
   ]
 
   return (
-    <div style={{ padding: 28, background: 'var(--bg-page)', minHeight: '100%' }}>
+    <div className="page-body" style={{ background: 'var(--bg-page)', minHeight: '100%' }}>
 
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
@@ -124,7 +124,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 16, alignItems: 'stretch' }}>
+      <div className="kpi-grid-4" style={{ marginBottom: 16, alignItems: 'stretch' }}>
         {kpis.map(kpi => (
           <Link key={kpi.label} href={kpi.href} style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column' }}>
             <div style={{ ...card, padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'opacity 0.15s', flex: 1, boxSizing: 'border-box' }}
@@ -146,7 +146,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Row 2: Payment Required + Pending Transfers */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div className="kpi-grid-2" style={{ marginBottom: 16 }}>
 
         {/* Payment Required */}
         <div style={card}>
@@ -219,14 +219,15 @@ export default async function DashboardPage() {
       </div>
 
       {/* Row 3: Today's Transactions + Coach Check-in */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="kpi-grid-2">
 
         {/* Today's Transactions */}
         <div style={{ ...card, overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>{t('todayTransactions')}</p>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {[tp('col.student'), tp('col.type'), tp('col.paid'), tp('col.paymentMethod')].map(h => (
@@ -263,6 +264,7 @@ export default async function DashboardPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Coach Check-in Status */}

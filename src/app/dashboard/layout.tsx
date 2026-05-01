@@ -1,4 +1,4 @@
-import Sidebar from '@/components/layout/Sidebar'
+import DashboardShell from '@/components/layout/DashboardShell'
 import ThemeToggle from '@/components/layout/ThemeToggle'
 import LanguageToggle from '@/components/layout/LanguageToggle'
 import { createClient } from '@/lib/supabase/server'
@@ -14,21 +14,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const initials = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-page)' }}>
-      <Sidebar user={{ displayName, role, email: user.email || '', initials }} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{
-          height: 52, background: 'var(--surface)', borderBottom: '0.5px solid var(--border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-          padding: '0 24px', gap: 10, flexShrink: 0,
-        }}>
-          <LanguageToggle />
-          <ThemeToggle />
-        </div>
-        <main style={{ flex: 1, overflowY: 'auto', background: 'var(--bg-page)' }}>
-          {children}
-        </main>
-      </div>
-    </div>
+    <DashboardShell
+      user={{ displayName, role, email: user.email || '', initials }}
+      topbarActions={<><LanguageToggle /><ThemeToggle /></>}
+    >
+      {children}
+    </DashboardShell>
   )
 }
