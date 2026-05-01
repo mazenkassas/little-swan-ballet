@@ -69,7 +69,7 @@ export default async function ExamDetailPage({
 
   // Target label for header
   const targetLabel = targets && targets.length === 1
-    ? [targets[0].grade?.name, targets[0].term?.name].filter(Boolean).join(' ')
+    ? [(targets[0] as any).grade?.name, (targets[0] as any).term?.name].filter(Boolean).join(' ')
     : targets && targets.length > 1
     ? null  // multiple — shown grouped, no single badge
     : [exam.grade?.name, exam.term?.name].filter(Boolean).join(' ') || null
