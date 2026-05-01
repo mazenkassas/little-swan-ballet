@@ -1,8 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { format, subDays, startOfMonth } from 'date-fns'
-import RevenueChart from './RevenueChart'
+import dynamic from 'next/dynamic'
 import { getTranslations, getLocale } from 'next-intl/server'
+
+const RevenueChart = dynamic(() => import('./RevenueChart'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="sk" style={{ width: '100%', height: 280, borderRadius: 8 }} />
+    </div>
+  ),
+})
 
 export default async function ReportsPage() {
   const t      = await getTranslations('reports')

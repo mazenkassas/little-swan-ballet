@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { getLocale, getMessages } from 'next-intl/server'
 import { NextIntlClientProvider } from 'next-intl'
@@ -6,6 +6,13 @@ import { NextIntlClientProvider } from 'next-intl'
 export const metadata: Metadata = {
   title: 'Little Swan Ballet Academy',
   description: 'Academy Management System — Miami Branch',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: '#C8788A',
 }
 
 const THEME_SCRIPT = `(function(){try{if(localStorage.getItem('ls-theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}})();`
