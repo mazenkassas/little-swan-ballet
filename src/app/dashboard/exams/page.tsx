@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, BookOpen, Trophy, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Plus, BookOpen, Trophy } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
 import { getLocale } from 'next-intl/server'
+import ExamCardActions from './ExamCardActions'
 
 export default async function ExamsPage() {
   const t       = await getTranslations('exams')
@@ -48,13 +49,12 @@ export default async function ExamsPage() {
           const pending = exam.student_exams?.filter((e: any) => e.result === 'pending').length || 0
 
           return (
-            <Link
+            <div
               key={exam.id}
-              href={`/dashboard/exams/${exam.id}`}
               style={{
                 display: 'flex', alignItems: 'center', gap: 18,
                 background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 14, padding: '16px 20px', textDecoration: 'none',
+                borderRadius: 14, padding: '16px 20px',
               }}
             >
               {/* Icon */}
@@ -97,12 +97,13 @@ export default async function ExamsPage() {
                   <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--txt2)', margin: 0 }}>{pending}</p>
                   <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>{t('pending')}</p>
                 </div>
-                {isRtl
-                  ? <ChevronLeft  size={15} color="var(--txt2)" style={{ opacity: 0.4 }} />
-                  : <ChevronRight size={15} color="var(--txt2)" style={{ opacity: 0.4 }} />
-                }
               </div>
-            </Link>
+
+              {/* Actions */}
+              <div style={{ flexShrink: 0, minWidth: 160 }}>
+                <ExamCardActions id={exam.id} name={exam.name} isRtl={isRtl} />
+              </div>
+            </div>
           )
         })}
 

@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, Star, MapPin, Users } from 'lucide-react'
+import { Plus, Star, MapPin } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
 import { getLocale } from 'next-intl/server'
+import EventCardActions from './EventCardActions'
 
 const TYPE_COLORS: Record<string, string> = {
   recital:     '#d4667a',
@@ -62,14 +63,12 @@ export default async function EventsPage() {
           const typeColor     = TYPE_COLORS[event.type] || '#8e5fd9'
 
           return (
-            <Link
+            <div
               key={event.id}
-              href={`/dashboard/events/${event.id}`}
               style={{
                 display: 'flex', alignItems: 'center', gap: 16,
                 background: 'var(--bg-card)', border: '1px solid var(--border)',
                 borderRadius: 14, padding: '14px 18px',
-                textDecoration: 'none',
               }}
             >
               {/* Icon */}
@@ -119,7 +118,12 @@ export default async function EventsPage() {
                   </p>
                 </div>
               </div>
-            </Link>
+
+              {/* Actions */}
+              <div style={{ flexShrink: 0, minWidth: 160 }}>
+                <EventCardActions id={event.id} name={event.name} isRtl={isRtl} />
+              </div>
+            </div>
           )
         })}
 

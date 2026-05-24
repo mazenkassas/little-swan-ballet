@@ -8,6 +8,7 @@ import Link from 'next/link'
 type Term   = { id: string; name: string }
 type Grade  = { id: string; name: string }
 type Class  = { id: string; name: string; days_of_week?: string[]; start_time?: string }
+type Plan   = { id: string; name: string; price: string | number; sessions_count: number }
 
 const LABELS = {
   en: {
@@ -27,6 +28,7 @@ const LABELS = {
     classDefault: 'Select group',
     notes: 'Notes',
     notesPlaceholder: 'Medical or administrative notes...',
+    plan: 'Subscription Plan', planDefault: 'Select plan',
     monthlyFees: 'Monthly Subscription (EGP)',
     discountedFees: 'Discounted Monthly Subscription Fees (EGP)',
     discountEndDate: 'End Discount Date',
@@ -53,6 +55,7 @@ const LABELS = {
       grade_id:              'Please select a grade',
       level_id:              'Please select a term',
       class_id:              'Please select a group',
+      plan_id:               'Please select a subscription plan',
       monthly_fees:          'Monthly fees are required',
       monthly_fees_invalid:  'Enter a whole number (no decimals)',
       discounted_fees:       'Discounted fees are required',
@@ -79,6 +82,7 @@ const LABELS = {
     classDefault: 'اختر المجموعه',
     notes: 'ملاحظات',
     notesPlaceholder: 'أي ملاحظات طبية أو إدارية...',
+    plan: 'خطة الاشتراك', planDefault: 'اختر الخطة (اختياري)',
     monthlyFees: 'الاشتراك الشهري (جنيه)',
     discountedFees: 'رسوم الاشتراك الشهري المخفضة (جنيه)',
     discountEndDate: 'تاريخ انتهاء التخفيض',
@@ -105,6 +109,7 @@ const LABELS = {
       grade_id:              'يرجى اختيار الصف الدراسي',
       level_id:              'يرجى اختيار الفصل الدراسي',
       class_id:              'يرجى اختيار المجموعة',
+      plan_id:               'يرجى اختيار خطة الاشتراك',
       monthly_fees:          'الرسوم الشهرية مطلوبة',
       monthly_fees_invalid:  'أدخل رقماً صحيحاً (بدون أرقام عشرية)',
       discounted_fees:       'الرسوم المخفضة مطلوبة',
@@ -120,14 +125,15 @@ function classLabel(c: Class) {
   return c.name
 }
 
-type FormFields = 'name_ar' | 'name_en' | 'date_of_birth' | 'parent_phone' | 'grade_id' | 'term_id' | 'class_id' | 'monthly_fees' | 'discounted_monthly_fees' | 'discount_end_date'
+type FormFields = 'name_ar' | 'name_en' | 'date_of_birth' | 'parent_phone' | 'grade_id' | 'term_id' | 'class_id' | 'plan_id' | 'discounted_monthly_fees' | 'discount_end_date'
 
 export default function NewStudentForm({
-  terms, grades, classes, locale,
+  terms, grades, classes, plans, locale,
 }: {
   terms:   Term[]
   grades:  Grade[]
   classes: Class[]
+  plans:   Plan[]
   locale:  string
 }) {
   const router   = useRouter()
@@ -140,7 +146,7 @@ export default function NewStudentForm({
     parent_phone: '', parent_name: '',
     grade_id: '', term_id: '', class_id: '',
     notes: '',
-    monthly_fees: '',
+    plan_id: '',
     discounted_monthly_fees: '',
     discount_end_date: '',
   })
@@ -189,22 +195,20 @@ export default function NewStudentForm({
         return value ? undefined : L.err.level_id
       case 'class_id':
         return value ? undefined : L.err.class_id
-      case 'monthly_fees':
-        if (!value.trim()) return L.err.monthly_fees
-        if (!/^\d+$/.test(value.trim())) return L.err.monthly_fees_invalid
-        return undefined
+      case 'plan_id':
+        return value ? undefined : L.err.plan_id
       case 'discounted_monthly_fees': {
-        if (!value.trim()) return L.err.discounted_fees
+        if (!value.trim()) return undefined
         if (!/^\d+$/.test(value.trim())) return L.err.discounted_fees_invalid
-        const mf = parseInt(form.monthly_fees || '0', 10)
+        const planPrice = Number(plans.find(p => p.id === form.plan_id)?.price || 0)
         const df = parseInt(value.trim(), 10)
-        if (mf > 0 && df >= mf) return L.err.discounted_fees_not_less
+        if (planPrice > 0 && df >= planPrice) return L.err.discounted_fees_not_less
         return undefined
       }
       case 'discount_end_date': {
-        const mf = parseInt(form.monthly_fees || '0', 10)
+        const planPrice = Number(plans.find(p => p.id === form.plan_id)?.price || 0)
         const df = parseInt(form.discounted_monthly_fees || '0', 10)
-        const hasDiscount = df > 0 && df < mf
+        const hasDiscount = df > 0 && df < planPrice
         if (hasDiscount && !value) return L.err.discount_end_date
         if (value) {
           const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -218,8 +222,8 @@ export default function NewStudentForm({
   function validateAll(): Partial<Record<FormFields, string>> {
     const fields: FormFields[] = [
       'name_ar', 'name_en', 'date_of_birth', 'parent_phone',
-      'grade_id', 'term_id', 'class_id',
-      'monthly_fees', 'discounted_monthly_fees', 'discount_end_date',
+      'grade_id', 'term_id', 'class_id', 'plan_id',
+      'discounted_monthly_fees', 'discount_end_date',
     ]
     const result: Partial<Record<FormFields, string>> = {}
     for (const f of fields) {
@@ -234,15 +238,16 @@ export default function NewStudentForm({
     setServerError('')
 
     const allErrors = validateAll()
-    setTouched({ name_ar: true, name_en: true, date_of_birth: true, parent_phone: true, grade_id: true, term_id: true, class_id: true, monthly_fees: true, discounted_monthly_fees: true, discount_end_date: true })
+    setTouched({ name_ar: true, name_en: true, date_of_birth: true, parent_phone: true, grade_id: true, term_id: true, class_id: true, plan_id: true, discounted_monthly_fees: true, discount_end_date: true })
     setErrors(allErrors)
     if (Object.keys(allErrors).length > 0) return
 
     setLoading(true)
 
-    const mf = parseInt(form.monthly_fees, 10)
-    const df = parseInt(form.discounted_monthly_fees, 10)
-    const hasDiscount = df > 0 && df < mf
+    const plan       = plans.find(p => p.id === form.plan_id)
+    const planPrice  = Number(plan?.price || 0)
+    const df         = parseInt(form.discounted_monthly_fees, 10)
+    const hasDiscount = df > 0 && df < planPrice
 
     const { data: student, error: err } = await supabase
       .from('students')
@@ -256,7 +261,7 @@ export default function NewStudentForm({
         term_id:                  form.term_id   || null,
         notes:                    form.notes        || null,
         enrollment_date:          new Date().toISOString().split('T')[0],
-        monthly_fees:             mf,
+        monthly_fees:             planPrice || null,
         discounted_monthly_fees:  hasDiscount ? df : null,
         discount_end_date:        hasDiscount && form.discount_end_date ? form.discount_end_date : null,
       })
@@ -274,6 +279,19 @@ export default function NewStudentForm({
         student_id:    student.id,
         class_id:      form.class_id,
         enrolled_date: new Date().toISOString().split('T')[0],
+      })
+    }
+
+    if (form.plan_id && student) {
+      const plan = plans.find(p => p.id === form.plan_id)
+      await supabase.from('subscriptions').insert({
+        student_id:          student.id,
+        class_id:            form.class_id || null,
+        plan_id:             form.plan_id,
+        total_sessions:      plan?.sessions_count ?? 4,
+        remaining_sessions:  plan?.sessions_count ?? 4,
+        start_date:          new Date().toISOString().split('T')[0],
+        status:              'active',
       })
     }
 
@@ -434,44 +452,48 @@ export default function NewStudentForm({
               <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt2)', margin: '0 0 10px', paddingTop: 6, borderTop: '1px solid var(--border)' }}>
                 💰 {L.feesSection}
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                <div>
-                  <label style={lbl}>{L.monthlyFees}{req}</label>
-                  <input
-                    value={form.monthly_fees}
-                    onChange={e => set('monthly_fees', e.target.value.replace(/[^\d]/g, ''))}
-                    onBlur={() => touch('monthly_fees')}
-                    inputMode="numeric"
-                    placeholder="0"
-                    dir="ltr"
-                    style={inpStyle('monthly_fees')}
-                  />
-                  <Err field="monthly_fees" />
-                </div>
-                <div>
-                  <label style={lbl}>{L.discountedFees}{req}</label>
-                  <input
-                    value={form.discounted_monthly_fees}
-                    onChange={e => {
-                      set('discounted_monthly_fees', e.target.value.replace(/[^\d]/g, ''))
-                      // re-validate discount_end_date when discount amount changes
-                      setTouched(t => ({ ...t, discount_end_date: true }))
-                    }}
-                    onBlur={() => { touch('discounted_monthly_fees'); touch('discount_end_date') }}
-                    inputMode="numeric"
-                    placeholder="0"
-                    dir="ltr"
-                    style={inpStyle('discounted_monthly_fees')}
-                  />
-                  <Err field="discounted_monthly_fees" />
-                </div>
+
+              {/* Plan selector */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={lbl}>{L.plan}{req}</label>
+                <select
+                  value={form.plan_id}
+                  onChange={e => { set('plan_id', e.target.value); setTouched(t => ({ ...t, plan_id: true })) }}
+                  onBlur={() => touch('plan_id')}
+                  style={{ ...inpStyle('plan_id'), cursor: 'pointer' }}
+                >
+                  <option value="">{L.planDefault}</option>
+                  {plans.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — {Number(p.price).toLocaleString()} EGP / {p.sessions_count} {isRtl ? 'حصص' : 'sessions'}
+                    </option>
+                  ))}
+                </select>
+                <Err field="plan_id" />
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={lbl}>{L.discountedFees}</label>
+                <input
+                  value={form.discounted_monthly_fees}
+                  onChange={e => {
+                    set('discounted_monthly_fees', e.target.value.replace(/[^\d]/g, ''))
+                    setTouched(t => ({ ...t, discount_end_date: true }))
+                  }}
+                  onBlur={() => { touch('discounted_monthly_fees'); touch('discount_end_date') }}
+                  inputMode="numeric"
+                  placeholder="0"
+                  dir="ltr"
+                  style={inpStyle('discounted_monthly_fees')}
+                />
+                <Err field="discounted_monthly_fees" />
               </div>
 
               {/* End Discount Date — shown + required only when a discount exists */}
               {(() => {
-                const mf = parseInt(form.monthly_fees || '0', 10)
-                const df = parseInt(form.discounted_monthly_fees || '0', 10)
-                const hasDiscount = df > 0 && df < mf
+                const planPrice  = Number(plans.find(p => p.id === form.plan_id)?.price || 0)
+                const df         = parseInt(form.discounted_monthly_fees || '0', 10)
+                const hasDiscount = df > 0 && df < planPrice
                 return hasDiscount ? (
                   <div>
                     <label style={lbl}>{L.discountEndDate}{req}</label>

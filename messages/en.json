@@ -17,6 +17,8 @@
     "inventory": "Inventory",
     "events": "Events",
     "private": "Private",
+    "holidays": "Holidays",
+    "paymentTypes": "Payment Methods",
     "settings": "Settings",
     "roles": "Roles",
     "logout": "Sign Out",
@@ -98,7 +100,10 @@
     "netRevenueToday": "Net Revenue Today",
     "checkIn": "In",
     "checkOut": "Out",
-    "revenueVsExpenses": "Revenue − Expenses"
+    "revenueVsExpenses": "Revenue − Expenses",
+    "todayClassesTitle": "Today's Classes",
+    "noClassesToday": "No classes today ✓",
+    "viewDailyBtn": "Daily"
   },
   "daily": {
     "title": "Daily",
@@ -293,5 +298,15 @@
   "theme": {
     "light": "Light mode",
     "dark": "Dark mode"
+  },
+  "coachNav": {
+    "groups": { "sessions": "My Sessions", "students": "Students" },
+    "dashboard": "Dashboard",
+    "schedule": "My Schedule",
+    "checkin": "Check In / Out",
+    "attendance": "Confirm Attendance",
+    "logout": "Sign Out",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar"
   }
 }

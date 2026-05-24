@@ -66,7 +66,7 @@ const DAYS_LABELS: Record<string, { en: string; ar: string }> = {
   Friday:    { en: 'Fri', ar: 'الجمعة' },
   Saturday:  { en: 'Sat', ar: 'السبت' },
 }
-const DAY_KEYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const DAY_KEYS = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 
 const HOURS: { value: string; en: string; ar: string }[] = []
 for (let h = 7; h <= 22; h++) {
@@ -182,7 +182,7 @@ export default function NewClassPage() {
       : ''
     const autoName  = [gradeName, termName, dayStr, timeRange].filter(Boolean).join(' · ')
 
-    const { error: err } = await supabase.from('classes').insert({
+    const { data: newClass, error: err } = await supabase.from('classes').insert({
       name:             autoName,
       grade_id:         form.grade_id || null,
       term_id:          form.term_id  || null,
@@ -193,10 +193,35 @@ export default function NewClassPage() {
       start_time:       form.start_time,
       end_time:         form.end_time,
       max_capacity:     parseInt(form.max_capacity),
-    })
+      is_active:        true,
+    }).select('id').single()
 
-    if (err) { setServerErr(err.message); setLoading(false) }
-    else router.push('/dashboard/classes')
+    if (err) { setServerErr(err.message); setLoading(false); return }
+
+    // Pre-create a session for each upcoming occurrence so the daily screen shows it immediately
+    if (newClass) {
+      const DOW: Record<string, number> = {
+        Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+        Thursday: 4, Friday: 5, Saturday: 6,
+      }
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const sessions = form.days_of_week.map(day => {
+        const ahead = ((DOW[day] - today.getDay()) + 7) % 7
+        const d = new Date(today)
+        d.setDate(today.getDate() + ahead)
+        return {
+          class_id: newClass.id,
+          date:     d.toISOString().split('T')[0],
+          coach_id: form.default_coach_id || null,
+          hall_id:  form.hall_id,
+          status:   'scheduled',
+        }
+      })
+      await supabase.from('sessions').insert(sessions)
+    }
+
+    router.push('/dashboard/classes')
   }
 
   const base = (field: string): React.CSSProperties => ({

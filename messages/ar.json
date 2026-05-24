@@ -17,6 +17,8 @@
     "inventory": "المخزون",
     "events": "الفعاليات",
     "private": "البرايفيت",
+    "holidays": "الإجازات",
+    "paymentTypes": "طرق الدفع",
     "settings": "الإعدادات",
     "roles": "الأدوار",
     "logout": "تسجيل الخروج",
@@ -98,7 +100,10 @@
     "netRevenueToday": "صافي إيرادات اليوم",
     "checkIn": "دخل",
     "checkOut": "خرج",
-    "revenueVsExpenses": "إيرادات − مصروفات"
+    "revenueVsExpenses": "إيرادات − مصروفات",
+    "todayClassesTitle": "حصص اليوم",
+    "noClassesToday": "لا توجد حصص اليوم ✓",
+    "viewDailyBtn": "اليومية"
   },
   "daily": {
     "title": "اليومية",
@@ -293,5 +298,15 @@
   "theme": {
     "light": "وضع النهار",
     "dark": "وضع الليل"
+  },
+  "coachNav": {
+    "groups": { "sessions": "حصصي", "students": "الطالبات" },
+    "dashboard": "لوحة التحكم",
+    "schedule": "جدولي",
+    "checkin": "تسجيل الدخول / الخروج",
+    "attendance": "تأكيد الحضور",
+    "logout": "تسجيل الخروج",
+    "expandSidebar": "توسيع الشريط الجانبي",
+    "collapseSidebar": "طي الشريط الجانبي"
   }
 }

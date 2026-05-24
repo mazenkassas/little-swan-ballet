@@ -108,7 +108,7 @@ export default function StudentStatusBadge({
         <ChevronDown size={10} style={{ opacity: 0.7, marginInlineStart: 1 }} />
       </button>
 
-      {/* True portal — renders into document.body, escapes all table stacking contexts */}
+      {/* True portal — renders into #portal-root, escapes all table stacking contexts */}
       {open && typeof document !== 'undefined' && createPortal(
         <>
           <div
@@ -153,7 +153,7 @@ export default function StudentStatusBadge({
             })}
           </div>
         </>,
-        document.body
+        document.getElementById('portal-root') ?? document.body
       )}
     </>
   )

@@ -23,12 +23,14 @@ const LABELS = {
     saving: 'Creating…',
     cancel: 'Cancel',
     err: {
-      name:             'Exam name is required',
-      date:             'Exam date is required',
-      fee:              'Exam fees are required',
-      fee_neg:          'Fee cannot be negative',
-      levels:           'Select at least one target level',
-      payment_deadline: 'Last payment date is required',
+      name:              'Exam name is required',
+      date:              'Exam date is required',
+      date_past:         'Exam date cannot be in the past',
+      fee:               'Exam fees are required',
+      fee_neg:           'Fee cannot be negative',
+      levels:            'Select at least one target level',
+      payment_deadline:  'Last payment date is required',
+      deadline_after:    'Payment deadline must be on or before the exam date',
     },
   },
   ar: {
@@ -48,10 +50,12 @@ const LABELS = {
     err: {
       name:             'اسم الامتحان مطلوب',
       date:             'تاريخ الامتحان مطلوب',
+      date_past:        'لا يمكن أن يكون تاريخ الامتحان في الماضي',
       fee:              'رسوم الامتحان مطلوبة',
       fee_neg:          'لا يمكن أن تكون الرسوم سالبة',
       levels:           'اختر مستوى واحداً على الأقل',
       payment_deadline: 'آخر موعد للسداد مطلوب',
+      deadline_after:   'يجب أن يكون آخر موعد للسداد قبل تاريخ الامتحان أو في نفسه',
     },
   },
 }
@@ -130,20 +134,31 @@ export default function NewExamPage() {
     setErrors(e => ({ ...e, levels: undefined }))
   }
 
-  function validateField(field: FormFields, value: string): string | undefined {
+  const today = new Date().toISOString().split('T')[0]
+
+  function validateField(field: FormFields, value: string, examDate?: string): string | undefined {
     switch (field) {
-      case 'name':             return value.trim() ? undefined : L.err.name
-      case 'date':             return value ? undefined : L.err.date
-      case 'fee':              return !value.trim() ? L.err.fee : parseFloat(value) < 0 ? L.err.fee_neg : undefined
-      case 'levels':           return selectedLevels.length > 0 ? undefined : L.err.levels
-      case 'payment_deadline': return value ? undefined : L.err.payment_deadline
+      case 'name':
+        return value.trim() ? undefined : L.err.name
+      case 'date':
+        if (!value) return L.err.date
+        if (value < today) return L.err.date_past
+        return undefined
+      case 'fee':
+        return !value.trim() ? L.err.fee : parseFloat(value) < 0 ? L.err.fee_neg : undefined
+      case 'levels':
+        return selectedLevels.length > 0 ? undefined : L.err.levels
+      case 'payment_deadline':
+        if (!value) return L.err.payment_deadline
+        if (examDate && value > examDate) return L.err.deadline_after
+        return undefined
     }
   }
 
   function validateAll(): Partial<Record<FormFields, string>> {
     const result: Partial<Record<FormFields, string>> = {}
     for (const f of ['name', 'date', 'fee', 'payment_deadline'] as FormFields[]) {
-      const msg = validateField(f, form[f as keyof typeof form])
+      const msg = validateField(f, form[f as keyof typeof form], form.date)
       if (msg) result[f] = msg
     }
     const lvlMsg = validateField('levels', '')
@@ -153,12 +168,26 @@ export default function NewExamPage() {
 
   function set(key: keyof typeof form, value: string) {
     setForm(f => ({ ...f, [key]: value }))
-    if (errors[key as FormFields]) setErrors(e => ({ ...e, [key]: undefined }))
+    // when exam date changes, re-validate deadline if it was already touched
+    if (key === 'date' && touched.payment_deadline) {
+      setErrors(e => ({
+        ...e,
+        date: value < today ? L.err.date_past : undefined,
+        payment_deadline: form.payment_deadline
+          ? (form.payment_deadline > value ? L.err.deadline_after : undefined)
+          : e.payment_deadline,
+      }))
+    } else if (errors[key as FormFields]) {
+      setErrors(e => ({ ...e, [key]: undefined }))
+    }
   }
 
   function touch(field: FormFields) {
     setTouched(t => ({ ...t, [field]: true }))
-    setErrors(e => ({ ...e, [field]: validateField(field, form[field as keyof typeof form] ?? '') }))
+    setErrors(e => ({
+      ...e,
+      [field]: validateField(field, form[field as keyof typeof form] ?? '', form.date),
+    }))
   }
 
   async function handleSubmit(e: React.FormEvent) {

@@ -5,6 +5,7 @@ import { getLocale, getTranslations } from 'next-intl/server'
 import { BookOpen } from 'lucide-react'
 import BackButton from '@/components/layout/BackButton'
 import ExamResultsForm from './ExamResultsForm'
+import ExamDetailActions from './ExamDetailActions'
 
 export default async function ExamDetailPage({
   params,
@@ -77,9 +78,10 @@ export default async function ExamDetailPage({
   return (
     <div style={{ padding: '24px 28px', background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
 
-      {/* Back */}
-      <div style={{ marginBottom: 20 }}>
+      {/* Back + actions */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <BackButton label={isRtl ? 'رجوع' : 'Back'} fallback="/dashboard/exams" variant="primary" />
+        <ExamDetailActions id={id} name={exam.name} isRtl={isRtl} />
       </div>
 
       {/* Header card */}

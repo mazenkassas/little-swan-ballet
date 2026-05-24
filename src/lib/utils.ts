@@ -76,11 +76,11 @@ export function getStatusLabel(status: string): string {
 }
 
 export const DAYS_OF_WEEK = [
-  { value: 'Sunday', label: 'الأحد' },
-  { value: 'Monday', label: 'الاثنين' },
-  { value: 'Tuesday', label: 'الثلاثاء' },
+  { value: 'Saturday',  label: 'السبت' },
+  { value: 'Sunday',    label: 'الأحد' },
+  { value: 'Monday',    label: 'الاثنين' },
+  { value: 'Tuesday',   label: 'الثلاثاء' },
   { value: 'Wednesday', label: 'الأربعاء' },
-  { value: 'Thursday', label: 'الخميس' },
-  { value: 'Friday', label: 'الجمعة' },
-  { value: 'Saturday', label: 'السبت' },
+  { value: 'Thursday',  label: 'الخميس' },
+  { value: 'Friday',    label: 'الجمعة' },
 ]

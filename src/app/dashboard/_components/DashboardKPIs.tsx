@@ -1,14 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
-import Link from 'next/link'
 import { formatCurrency } from '@/lib/utils'
 import { Users, AlertCircle, TrendingUp, BookOpen } from 'lucide-react'
-import { getTranslations, getLocale } from 'next-intl/server'
+import { getTranslations } from 'next-intl/server'
 
 export default async function DashboardKPIs() {
-  const t      = await getTranslations('dashboard')
-  const tc     = await getTranslations('common')
-  const locale = await getLocale()
+  const t = await getTranslations('dashboard')
   const supabase = await createClient()
   const today  = format(new Date(), 'yyyy-MM-dd')
 
@@ -39,7 +36,6 @@ export default async function DashboardKPIs() {
       value: String(activeStudents || 0),
       sub: `${totalStudents || 0} ${t('totalLabel')}`,
       accent: '#C8788A',
-      href: '/dashboard/students',
       alert: false,
     },
     {
@@ -48,7 +44,6 @@ export default async function DashboardKPIs() {
       value: String(paymentRequired?.length || 0),
       sub: t('sessionsZeroLabel'),
       accent: '#e04040',
-      href: '/dashboard/students',
       alert: (paymentRequired?.length || 0) > 0,
     },
     {
@@ -57,7 +52,6 @@ export default async function DashboardKPIs() {
       value: formatCurrency(netRevenue),
       sub: `${formatCurrency(totalRevenue)} − ${formatCurrency(totalExp)}`,
       accent: netRevenue >= 0 ? '#4A8C6A' : '#e04040',
-      href: '/dashboard/payments',
       alert: false,
     },
     {
@@ -66,7 +60,6 @@ export default async function DashboardKPIs() {
       value: String(activeClasses || 0),
       sub: t('activeClasses'),
       accent: '#8B6EC8',
-      href: '/dashboard/classes',
       alert: false,
     },
   ]
@@ -80,22 +73,19 @@ export default async function DashboardKPIs() {
   return (
     <div className="kpi-grid-4" style={{ marginBottom: 16, alignItems: 'stretch' }}>
       {kpis.map(kpi => (
-        <Link key={kpi.label} href={kpi.href} style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ ...card, padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'opacity 0.15s', flex: 1 }}
-            className="hover:opacity-90">
-            {kpi.alert && (
-              <div style={{ position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, background: '#e04040' }} />
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--txt2)' }}>{kpi.label}</span>
-              <div style={{ width: 34, height: 34, borderRadius: 9, background: kpi.accent + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', color: kpi.accent, flexShrink: 0 }}>
-                {kpi.icon}
-              </div>
+        <div key={kpi.label} style={{ ...card, padding: 20, position: 'relative', overflow: 'hidden' }}>
+          {kpi.alert && (
+            <div style={{ position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, background: '#e04040' }} />
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--txt2)' }}>{kpi.label}</span>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: kpi.accent + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', color: kpi.accent, flexShrink: 0 }}>
+              {kpi.icon}
             </div>
-            <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--txt1)', margin: '0 0 4px', letterSpacing: -0.5 }}>{kpi.value}</p>
-            <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>{kpi.sub}</p>
           </div>
-        </Link>
+          <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--txt1)', margin: '0 0 4px', letterSpacing: -0.5 }}>{kpi.value}</p>
+          <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>{kpi.sub}</p>
+        </div>
       ))}
     </div>
   )

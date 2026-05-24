@@ -105,3 +105,11 @@ html.dark input[type="date"]::-webkit-calendar-picker-indicator {
   border-radius: 8px;
   animation: sk-pulse 1.5s ease-in-out infinite;
 }
+
+/* ── Pulse ring (NowNext hero dot) ── */
+@keyframes pulseRing {
+  0%   { box-shadow: 0 0 0 0 rgba(212,102,122,.45); }
+  70%  { box-shadow: 0 0 0 10px rgba(212,102,122,0); }
+  100% { box-shadow: 0 0 0 0 rgba(212,102,122,0); }
+}
+.pulse { animation: pulseRing 2s infinite; }

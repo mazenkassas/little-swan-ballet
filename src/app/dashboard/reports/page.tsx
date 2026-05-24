@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic'
 import { getTranslations, getLocale } from 'next-intl/server'
 
 const RevenueChart = dynamic(() => import('./RevenueChart'), {
-  ssr: false,
   loading: () => (
     <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div className="sk" style={{ width: '100%', height: 280, borderRadius: 8 }} />

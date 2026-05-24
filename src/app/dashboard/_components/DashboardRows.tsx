@@ -1,9 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
-import Link from 'next/link'
 import { formatCurrency } from '@/lib/utils'
 import { getTranslations, getLocale } from 'next-intl/server'
-import TransferActions from '../transfers/TransferActions'
 
 export default async function DashboardRows() {
   const t      = await getTranslations('dashboard')
@@ -15,21 +13,21 @@ export default async function DashboardRows() {
 
   const [
     { data: paymentRequired },
-    { data: pendingTransfers },
+    { data: todayClasses },
     { data: todayPayments },
     { data: coachAttendance },
   ] = await Promise.all([
     supabase
       .from('subscriptions')
-      .select('student:students(id, name_ar, name_en, level:levels(name))')
+      .select('student:students(id, name_ar, name_en, status, level:levels(name))')
       .eq('status', 'active')
       .eq('remaining_sessions', 0),
     supabase
-      .from('student_transfers')
-      .select('id, student:students(name_ar, name_en), from_class:classes!from_class_id(name), to_class:classes!to_class_id(name), request_date')
-      .eq('status', 'pending')
-      .order('request_date', { ascending: false })
-      .limit(5),
+      .from('sessions')
+      .select('id, status, class:classes(id, name, start_time, end_time, level:levels(name)), coach:coaches(name_ar, name_en)')
+      .eq('date', today)
+      .order('class_id')
+      .limit(8),
     supabase
       .from('payments')
       .select('amount_paid, type, payment_method, student:students(name_ar, name_en), staff:staff(name)')
@@ -42,6 +40,13 @@ export default async function DashboardRows() {
       .lte('check_in_time', today + 'T23:59:59')
       .order('check_in_time', { ascending: false }),
   ])
+
+  function fmtTime(t: string | null): string | null {
+    if (!t) return null
+    const [h, m] = t.split(':').map(Number)
+    const h12 = h % 12 || 12
+    return m === 0 ? `${h12} ${h < 12 ? 'AM' : 'PM'}` : `${h12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
+  }
 
   const payTypeColors: Record<string, string> = {
     subscription: '#C8788A', product: '#4A8C6A', event: '#8B6EC8',
@@ -60,68 +65,67 @@ export default async function DashboardRows() {
       <div className="kpi-grid-2" style={{ marginBottom: 16 }}>
 
         <div style={card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>
               🚨 {t('paymentRequiredTitle')}
             </p>
-            <Link href="/dashboard/students" style={{ textDecoration: 'none' }}>
-              <span style={{ fontSize: 11, color: '#C8788A', fontWeight: 500 }}>{t('allStudentsBtn')}</span>
-            </Link>
           </div>
           <div style={{ padding: '8px 0' }}>
-            {paymentRequired && paymentRequired.length > 0 ? paymentRequired.slice(0, 6).map((sub: any) => (
-              <Link key={sub.student?.id} href={`/dashboard/students/${sub.student?.id}`} style={{ textDecoration: 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid var(--border)', transition: 'opacity 0.1s' }}
-                  className="hover:opacity-75">
-                  <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#C8788A20', color: '#C8788A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-                    {(sub.student?.name_ar || '?')[0]}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>
-                      {locale === 'en' && sub.student?.name_en ? sub.student.name_en : sub.student?.name_ar}
-                    </p>
-                    <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>{sub.student?.level?.name}</p>
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 600, background: 'rgba(224,64,64,0.12)', color: '#e04040', border: '1px solid rgba(224,64,64,0.2)', borderRadius: 20, padding: '2px 8px', flexShrink: 0 }}>
-                    0 {tc('session')}
-                  </span>
+            {(() => { const list = (paymentRequired || []).filter((sub: any) => sub.student?.status === 'active'); return list.length > 0 ? list.slice(0, 6).map((sub: any) => (
+              <div key={sub.student?.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#C8788A20', color: '#C8788A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                  {(sub.student?.name_ar || '?')[0]}
                 </div>
-              </Link>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>
+                    {locale === 'en' && sub.student?.name_en ? sub.student.name_en : sub.student?.name_ar}
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>{sub.student?.level?.name}</p>
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 600, background: 'rgba(224,64,64,0.12)', color: '#e04040', border: '1px solid rgba(224,64,64,0.2)', borderRadius: 20, padding: '2px 8px', flexShrink: 0 }}>
+                  0 {tc('session')}
+                </span>
+              </div>
             )) : (
               <p style={{ textAlign: 'center', padding: '20px 0', color: 'var(--txt2)', fontSize: 12, margin: 0 }}>{t('noPaymentRequired')}</p>
-            )}
+            ); })()}
           </div>
         </div>
 
         <div style={card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>
-              ↔ {t('pendingTransfersTitle')}
+              🗓 {t('todayClassesTitle')}
             </p>
-            <Link href="/dashboard/transfers" style={{ textDecoration: 'none' }}>
-              <span style={{ fontSize: 11, color: '#C8788A', fontWeight: 500 }}>{t('allBtn')}</span>
-            </Link>
           </div>
-          <div style={{ padding: '6px 0' }}>
-            {pendingTransfers && pendingTransfers.length > 0 ? pendingTransfers.map((tr: any) => (
-              <div key={tr.id} style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                  <p style={{ fontWeight: 600, fontSize: 13, color: 'var(--txt1)', margin: 0 }}>
-                    {locale === 'en' && tr.student?.name_en ? tr.student.name_en : tr.student?.name_ar}
-                  </p>
-                  <span style={{ fontSize: 10, fontWeight: 600, background: 'rgba(232,150,10,0.12)', color: '#e8960a', border: '1px solid rgba(232,150,10,0.2)', borderRadius: 20, padding: '2px 8px' }}>
-                    {tc('sessionStatus.scheduled')}
+          <div style={{ padding: '8px 0' }}>
+            {todayClasses && todayClasses.length > 0 ? todayClasses.map((s: any) => {
+              const statusColor = s.status === 'completed' ? '#4A8C6A' : s.status === 'cancelled' ? '#e04040' : '#e8960a'
+              const statusBg   = s.status === 'completed' ? 'rgba(74,140,106,0.12)' : s.status === 'cancelled' ? 'rgba(224,64,64,0.12)' : 'rgba(232,150,10,0.12)'
+              const start = fmtTime(s.class?.start_time)
+              const end   = fmtTime(s.class?.end_time)
+              const timeStr = start ? (end ? `${start} – ${end}` : start) : null
+              const coachName = locale === 'en' && s.coach?.name_en ? s.coach.name_en : s.coach?.name_ar
+              return (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#7c5cdb20', color: '#7c5cdb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                    {(s.class?.name || '?')[0]}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt1)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {s.class?.name}
+                    </p>
+                    <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>
+                      {timeStr}{timeStr && coachName ? ' · ' : ''}{coachName}
+                    </p>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, background: statusBg, color: statusColor, border: `1px solid ${statusColor}30`, borderRadius: 20, padding: '2px 8px', flexShrink: 0 }}>
+                    {tc('sessionStatus.' + s.status) || s.status}
                   </span>
                 </div>
-                <p style={{ fontSize: 12, color: 'var(--txt2)', margin: '0 0 10px' }}>
-                  <span style={{ color: '#C8788A' }}>{tr.from_class?.name}</span>
-                  {' → '}
-                  <span style={{ color: '#4A8C6A' }}>{tr.to_class?.name}</span>
-                </p>
-                <TransferActions transferId={tr.id} />
-              </div>
-            )) : (
-              <p style={{ textAlign: 'center', padding: '20px 0', color: 'var(--txt2)', fontSize: 12, margin: 0 }}>{t('noPendingTransfers')}</p>
+              )
+            }) : (
+              <p style={{ textAlign: 'center', padding: '20px 0', color: 'var(--txt2)', fontSize: 12, margin: 0 }}>{t('noClassesToday')}</p>
             )}
           </div>
         </div>

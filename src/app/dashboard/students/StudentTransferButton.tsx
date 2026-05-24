@@ -72,7 +72,7 @@ export default function StudentTransferButton({ studentId, studentName, isRtl }:
     setCurrentClasses(enrolled || [])
     setSelectedGrade('')
     setSelectedTerm('')
-    setFromClassId(enrolled?.length === 1 ? enrolled[0].class_id : '')
+    setFromClassId(enrolled?.[0]?.class_id || '')
     setToClassId('')
     setNotes('')
     setErr('')

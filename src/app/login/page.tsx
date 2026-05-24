@@ -97,13 +97,21 @@ export default function LoginPage() {
     }
     setLoading(true)
     const supabase = createClient()
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error: err } = await supabase.auth.signInWithPassword({ email, password })
     if (err) {
       if (err.message.includes('Invalid')) setError(T.errInvalid)
       else setError(T.errGeneral)
       setLoading(false)
     } else {
-      router.push('/dashboard')
+      // Check if this user is a coach and send them to the coach portal directly
+      const { data: coachRow } = await supabase
+        .from('coaches')
+        .select('id')
+        .eq('email', data.user?.email ?? '')
+        .eq('can_login', true)
+        .eq('is_active', true)
+        .maybeSingle()
+      router.push(coachRow ? '/coach' : '/dashboard')
       router.refresh()
     }
   }

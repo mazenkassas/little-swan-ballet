@@ -16,7 +16,7 @@ export default async function SettingsPage() {
   ] = await Promise.all([
     supabase.from('system_settings').select('*'),
     supabase.from('levels').select('*').order('order_num'),
-    supabase.from('subscription_plans').select('*').order('price'),
+    supabase.from('subscription_plans').select('*').eq('is_active', true).order('price'),
     supabase.from('halls').select('*'),
   ])
 

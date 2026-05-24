@@ -20,13 +20,17 @@ export default async function AttendancePage({
     .eq('date', today)
     .order('created_at')
 
-  // Deduplicate by class_id
+  // Deduplicate by class_id then sort by class start_time
   const seen = new Set<string>()
-  const sessions = (rawSessions || []).filter((s: any) => {
-    if (seen.has(s.class_id)) return false
-    seen.add(s.class_id)
-    return true
-  })
+  const sessions = (rawSessions || [])
+    .filter((s: any) => {
+      if (seen.has(s.class_id)) return false
+      seen.add(s.class_id)
+      return true
+    })
+    .sort((a: any, b: any) =>
+      (a.class?.start_time || '').localeCompare(b.class?.start_time || '')
+    )
 
   let selectedSession = null
   let enrolledStudents: any[] = []

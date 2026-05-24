@@ -161,8 +161,10 @@ function UnenrollButton({ classStudentId, label }: { classStudentId: string; lab
     <form action={async () => {
       'use server'
       const { createClient } = await import('@/lib/supabase/server')
+      const { revalidatePath } = await import('next/cache')
       const supabase = await createClient()
       await supabase.from('class_students').delete().eq('id', classStudentId)
+      revalidatePath('/dashboard/classes/[id]', 'page')
     }}>
       <button type="submit" style={{
         background: 'transparent', border: '1px solid var(--border)',

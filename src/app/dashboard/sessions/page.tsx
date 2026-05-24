@@ -23,8 +23,8 @@ export default async function SessionsPage({
 
   const weekStart = params.week
     ? new Date(params.week)
-    : startOfWeek(new Date(), { weekStartsOn: 0 })
-  const weekEnd = endOfWeek(weekStart, { weekStartsOn: 0 })
+    : startOfWeek(new Date(), { weekStartsOn: 6 })
+  const weekEnd = endOfWeek(weekStart, { weekStartsOn: 6 })
 
   const weekStartStr = format(weekStart, 'yyyy-MM-dd')
   const weekEndStr   = format(weekEnd,   'yyyy-MM-dd')

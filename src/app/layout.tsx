@@ -15,6 +15,9 @@ export const viewport: Viewport = {
   themeColor: '#C8788A',
 }
 
+// Runs before first paint to prevent flash of wrong theme.
+// Using next/script (strategy="beforeInteractive") keeps this out of React's
+// reconciler, which is what caused the React 19 "Encountered a script tag" warning.
 const THEME_SCRIPT = `(function(){try{if(localStorage.getItem('ls-theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}})();`
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -24,14 +27,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang={locale} dir={dir} translate="no" suppressHydrationWarning>
-      <head>
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-      </head>
       <body style={{ backgroundColor: 'var(--bg-page)', color: 'var(--txt1)', minHeight: '100vh' }}>
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} suppressHydrationWarning />
         <NextIntlClientProvider messages={messages}>
           {children}
         </NextIntlClientProvider>
+        <div id="portal-root" />
       </body>
     </html>
   )

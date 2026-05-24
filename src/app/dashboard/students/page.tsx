@@ -10,6 +10,16 @@ import StudentTransferButton from './StudentTransferButton'
 
 const PAGE_SIZE = 15
 
+const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+
+function fmt12h(time: string) {
+  if (!time) return ''
+  const [h, m] = time.split(':').map(Number)
+  const h12 = h % 12 || 12
+  const s = h < 12 ? 'AM' : 'PM'
+  return m === 0 ? `${h12} ${s}` : `${h12}:${String(m).padStart(2, '0')} ${s}`
+}
+
 export default async function StudentsPage({
   searchParams,
 }: {
@@ -20,12 +30,14 @@ export default async function StudentsPage({
   const supabase = await createClient()
   const isRtl = locale === 'ar'
 
+  const todayDayName = WEEKDAYS[new Date().getDay()]
+
   const statusFilter = params.status || ''
   const page = Math.max(1, parseInt(params.page || '1', 10))
   const from = (page - 1) * PAGE_SIZE
   const to   = from + PAGE_SIZE - 1
 
-  const SELECT = '*, level:levels(id, name, order_num), subscriptions:subscriptions(remaining_sessions, total_sessions, status), class_enrollments:class_students(enrolled_date, class:classes(level:levels(name)))'
+  const SELECT = '*, level:levels(id, name, order_num), subscriptions:subscriptions(remaining_sessions, total_sessions, status), class_enrollments:class_students(enrolled_date, class:classes(name, start_time, days_of_week, level:levels(name)))'
 
   let students: any[] = []
   let totalCount = 0
@@ -138,23 +150,25 @@ export default async function StudentsPage({
         <div className="tbl-scroll">
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>
-            <col style={{ width: '5%' }} />
-            <col style={{ width: '25%' }} />
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '17%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '22%' }} />
+            <col style={{ width: '4%' }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '16%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '20%' }} />
           </colgroup>
           <thead>
             <tr>
-              <th style={th}>{isRtl ? 'ID'         : 'ID'}</th>
-              <th style={th}>{isRtl ? 'الطالبة'    : 'Student'}</th>
-              <th style={th}>{isRtl ? 'المستوى'    : 'Level'}</th>
-              <th style={th}>{isRtl ? 'السن'        : 'Age'}</th>
-              <th style={th}>{isRtl ? 'عدد المرات' : 'Sessions'}</th>
-              <th style={th}>{isRtl ? 'الحالة'     : 'Status'}</th>
-              <th style={th}>{isRtl ? 'الإجراءات' : 'Actions'}</th>
+              <th style={th}>{isRtl ? 'ID'              : 'ID'}</th>
+              <th style={th}>{isRtl ? 'الطالبة'         : 'Student'}</th>
+              <th style={th}>{isRtl ? 'المستوى'         : 'Level'}</th>
+              <th style={th}>{isRtl ? 'السن'             : 'Age'}</th>
+              <th style={th}>{isRtl ? 'عدد المرات'      : 'Sessions'}</th>
+              <th style={th}>{isRtl ? 'حصص اليوم'       : "Today's Sessions"}</th>
+              <th style={th}>{isRtl ? 'الحالة'          : 'Status'}</th>
+              <th style={th}>{isRtl ? 'الإجراءات'      : 'Actions'}</th>
             </tr>
           </thead>
           <tbody>
@@ -226,6 +240,30 @@ export default async function StudentsPage({
                     ) : (
                       <span style={{ color: 'var(--txt2)', fontSize: 12 }}>—</span>
                     )}
+                  </td>
+
+                  {/* Today's Sessions */}
+                  <td style={td}>
+                    {(() => {
+                      const todayClass = student.class_enrollments?.find((e: any) =>
+                        e.class?.days_of_week?.includes(todayDayName)
+                      )
+                      if (!todayClass?.class) {
+                        return <span style={{ color: 'var(--txt2)', fontSize: 12 }}>—</span>
+                      }
+                      return (
+                        <div>
+                          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--txt1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {todayClass.class.name}
+                          </p>
+                          {todayClass.class.start_time && (
+                            <p style={{ margin: '2px 0 0', fontSize: 10, color: '#4a90d9', fontWeight: 600 }}>
+                              {fmt12h(todayClass.class.start_time)}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </td>
 
                   {/* Status */}

@@ -58,7 +58,7 @@ const DAYS_LABELS: Record<string, { en: string; ar: string }> = {
   Friday:    { en: 'Fri', ar: 'الجمعة' },
   Saturday:  { en: 'Sat', ar: 'السبت' },
 }
-const DAY_KEYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const DAY_KEYS = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 
 const HOURS: { value: string; en: string; ar: string }[] = []
 for (let h = 7; h <= 22; h++) {

@@ -9,8 +9,8 @@ import { useTranslations } from 'next-intl'
 import {
   LayoutDashboard, Users, GraduationCap, ClipboardCheck,
   CreditCard, UserCog, BookOpen, ShoppingBag, Star, Dumbbell,
-  Settings, LogOut, Wallet, FileBarChart, ArrowLeftRight,
-  ChevronLeft, ClipboardList, ShieldCheck
+  Settings, LogOut, Wallet, FileBarChart,
+  ChevronLeft, ClipboardList, ShieldCheck, Umbrella,
 } from 'lucide-react'
 
 type UserInfo = { displayName: string; role: string; email: string; initials: string }
@@ -47,10 +47,11 @@ export default function Sidebar({ user, mobileOpen = false }: { user: UserInfo; 
         { href: '/dashboard/coaches', icon: UserCog, label: t('coaches') },
         { href: '/dashboard/exams', icon: BookOpen, label: t('exams') },
         { href: '/dashboard/events', icon: Star, label: t('events') },
-        // { href: '/dashboard/transfers', icon: ArrowLeftRight, label: t('transfers') },
         { href: '/dashboard/inventory', icon: ShoppingBag, label: t('inventory') },
-        { href: '/dashboard/private', icon: Dumbbell, label: t('private') },
-        { href: '/dashboard/roles',   icon: ShieldCheck, label: t('roles') },
+        { href: '/dashboard/private',   icon: Dumbbell,   label: t('private') },
+        { href: '/dashboard/holidays',      icon: Umbrella,   label: t('holidays') },
+        // { href: '/dashboard/payment-types', icon: Banknote,   label: t('paymentTypes') },
+        { href: '/dashboard/roles',         icon: ShieldCheck, label: t('roles') },
       ]
     }
   ]
