@@ -65,10 +65,11 @@ export default async function CoachCheckInPage() {
   ])
 
   return (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     <CheckInPanel
-      todaySessions={todaySessions || []}
+      todaySessions={(todaySessions || []) as any}
       todayLogs={todayLogs || []}
-      history={history || []}
+      history={(history || []) as any}
       isRtl={isRtl}
     />
   )

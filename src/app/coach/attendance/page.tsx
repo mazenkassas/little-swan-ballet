@@ -57,6 +57,7 @@ export default async function CoachAttendancePage() {
     .limit(80)
 
   return (
-    <AttendanceConfirm attendance={attendance || []} isRtl={isRtl} />
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    <AttendanceConfirm attendance={(attendance || []) as any} isRtl={isRtl} />
   )
 }
