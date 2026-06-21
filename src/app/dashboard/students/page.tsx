@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, Eye, Pencil } from 'lucide-react'
 import { calculateAge } from '@/lib/utils'
 import { getLocale } from 'next-intl/server'
 import { Suspense } from 'react'
@@ -152,13 +152,13 @@ export default async function StudentsPage({
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: '4%' }} />
-            <col style={{ width: '20%' }} />
+            <col style={{ width: '21%' }} />
             <col style={{ width: '13%' }} />
             <col style={{ width: '6%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '16%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '18%' }} />
             <col style={{ width: '11%' }} />
-            <col style={{ width: '20%' }} />
+            <col style={{ width: '15%' }} />
           </colgroup>
           <thead>
             <tr>
@@ -274,20 +274,30 @@ export default async function StudentsPage({
 
                   {/* Actions */}
                   <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <Link href={`/dashboard/students/${student.id}`} style={{
-                        background: 'transparent', border: '1px solid var(--border)',
-                        borderRadius: 8, padding: '4px 10px', color: 'var(--txt2)',
-                        fontSize: 10, fontWeight: 600, textDecoration: 'none',
-                      }}>
-                        {isRtl ? 'عرض' : 'View'}
+                    <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                      <Link
+                        href={`/dashboard/students/${student.id}`}
+                        title={isRtl ? 'عرض' : 'View'}
+                        style={{
+                          width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                          background: '#4a90d910', border: '1px solid #4a90d928',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#4a90d9', textDecoration: 'none',
+                        }}
+                      >
+                        <Eye size={13} />
                       </Link>
-                      <Link href={`/dashboard/students/${student.id}/edit`} style={{
-                        background: '#d4667a12', border: '1px solid #d4667a28',
-                        borderRadius: 8, padding: '4px 10px', color: '#d4667a',
-                        fontSize: 10, fontWeight: 600, textDecoration: 'none',
-                      }}>
-                        {isRtl ? 'تعديل' : 'Edit'}
+                      <Link
+                        href={`/dashboard/students/${student.id}/edit`}
+                        title={isRtl ? 'تعديل' : 'Edit'}
+                        style={{
+                          width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                          background: '#d4667a10', border: '1px solid #d4667a28',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#d4667a', textDecoration: 'none',
+                        }}
+                      >
+                        <Pencil size={13} />
                       </Link>
                       <StudentTransferButton
                         studentId={student.id}

@@ -119,20 +119,18 @@ export default function StudentTransferButton({ studentId, studentName, isRtl }:
 
   return (
     <>
-      <span
-        role="button"
-        tabIndex={0}
+      <button
         onClick={openModal}
-        onKeyDown={e => e.key === 'Enter' && openModal()}
+        title={L.btn}
         style={{
-          backgroundColor: '#7c3aed', borderRadius: 8, padding: '4px 10px', color: '#fff',
-          fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-          display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap',
-          userSelect: 'none',
+          width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+          background: '#7c3aed10', border: '1px solid #7c3aed28',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          color: '#7c3aed', cursor: 'pointer', padding: 0,
         }}
       >
-        {L.btn}
-      </span>
+        <ArrowLeftRight size={13} />
+      </button>
 
       {open && (
         <div

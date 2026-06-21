@@ -107,15 +107,16 @@ export default function StudentDeleteButton({
       <button
         onClick={() => { setError(''); setShowConfirm(true) }}
         disabled={pending}
+        title={L.del}
         style={{
-          background: '#e0404012', border: '1px solid #e0404028',
-          borderRadius: 8, padding: '4px 10px', color: '#e04040',
-          fontSize: 10, fontWeight: 600, cursor: 'pointer',
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          opacity: pending ? 0.5 : 1,
+          width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+          background: '#e0404010', border: '1px solid #e0404028',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          color: '#e04040', cursor: pending ? 'wait' : 'pointer',
+          opacity: pending ? 0.5 : 1, padding: 0,
         }}
       >
-        <Trash2 size={10} />{L.del}
+        <Trash2 size={13} />
       </button>
 
       {error && (
