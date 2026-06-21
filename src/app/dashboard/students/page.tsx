@@ -11,14 +11,18 @@ import StudentDeleteButton from './StudentDeleteButton'
 
 const PAGE_SIZE = 15
 
-const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+function fmtPayDate(iso: string | null | undefined, isRtl: boolean) {
+  if (!iso) return null
+  const d = new Date(iso + 'T00:00:00')
+  return d.toLocaleDateString(isRtl ? 'ar-EG' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
 
-function fmt12h(time: string) {
-  if (!time) return ''
-  const [h, m] = time.split(':').map(Number)
-  const h12 = h % 12 || 12
-  const s = h < 12 ? 'AM' : 'PM'
-  return m === 0 ? `${h12} ${s}` : `${h12}:${String(m).padStart(2, '0')} ${s}`
+function paymentUrgency(iso: string | null | undefined): 'overdue' | 'soon' | 'ok' | 'none' {
+  if (!iso) return 'none'
+  const diff = (new Date(iso + 'T00:00:00').getTime() - Date.now()) / 86_400_000
+  if (diff < 0)   return 'overdue'
+  if (diff <= 7)  return 'soon'
+  return 'ok'
 }
 
 export default async function StudentsPage({
@@ -31,14 +35,12 @@ export default async function StudentsPage({
   const supabase = await createClient()
   const isRtl = locale === 'ar'
 
-  const todayDayName = WEEKDAYS[new Date().getDay()]
-
   const statusFilter = params.status || ''
   const page = Math.max(1, parseInt(params.page || '1', 10))
   const from = (page - 1) * PAGE_SIZE
   const to   = from + PAGE_SIZE - 1
 
-  const SELECT = '*, level:levels(id, name, order_num), subscriptions:subscriptions(remaining_sessions, total_sessions, status), class_enrollments:class_students(enrolled_date, class:classes(name, start_time, days_of_week, level:levels(name)))'
+  const SELECT = '*, level:levels(id, name, order_num), subscriptions:subscriptions(remaining_sessions, total_sessions, status, next_cycle_start), class_enrollments:class_students(enrolled_date, class:classes(name, level:levels(name)))'
 
   let students: any[] = []
   let totalCount = 0
@@ -167,7 +169,7 @@ export default async function StudentsPage({
               <th style={th}>{isRtl ? 'المستوى'         : 'Level'}</th>
               <th style={th}>{isRtl ? 'السن'             : 'Age'}</th>
               <th style={th}>{isRtl ? 'عدد المرات'      : 'Sessions'}</th>
-              <th style={th}>{isRtl ? 'حصص اليوم'       : "Today's Sessions"}</th>
+              <th style={th}>{isRtl ? 'تاريخ الدفع' : 'Payment Due'}</th>
               <th style={th}>{isRtl ? 'الحالة'          : 'Status'}</th>
               <th style={th}>{isRtl ? 'الإجراءات'      : 'Actions'}</th>
             </tr>
@@ -243,26 +245,29 @@ export default async function StudentsPage({
                     )}
                   </td>
 
-                  {/* Today's Sessions */}
+                  {/* Payment Due */}
                   <td style={td}>
                     {(() => {
-                      const todayClass = student.class_enrollments?.find((e: any) =>
-                        e.class?.days_of_week?.includes(todayDayName)
-                      )
-                      if (!todayClass?.class) {
-                        return <span style={{ color: 'var(--txt2)', fontSize: 12 }}>—</span>
+                      const sub = student.subscriptions?.find((s: any) => s.status === 'active')
+                      const dueDate = sub?.remaining_sessions === 0 ? sub?.next_cycle_start : null
+                      const urgency = paymentUrgency(dueDate)
+                      if (urgency === 'none') return <span style={{ color: 'var(--txt2)', fontSize: 12 }}>—</span>
+                      const colors = {
+                        overdue: { bg: '#e0404015', border: '#e0404030', text: '#e04040' },
+                        soon:    { bg: '#e8960a15', border: '#e8960a30', text: '#e8960a' },
+                        ok:      { bg: '#3dab7e15', border: '#3dab7e30', text: '#3dab7e' },
                       }
+                      const c = colors[urgency]
                       return (
-                        <div>
-                          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--txt1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {todayClass.class.name}
-                          </p>
-                          {todayClass.class.start_time && (
-                            <p style={{ margin: '2px 0 0', fontSize: 10, color: '#4a90d9', fontWeight: 600 }}>
-                              {fmt12h(todayClass.class.start_time)}
-                            </p>
-                          )}
-                        </div>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          background: c.bg, border: `1px solid ${c.border}`,
+                          borderRadius: 20, padding: '2px 8px',
+                          fontSize: 11, fontWeight: 600, color: c.text, whiteSpace: 'nowrap',
+                        }}>
+                          {urgency === 'overdue' && '⚠ '}
+                          {fmtPayDate(dueDate, isRtl)}
+                        </span>
                       )
                     })()}
                   </td>
