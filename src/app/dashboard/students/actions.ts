@@ -3,6 +3,14 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getNextOrCurrentClassDate } from '@/lib/subscriptionLogic'
 
+export async function deleteStudent(studentId: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('students').delete().eq('id', studentId)
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/students')
+  return {}
+}
+
 export async function transferStudent(
   studentId: string,
   fromClassId: string | null,

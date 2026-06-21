@@ -7,6 +7,7 @@ import { Suspense } from 'react'
 import StudentStatusBadge from './StudentStatusBadge'
 import StudentSearch from './StudentSearch'
 import StudentTransferButton from './StudentTransferButton'
+import StudentDeleteButton from './StudentDeleteButton'
 
 const PAGE_SIZE = 15
 
@@ -289,6 +290,11 @@ export default async function StudentsPage({
                         {isRtl ? 'تعديل' : 'Edit'}
                       </Link>
                       <StudentTransferButton
+                        studentId={student.id}
+                        studentName={displayName}
+                        isRtl={isRtl}
+                      />
+                      <StudentDeleteButton
                         studentId={student.id}
                         studentName={displayName}
                         isRtl={isRtl}
