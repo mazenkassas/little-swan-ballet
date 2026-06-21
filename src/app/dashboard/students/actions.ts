@@ -5,8 +5,24 @@ import { getNextOrCurrentClassDate } from '@/lib/subscriptionLogic'
 
 export async function deleteStudent(studentId: string): Promise<{ error?: string }> {
   const supabase = await createClient()
+
+  // Delete dependent rows before the student to satisfy FK constraints
+  const deps = [
+    'attendance',
+    'class_students',
+    'subscriptions',
+    'freezes',
+    'student_transfers',
+  ] as const
+
+  for (const table of deps) {
+    const { error } = await supabase.from(table).delete().eq('student_id', studentId)
+    if (error) return { error: `${table}: ${error.message}` }
+  }
+
   const { error } = await supabase.from('students').delete().eq('id', studentId)
   if (error) return { error: error.message }
+
   revalidatePath('/dashboard/students')
   return {}
 }
