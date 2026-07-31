@@ -184,18 +184,16 @@ export default async function StaffPage({
                     </div>
                   )}
 
-                  {/* Actions (hidden for super_admin) */}
-                  {!isSuperAdmin && (
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                      <StaffCardActions
-                        id={member.id}
-                        displayName={displayName || member.id}
-                        isActive={member.is_active}
-                        isSuperAdmin={isSuperAdmin}
-                        isRtl={isRtl}
-                      />
-                    </div>
-                  )}
+                  {/* Actions */}
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                    <StaffCardActions
+                      id={member.id}
+                      displayName={displayName || member.id}
+                      isActive={member.is_active}
+                      isSuperAdmin={isSuperAdmin}
+                      isRtl={isRtl}
+                    />
+                  </div>
                 </div>
               )
             })}
