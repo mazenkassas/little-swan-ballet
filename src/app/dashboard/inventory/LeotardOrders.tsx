@@ -101,6 +101,7 @@ const LABELS = {
     emptySearch: 'No results match your search.',
     delRow: 'Delete row', delTitle: 'Delete this row?', delBody: 'This cannot be undone.',
     del: 'Delete', cancel: 'Cancel', unnamed: '(no name)',
+    exportCsv: 'Export', clear: 'Clear filters', filterHint: 'Click to show only these rows',
     addMonth: '+ Add month', addMonthTitle: 'Add a month sheet', month: 'Month', year: 'Year', add: 'Add',
     saveFailed: 'Some changes could not be saved. Check your connection, then press Retry.',
     actionFailed: 'That action failed. Check your connection and try again.',
@@ -123,6 +124,7 @@ const LABELS = {
     emptySearch: 'مفيش نتايج مطابقة للبحث.',
     delRow: 'حذف الصف', delTitle: 'حذف هذا الصف؟', delBody: 'لا يمكن التراجع عن هذا الإجراء.',
     del: 'حذف', cancel: 'إلغاء', unnamed: '(بدون اسم)',
+    exportCsv: 'تصدير', clear: 'مسح الفلاتر', filterHint: 'اضغط لعرض هذه الصفوف فقط',
     addMonth: '+ إضافة شهر', addMonthTitle: 'إضافة شيت شهر جديد', month: 'الشهر', year: 'السنة', add: 'إضافة',
     saveFailed: 'تعذر حفظ بعض التعديلات. تأكد من الاتصال ثم اضغط إعادة المحاولة.',
     actionFailed: 'تعذر تنفيذ العملية. تأكد من الاتصال وحاول مرة أخرى.',
@@ -155,6 +157,19 @@ const CSS = `
 .lsw-stat::before{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:4px;background:var(--tone)}
 .lsw-stat span{display:block;color:var(--txt2);font-size:12px;font-weight:600}
 .lsw-stat b{display:block;margin-top:2px;font-size:22px;line-height:1.25;color:var(--txt1);font-variant-numeric:tabular-nums}
+.lsw-stat.click{appearance:none;font:inherit;text-align:start;cursor:pointer;width:100%;transition:border-color .15s,box-shadow .15s}
+.lsw-stat.click:hover{border-color:var(--tone)}
+.lsw-stat.click[aria-pressed=true]{border-color:var(--tone);box-shadow:0 0 0 2px var(--tone)}
+.lsw-stat.click.calm b{color:var(--txt1)}
+.lsw-btn.ghost{background:var(--surface);color:var(--txt1);border:1px solid var(--border);font-weight:600}
+.lsw-btn.ghost:hover{filter:none;border-color:#d4667a;color:#d4667a}
+.lsw-toggle{border:0;border-radius:999px;height:28px;min-width:104px;padding:0 14px;font:inherit;font-weight:600;font-size:14px;cursor:pointer;background:transparent;color:color-mix(in srgb,var(--txt2) 60%,transparent);box-shadow:inset 0 0 0 1px var(--border)}
+.lsw-toggle:hover{color:var(--txt1)}
+.lsw-toggle[aria-pressed=true]{background:var(--bg);color:var(--fg);box-shadow:none}
+.lsw-toggle:focus-visible{outline:2px solid #d4667a;outline-offset:1px}
+.lsw-tabn{display:inline-block;margin-inline-start:8px;min-width:20px;padding:0 6px;border-radius:999px;background:color-mix(in srgb,var(--txt1) 12%,transparent);font-size:11.5px;font-weight:700;line-height:20px;text-align:center}
+.lsw-tab[aria-selected=true] .lsw-tabn{background:#ffffff38}
+.lsw-empty .lsw-btn{margin-top:14px}
 .lsw-stat.pink{--tone:#d4667a}
 .lsw-stat.info{--tone:#4a90d9}
 .lsw-stat.amber{--tone:#e8960a}
@@ -242,6 +257,7 @@ const CSS = `
 
 const STOCK = 'stock'
 const EXTRA_MONTHS_KEY = 'lsw-extra-months'
+const ACTIVE_TAB_KEY = 'lsw-active-tab'
 
 /** A class time slot on one weekday, e.g. { day: 'fri', label: '12 - 2' } */
 export interface ClassSlot { day: string; label: string }
@@ -321,6 +337,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
   const [active, setActive] = useState(currentMonth)
   const [query, setQuery] = useState('')
   const [fPay, setFPay] = useState('')
+  const [fDel, setFDel] = useState(false)       // only rows not delivered to the customer
   const [failed, setFailed] = useState(false)   // an add or delete failed
   const [pending, setPending] = useState(0)     // edits being saved right now
   const [unsaved, setUnsaved] = useState(0)     // rows with an edit that failed to save
@@ -339,7 +356,16 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
       const saved = JSON.parse(localStorage.getItem(EXTRA_MONTHS_KEY) || '[]')
       if (Array.isArray(saved)) setExtraMonths(saved.filter(x => /^\d{4}-\d{2}$/.test(String(x))))
     } catch { /* storage unavailable */ }
+    // Reopen the tab that was open before a refresh
+    try {
+      const last = sessionStorage.getItem(ACTIVE_TAB_KEY)
+      if (last && (last === STOCK || /^\d{4}-\d{2}$/.test(last))) setActive(last)
+    } catch { /* storage unavailable */ }
   }, [])
+
+  useEffect(() => {
+    try { sessionStorage.setItem(ACTIVE_TAB_KEY, active) } catch { /* storage unavailable */ }
+  }, [active])
   const dirty = useRef(new Set<string>())
   const bodyRef = useRef<HTMLTableSectionElement>(null)
 
@@ -349,8 +375,9 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     for (let d = -2; d <= 3; d++) set.add(addMonths(currentMonth, d))
     rows.forEach(r => { if (r.sheet_month) set.add(r.sheet_month) })
     extraMonths.forEach(m => set.add(m))
+    if (active !== STOCK) set.add(active)
     return Array.from(set).sort()
-  }, [rows, currentMonth, extraMonths])
+  }, [rows, currentMonth, extraMonths, active])
 
   // "Add month" suggests the month after the last tab
   function openMonthForm() {
@@ -391,8 +418,11 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
       .map((r, i) => ({ r, i }))
       .filter(({ r }) =>
         (!q || r.customer_name.toLowerCase().includes(q)) &&
-        (!fPay || payOf(r) === fPay))
-  }, [sheetRows, query, fPay])
+        (!fPay || payOf(r) === fPay) &&
+        (!fDel || r.delivery_status !== 'delivered'))
+  }, [sheetRows, query, fPay, fDel])
+  const filtering = !!query.trim() || !!fPay || fDel
+  const clearFilters = () => { setQuery(''); setFPay(''); setFDel(false) }
 
   const paid = visible.reduce((s, { r }) => s + r.paid_amount, 0)
   const total = visible.reduce((s, { r }) => s + r.total_amount, 0)
@@ -478,7 +508,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
 
   async function addRow() {
     if (isStock || adding) return
-    setQuery(''); setFPay('')
+    clearFilters()
     setAdding(true)
     const { data, error } = await supabase
       .from('leotard_orders')
@@ -535,9 +565,44 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     change(r.id, patch)
   }
 
+  // Enter saves the cell and moves down to the same column of the next row, like a spreadsheet
   const onEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') e.currentTarget.blur()
+    if (e.key !== 'Enter') return
+    const el = e.currentTarget
+    const next = el.closest('tr')?.nextElementSibling
+      ?.querySelector<HTMLInputElement>(`input[aria-label="${el.getAttribute('aria-label')}"]`)
+    if (next) { next.focus(); next.select() } else el.blur()
   }
+
+  // Download the rows on screen as a CSV file that Excel opens with Arabic intact
+  function exportCsv() {
+    const lang = isRtl ? 'ar' : 'en'
+    const label = (opts: Opt[], v: string | null) => opts.find(o => o.v === v)?.[lang] || v || ''
+    const head = [L.num, L.name, L.date, L.day, L.group, L.paid, L.remaining, L.total, L.payStatus,
+      L.cash, L.instapay, L.size, L.tailor, L.delivery]
+    const lines = visible.map(({ r, i }) => [
+      i + 1, r.customer_name, r.order_date || '', label(OPTIONS.day, r.day_of_week), r.group_name || '',
+      r.paid_amount, r.total_amount - r.paid_amount, r.total_amount, label(OPTIONS.payStatus, payOf(r)),
+      r.cash ? L.cash : '', r.instapay ? L.instapay : '', r.size || '',
+      label(OPTIONS.tailor, r.tailor_status), label(OPTIONS.delivery, r.delivery_status),
+    ])
+    const csv = [head, ...lines]
+      .map(cells => cells.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\r\n')
+    const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff) + csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `leotards-${active}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Number of orders on each month sheet, shown on its tab
+  const monthCounts = useMemo(() => {
+    const map: Record<string, number> = {}
+    rows.forEach(r => { if (r.sheet_month) map[r.sheet_month] = (map[r.sheet_month] || 0) + 1 })
+    return map
+  }, [rows])
 
   const tabs = [{ id: STOCK, label: L.stockTab }, ...months.map(m => ({ id: m, label: monthLabel(m) }))]
   const activeLabel = tabs.find(t => t.id === active)?.label || ''
@@ -565,6 +630,8 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
               <option value="">{L.allPay}</option>
               {OPTIONS.payStatus.map(o => <option key={o.v} value={o.v}>{isRtl ? o.ar : o.en}</option>)}
             </select>
+            {filtering && <button className="lsw-btn ghost" onClick={clearFilters}>{L.clear}</button>}
+            <button className="lsw-btn ghost" onClick={exportCsv} disabled={!visible.length}>{L.exportCsv}</button>
             <button className="lsw-btn" onClick={addRow} disabled={adding}>{L.addRow}</button>
           </div>
         )}
@@ -584,8 +651,16 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
             <div className="lsw-stat pink"><span>{L.statCount}</span><b>{visible.length}</b></div>
             <div className="lsw-stat info"><span>{L.statTotal}</span><b>{fmt(total)}</b></div>
             <div className="lsw-stat ok"><span>{L.statPaid}</span><b>{fmt(paid)}</b></div>
-            <div className={`lsw-stat${rem > 0 ? ' warn' : ''}`}><span>{L.statRemaining}</span><b>{fmt(rem)}</b></div>
-            <div className={`lsw-stat${notDelivered > 0 ? ' amber' : ''}`}><span>{L.statNotDelivered}</span><b>{notDelivered}</b></div>
+            <button type="button" title={L.filterHint} aria-pressed={fPay === 'remaining'}
+              className={`lsw-stat click warn${rem > 0 ? '' : ' calm'}`}
+              onClick={() => setFPay(fPay === 'remaining' ? '' : 'remaining')}>
+              <span>{L.statRemaining}</span><b>{fmt(rem)}</b>
+            </button>
+            <button type="button" title={L.filterHint} aria-pressed={fDel}
+              className={`lsw-stat click amber${notDelivered > 0 ? '' : ' calm'}`}
+              onClick={() => setFDel(!fDel)}>
+              <span>{L.statNotDelivered}</span><b>{notDelivered}</b>
+            </button>
           </div>
 
           {unsaved > 0 && (
@@ -662,12 +737,14 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
                               onChange={v => change(r.id, { pay_status: v || null })} />}
                       </td>
                       <td>
-                        <Chip value={r.cash ? 'yes' : ''} options={OPTIONS.cash} label={L.cash} isRtl={isRtl}
-                          onChange={v => change(r.id, { cash: v === 'yes' })} />
+                        <button type="button" className="lsw-toggle" aria-pressed={r.cash}
+                          style={{ '--bg': OPTIONS.cash[0].bg, '--fg': OPTIONS.cash[0].fg } as React.CSSProperties}
+                          onClick={() => change(r.id, { cash: !r.cash })}>{L.cash}</button>
                       </td>
                       <td>
-                        <Chip value={r.instapay ? 'yes' : ''} options={OPTIONS.instapay} label={L.instapay} isRtl={isRtl}
-                          onChange={v => change(r.id, { instapay: v === 'yes' })} />
+                        <button type="button" className="lsw-toggle" aria-pressed={r.instapay}
+                          style={{ '--bg': OPTIONS.instapay[0].bg, '--fg': OPTIONS.instapay[0].fg } as React.CSSProperties}
+                          onClick={() => change(r.id, { instapay: !r.instapay })}>{L.instapay}</button>
                       </td>
                       <td>
                         <Chip value={r.size || ''} options={OPTIONS.size} label={L.size} isRtl={false}
@@ -704,7 +781,12 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
               )}
             </table>
             {visible.length === 0 && (
-              <div className="lsw-empty">{sheetRows.length ? L.emptySearch : L.emptySheet}</div>
+              <div className="lsw-empty">
+                <div>{sheetRows.length ? L.emptySearch : L.emptySheet}</div>
+                {sheetRows.length
+                  ? <button className="lsw-btn ghost" onClick={clearFilters}>{L.clear}</button>
+                  : <button className="lsw-btn" onClick={addRow} disabled={adding}>{L.addRow}</button>}
+              </div>
             )}
           </div>
           <datalist id="lsw-students">
@@ -720,6 +802,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
             <button key={t.id} className="lsw-tab" role="tab" aria-selected={t.id === active}
               onClick={() => setActive(t.id)}>
               {t.label}
+              {monthCounts[t.id] > 0 && <span className="lsw-tabn">{monthCounts[t.id]}</span>}
             </button>
           ))}
         </nav>
