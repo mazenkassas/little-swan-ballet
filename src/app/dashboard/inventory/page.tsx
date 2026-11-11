@@ -54,7 +54,7 @@ export default async function InventoryPage() {
   }))
 
   return (
-    <div className="lsw-page" style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
+    <div className={`lsw-page${isRtl ? ' rtl' : ''}`} style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
       {/* Monthly leotard sheets; the stock tab shows everything passed as `stock` */}
       <LeotardOrders
         orders={leotardOrders}

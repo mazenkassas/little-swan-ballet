@@ -149,7 +149,11 @@ const CSS = `
 .lsw-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .lsw-tools input,.lsw-tools select{height:38px;border:1px solid var(--border);border-radius:10px;padding:0 12px;font:inherit;font-size:13px;background:var(--bg-card);color:var(--txt1);transition:border-color .15s,box-shadow .15s}
 .lsw-tools input:focus,.lsw-tools select:focus{outline:0;border-color:#d4667a;box-shadow:0 0 0 3px #d4667a26}
-.lsw-tools input{width:210px}
+.lsw-tools input{width:210px;background:var(--surface)}
+.lsw-page .lsw-tools select,.lsw-page .lsw-modal select,.lsw-page .lst-tools select{appearance:none;-webkit-appearance:none;cursor:pointer;background-color:var(--surface);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a8f95' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding:0 34px 0 12px;text-overflow:ellipsis}
+.lsw-page.rtl .lsw-tools select,.lsw-page.rtl .lsw-modal select,.lsw-page.rtl .lst-tools select{background-position:left 12px center;padding:0 12px 0 34px}
+.lsw-page .lsw-tools select:hover,.lsw-page .lst-tools select:hover{border-color:#d4667a99}
+.lsw-page .lsw-tools option,.lsw-page .lsw-modal option,.lsw-page .lst-tools option{background:var(--bg-popup);color:var(--txt1)}
 .lsw-btn{height:38px;padding:0 16px;border:0;border-radius:8px;background:#d4667a;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .lsw-btn:hover{filter:brightness(1.08)}
 .lsw-btn:disabled{opacity:.6;cursor:default}
