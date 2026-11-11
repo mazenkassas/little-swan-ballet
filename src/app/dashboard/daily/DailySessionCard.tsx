@@ -61,10 +61,8 @@ export default function DailySessionCard({
   const [makeups,             setMakeups]             = useState<any[]>(makeupStudents || [])
   const [showMakeupAdd,       setShowMakeupAdd]       = useState(false)
   const [makeupSearch,        setMakeupSearch]        = useState('')
-  const [makeupSearchOpen,    setMakeupSearchOpen]    = useState(false)
   const [selectedMakeupStud,  setSelectedMakeupStud]  = useState<any>(null)
-  const [makeupOriginalClass, setMakeupOriginalClass] = useState('')
-  const [fetchingMakeupClass, setFetchingMakeupClass] = useState(false)
+  const [makeupError,         setMakeupError]         = useState(false)
   const [addingMakeup,        setAddingMakeup]        = useState(false)
   const [open, setOpen] = useState(session.status !== 'completed')
 
@@ -121,46 +119,58 @@ export default function DailySessionCard({
   const baseMakeupStudents = (allStudents || []).filter(
     (s: any) => !enrolledIds.has(s.id) && !makeupIds.has(s.id)
   )
-  const filteredMakeupStudents = makeupSearch
+  const makeupQuery = makeupSearch.trim()
+  const filteredMakeupStudents = makeupQuery
     ? baseMakeupStudents.filter((s: any) => {
-        const q = makeupSearch.toLowerCase()
-        return (s.name_ar || '').includes(makeupSearch) || (s.name_en || '').toLowerCase().includes(q)
+        const q = makeupQuery.toLowerCase()
+        return (s.name_ar || '').includes(makeupQuery) || (s.name_en || '').toLowerCase().includes(q)
       })
     : baseMakeupStudents
 
-  async function selectMakeupStudent(student: any) {
-    setSelectedMakeupStud(student)
-    setMakeupSearch(locale === 'en' && student.name_en ? student.name_en : student.name_ar)
-    setMakeupSearchOpen(false)
-    setFetchingMakeupClass(true)
-    const { data } = await supabase
-      .from('class_students')
-      .select('class:classes(id, name)')
-      .eq('student_id', student.id)
-      .limit(1)
-      .maybeSingle()
-    setMakeupOriginalClass((data as any)?.class?.name || '')
-    setFetchingMakeupClass(false)
+  // The group a visiting student normally belongs to (shown in the makeup picker)
+  function homeClassName(student: any): string {
+    const classes = (student?.class_students || []).map((cs: any) => cs.class).filter(Boolean)
+    const home = classes.find((c: any) => c.is_active !== false && c.id !== session.class_id) || classes[0]
+    return home?.name || ''
+  }
+
+  function openMakeupPicker() {
+    setMakeupSearch('')
+    setSelectedMakeupStud(null)
+    setMakeupError(false)
+    setShowMakeupAdd(true)
+  }
+
+  function closeMakeupPicker() {
+    if (addingMakeup) return
+    setShowMakeupAdd(false)
+    setMakeupSearch('')
+    setSelectedMakeupStud(null)
+    setMakeupError(false)
   }
 
   async function addMakeup() {
-    if (!selectedMakeupStud) return
+    if (!selectedMakeupStud || addingMakeup) return
     setAddingMakeup(true)
-    const { data: att } = await supabase.from('attendance').insert({
+    setMakeupError(false)
+    const { data: att, error } = await supabase.from('attendance').insert({
       session_id: session.id, student_id: selectedMakeupStud.id, status: 'make_up',
     }).select('id').single()
-    if (att) {
-      setMakeups(prev => [...prev, {
-        id: selectedMakeupStud.id,
-        name_ar: selectedMakeupStud.name_ar,
-        name_en: selectedMakeupStud.name_en,
-        attendanceId: att.id,
-        originalClass: makeupOriginalClass ? { name: makeupOriginalClass } : null,
-      }])
+    if (error || !att) {
+      setMakeupError(true)
+      setAddingMakeup(false)
+      return
     }
+    const home = homeClassName(selectedMakeupStud)
+    setMakeups(prev => [...prev, {
+      id: selectedMakeupStud.id,
+      name_ar: selectedMakeupStud.name_ar,
+      name_en: selectedMakeupStud.name_en,
+      attendanceId: att.id,
+      originalClass: home ? { name: home } : null,
+    }])
     setMakeupSearch('')
     setSelectedMakeupStud(null)
-    setMakeupOriginalClass('')
     setShowMakeupAdd(false)
     setAddingMakeup(false)
   }
@@ -729,47 +739,12 @@ export default function DailySessionCard({
               {payRequiredCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#e8960a', background: '#e8960a14', border: '1px solid #e8960a28', borderRadius: 20, padding: '3px 10px' }}>💳 {payRequiredCount}</span>}
               <span style={{ fontSize: 11, color: 'var(--txt2)' }}>{markedCount}/{visibleStudents.length} {isRtl ? 'مسجّل' : 'marked'}</span>
 
-              {!showMakeupAdd ? (
-                <button
-                  onClick={() => { setShowMakeupAdd(true); setMakeupSearch(''); setSelectedMakeupStud(null); setMakeupOriginalClass('') }}
-                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--txt2)', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                >
-                  + {locale === 'ar' ? 'إضافة تعويض' : 'Add makeup'}
-                </button>
-              ) : (
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#e8960a14', border: '1px solid #e8960a40', borderRadius: 8, padding: '5px 8px' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#e8960a' }}>🔄</span>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="text" value={makeupSearch}
-                      onChange={e => { setMakeupSearch(e.target.value); setSelectedMakeupStud(null); setMakeupOriginalClass('') }}
-                      onFocus={() => setMakeupSearchOpen(true)}
-                      onBlur={() => setTimeout(() => setMakeupSearchOpen(false), 150)}
-                      placeholder={locale === 'ar' ? 'ابحثي...' : 'Search student...'}
-                      style={{ background: 'var(--bg-page)', border: '1px solid #e8960a50', borderRadius: 6, padding: '4px 8px', fontSize: 11, color: 'var(--txt1)', fontFamily: 'inherit', outline: 'none', minWidth: 150 }}
-                    />
-                    {makeupSearchOpen && filteredMakeupStudents.length > 0 && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200, background: 'var(--bg-popup)', border: '1px solid var(--border)', borderRadius: 8, marginTop: 2, maxHeight: 180, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
-                        {filteredMakeupStudents.map((s: any) => (
-                          <div key={s.id} onMouseDown={() => selectMakeupStudent(s)} style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: 'var(--txt1)', borderBottom: '1px solid var(--border)' }}>
-                            {locale === 'en' && s.name_en ? s.name_en : s.name_ar}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={addMakeup} disabled={!selectedMakeupStud || addingMakeup}
-                    style={{ background: '#e8960a', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: !selectedMakeupStud || addingMakeup ? 'not-allowed' : 'pointer', opacity: !selectedMakeupStud || addingMakeup ? 0.6 : 1, fontFamily: 'inherit' }}
-                  >
-                    {addingMakeup ? '…' : (locale === 'ar' ? 'إضافة' : 'Add')}
-                  </button>
-                  <button
-                    onClick={() => { setShowMakeupAdd(false); setMakeupSearch(''); setSelectedMakeupStud(null); setMakeupOriginalClass('') }}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--txt2)', cursor: 'pointer', fontSize: 16, padding: '2px 4px', fontFamily: 'inherit' }}
-                  >×</button>
-                </div>
-              )}
+              <button
+                onClick={openMakeupPicker}
+                style={{ background: '#e8960a14', border: '1px solid #e8960a40', borderRadius: 7, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: '#e8960a', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+              >
+                🔄 {locale === 'ar' ? 'إضافة تعويض' : 'Add makeup'}
+              </button>
             </div>
 
             {/* Right: auto-save status */}
@@ -780,6 +755,144 @@ export default function DailySessionCard({
                 : savedOnce ? t('saved')
                 : ''}
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Add makeup modal */}
+      {showMakeupAdd && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) closeMakeupPicker() }}
+          onKeyDown={e => { if (e.key === 'Escape') closeMakeupPicker() }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <div style={{
+            background: 'var(--bg-popup)', border: '1px solid var(--border)',
+            borderRadius: 16, width: '100%', maxWidth: 440, maxHeight: '85vh',
+            display: 'flex', flexDirection: 'column',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+            direction: isRtl ? 'rtl' : 'ltr', textAlign: isRtl ? 'right' : 'left',
+          }}>
+            {/* Title */}
+            <div style={{ padding: '18px 22px 14px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, background: '#e8960a18', border: '1px solid #e8960a30', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                🔄
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: '0 0 3px', fontSize: 16, fontWeight: 700, color: 'var(--txt1)' }}>
+                  {locale === 'ar' ? 'إضافة طالبة تعويض' : 'Add Makeup Student'}
+                </p>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--txt2)' }}>
+                  {locale === 'ar' ? 'إلى' : 'To'} {displayName}
+                  {session.class?.start_time ? ` · ${fmt12(session.class.start_time, locale === 'ar')}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={closeMakeupPicker}
+                aria-label={locale === 'ar' ? 'إغلاق' : 'Close'}
+                style={{ background: 'transparent', border: 'none', color: 'var(--txt2)', cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: '2px 6px', fontFamily: 'inherit' }}
+              >×</button>
+            </div>
+
+            {/* Search */}
+            <div style={{ padding: '0 22px 10px' }}>
+              <input
+                type="text" autoFocus value={makeupSearch}
+                onChange={e => { setMakeupSearch(e.target.value); setSelectedMakeupStud(null) }}
+                onKeyDown={e => {
+                  if (e.key !== 'Enter') return
+                  if (selectedMakeupStud) addMakeup()
+                  else if (filteredMakeupStudents.length === 1) setSelectedMakeupStud(filteredMakeupStudents[0])
+                }}
+                placeholder={locale === 'ar' ? '🔍 ابحثي باسم الطالبة…' : '🔍 Search by student name…'}
+                style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'var(--txt1)', fontFamily: 'inherit', outline: 'none', direction: isRtl ? 'rtl' : 'ltr' }}
+              />
+              <p style={{ margin: '6px 2px 0', fontSize: 10, color: 'var(--txt2)' }}>
+                {filteredMakeupStudents.length} {locale === 'ar' ? 'طالبة' : (filteredMakeupStudents.length === 1 ? 'student' : 'students')}
+              </p>
+            </div>
+
+            {/* Student list */}
+            <div style={{ flex: 1, minHeight: 120, overflowY: 'auto', margin: '0 22px', border: '1px solid var(--border)', borderRadius: 10 }}>
+              {filteredMakeupStudents.length === 0 ? (
+                <p style={{ margin: 0, padding: '28px 12px', textAlign: 'center', fontSize: 12, color: 'var(--txt2)' }}>
+                  {locale === 'ar' ? 'لا توجد طالبات مطابقة' : 'No matching students'}
+                </p>
+              ) : filteredMakeupStudents.map((s: any) => {
+                const sName    = locale === 'en' && s.name_en ? s.name_en : s.name_ar
+                const home     = homeClassName(s)
+                const selected = selectedMakeupStud?.id === s.id
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelectedMakeupStud(selected ? null : s)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 12px', cursor: 'pointer', fontFamily: 'inherit',
+                      background: selected ? '#e8960a18' : 'transparent',
+                      border: 'none', borderBottom: '1px solid var(--border)',
+                      textAlign: isRtl ? 'right' : 'left',
+                    }}
+                  >
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: selected ? '#e8960a' : '#e8960a15', border: '1px solid #e8960a30', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: selected ? '#fff' : '#e8960a' }}>
+                      {selected ? '✓' : (sName || '').charAt(0)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--txt1)' }}>{sName}</p>
+                      <p style={{ margin: '1px 0 0', fontSize: 10, color: 'var(--txt2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {home || (locale === 'ar' ? 'بدون مجموعة' : 'No group')}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Error */}
+            {makeupError && (
+              <p style={{ margin: '10px 22px 0', fontSize: 12, fontWeight: 600, color: '#e04040' }}>
+                {locale === 'ar' ? '⚠ تعذّرت الإضافة — حاولي مرة أخرى' : '⚠ Could not add the student — please try again'}
+              </p>
+            )}
+
+            {/* Actions */}
+            <div style={{ padding: '14px 22px 18px', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={addMakeup}
+                disabled={!selectedMakeupStud || addingMakeup}
+                style={{
+                  background: '#e8960a', border: 'none', borderRadius: 10,
+                  padding: '9px 20px', color: '#fff', fontSize: 13, fontWeight: 700,
+                  cursor: !selectedMakeupStud || addingMakeup ? 'not-allowed' : 'pointer',
+                  opacity: !selectedMakeupStud || addingMakeup ? 0.5 : 1,
+                  fontFamily: 'inherit',
+                }}
+              >
+                {addingMakeup
+                  ? '…'
+                  : selectedMakeupStud
+                  ? (locale === 'ar'
+                      ? `إضافة ${selectedMakeupStud.name_ar || selectedMakeupStud.name_en}`
+                      : `Add ${selectedMakeupStud.name_en || selectedMakeupStud.name_ar}`)
+                  : (locale === 'ar' ? 'اختاري طالبة' : 'Select a student')}
+              </button>
+              <button
+                onClick={closeMakeupPicker}
+                disabled={addingMakeup}
+                style={{
+                  background: 'var(--bg-page)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: '9px 18px', color: 'var(--txt2)',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                {locale === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+            </div>
           </div>
         </div>
       )}

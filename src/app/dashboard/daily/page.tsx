@@ -185,7 +185,7 @@ export default async function DailyPage({
     .eq('date', selectedDay).order('start_time')
 
   const { data: coaches }     = await supabase.from('coaches').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
-  const { data: allStudents } = await supabase.from('students').select('id, name_ar, name_en').eq('status', 'active').order('name_ar')
+  const { data: allStudents } = await supabase.from('students').select('id, name_ar, name_en, class_students(class:classes(id, name, is_active))').eq('status', 'active').order('name_ar')
 
   // ── Formatted date ────────────────────────────────────────────────────────
   const formattedDate = selectedDate.toLocaleDateString(
