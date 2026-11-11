@@ -101,7 +101,10 @@ const LABELS = {
     emptySearch: 'No results match your search.',
     delRow: 'Delete row', delTitle: 'Delete this row?', delBody: 'This cannot be undone.',
     del: 'Delete', cancel: 'Cancel', unnamed: '(no name)',
-    saveFailed: 'The last change could not be saved. Check your connection and try again.',
+    saveFailed: 'Some changes could not be saved. Check your connection, then press Retry.',
+    actionFailed: 'That action failed. Check your connection and try again.',
+    saving: 'Saving…', saved: 'All changes saved', notSaved: 'Not saved', retry: 'Retry',
+    autoPay: 'Set automatically from the paid and total amounts',
     setupTitle: 'Leotard orders are not set up yet',
     setupBody: 'Run the file supabase/add_leotard_orders.sql in the Supabase SQL Editor, then refresh this page.',
   },
@@ -119,13 +122,20 @@ const LABELS = {
     emptySearch: 'مفيش نتايج مطابقة للبحث.',
     delRow: 'حذف الصف', delTitle: 'حذف هذا الصف؟', delBody: 'لا يمكن التراجع عن هذا الإجراء.',
     del: 'حذف', cancel: 'إلغاء', unnamed: '(بدون اسم)',
-    saveFailed: 'تعذر حفظ آخر تعديل. تأكد من الاتصال وحاول مرة أخرى.',
+    saveFailed: 'تعذر حفظ بعض التعديلات. تأكد من الاتصال ثم اضغط إعادة المحاولة.',
+    actionFailed: 'تعذر تنفيذ العملية. تأكد من الاتصال وحاول مرة أخرى.',
+    saving: 'جارٍ الحفظ…', saved: 'تم حفظ كل التعديلات', notSaved: 'لم يُحفظ', retry: 'إعادة المحاولة',
+    autoPay: 'تتحدد تلقائياً من المدفوع والاجمالي',
     setupTitle: 'طلبات المايوهات غير مفعّلة بعد',
     setupBody: 'شغّل الملف supabase/add_leotard_orders.sql في Supabase SQL Editor ثم حدّث الصفحة.',
   },
 }
 
 const CSS = `
+.lsw-page{padding:24px 28px;background:var(--bg-page);min-height:100%}
+.lsw-sync{font-size:12.5px;font-weight:600;border-radius:999px;padding:5px 12px;white-space:nowrap;border:1px solid var(--border);color:var(--txt2);background:var(--bg-card)}
+.lsw-sync.ok{color:#3dab7e;background:#3dab7e14;border-color:#3dab7e30}
+.lsw-sync.bad{color:#e04040;background:#e0404014;border-color:#e0404040}
 .lsw-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
 .lsw-brand{display:flex;align-items:center;gap:10px;margin-inline-end:auto}
 .lsw-logo{width:34px;height:34px;border-radius:8px;background:#11734b;color:#fff;display:grid;place-items:center;font-weight:700}
@@ -143,7 +153,8 @@ const CSS = `
 .lsw-stat b{font-size:22px;color:var(--txt1);font-variant-numeric:tabular-nums}
 .lsw-stat.warn b{color:#e04040}
 .lsw-stat.ok b{color:#3dab7e}
-.lsw-err{margin:0 0 10px;padding:8px 12px;border-radius:8px;background:#e0404014;border:1px solid #e0404040;color:#e04040;font-size:12.5px;font-weight:600}
+.lsw-err{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 10px;padding:8px 12px;border-radius:8px;background:#e0404014;border:1px solid #e0404040;color:#e04040;font-size:12.5px;font-weight:600}
+.lsw-err button{border:0;border-radius:6px;background:#e04040;color:#fff;font:inherit;font-weight:700;padding:5px 14px;cursor:pointer}
 .lsw-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:10px 10px 0 0;overflow:auto;max-height:calc(100vh - 330px);min-height:220px}
 .lsw-wrap table{direction:ltr;border-collapse:separate;border-spacing:0;width:100%;min-width:1560px}
 .lsw-wrap th,.lsw-wrap td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:0 8px;height:46px;text-align:center;white-space:nowrap;background:var(--bg-card);color:var(--txt1);font-size:14.5px}
@@ -154,6 +165,9 @@ const CSS = `
 .lsw-wrap td.num,.lsw-wrap tfoot td{font-variant-numeric:tabular-nums}
 .lsw-wrap td.due{color:#e04040;font-weight:700}
 .lsw-wrap tfoot td{position:sticky;bottom:0;background:var(--bg-page);font-weight:700;border-top:1px solid var(--border);border-bottom:0}
+.lsw-wrap tfoot td{z-index:2}
+.lsw-wrap th:nth-child(2),.lsw-wrap td:nth-child(2){position:sticky;left:0;z-index:1}
+.lsw-wrap thead th:nth-child(2),.lsw-wrap tfoot td:nth-child(2){z-index:3}
 .lsw-wrap td.act,.lsw-wrap th.act{border-right:0;width:40px;padding:0 4px}
 .lsw-del{border:0;background:none;color:#e04040;font-size:18px;line-height:1;cursor:pointer;opacity:0;width:28px;height:28px;border-radius:6px;font-family:inherit}
 .lsw-wrap tr:hover .lsw-del,.lsw-del:focus{opacity:1}
@@ -169,6 +183,7 @@ const CSS = `
 .lsw-chip.wide select{min-width:140px}
 .lsw-chip::after{content:"";position:absolute;left:12px;top:50%;margin-top:-2px;border:5px solid transparent;border-top-color:var(--fg);border-bottom:0;pointer-events:none}
 .lsw-chip option{background:#fff;color:#1f1f1f}
+.lsw-pill{display:inline-block;border-radius:999px;background:var(--bg);color:var(--fg);font-weight:600;font-size:14px;height:28px;line-height:28px;min-width:104px;padding:0 14px;cursor:default}
 .lsw-empty{padding:56px 20px;text-align:center;color:var(--txt2);font-size:14px}
 .lsw-stockpane{background:var(--bg-card);border:1px solid var(--border);border-radius:10px 10px 0 0;padding:20px}
 .lsw-tabs{display:flex;gap:2px;overflow-x:auto;padding:0 6px;background:var(--bg-page);border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px}
@@ -180,7 +195,25 @@ const CSS = `
 .lsw-modal p{margin:0}
 .lsw-modal .btns{display:flex;gap:10px;justify-content:center;margin-top:18px}
 .lsw-modal button{border-radius:10px;padding:8px 20px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
-@media (max-width:640px){.lsw-tools input{width:100%}}
+@media (hover:none){.lsw-del{opacity:1}}
+@media (max-width:640px){
+.lsw-page{padding:14px 12px}
+.lsw-tools{width:100%}
+.lsw-tools input{width:100%}
+.lsw-tools select{flex:1;min-width:0}
+.lsw-tools .lsw-btn{width:100%}
+.lsw-stats{grid-template-columns:repeat(2,1fr);gap:8px}
+.lsw-stat{padding:10px 12px}
+.lsw-stat span{font-size:12px}
+.lsw-stat b{font-size:18px}
+.lsw-stat:last-child{grid-column:1/-1}
+.lsw-wrap{max-height:70vh}
+.lsw-wrap th,.lsw-wrap td{height:42px;font-size:13.5px;padding:0 6px}
+.lsw-wrap thead th{font-size:14px}
+.lsw-wrap td input[name=name]{min-width:120px}
+.lsw-stockpane{padding:14px}
+.lsw-tab{padding:11px 14px}
+}
 `
 
 const STOCK = 'stock'
@@ -206,6 +239,15 @@ function groupOpt(label: string): Opt {
   let h = 0
   for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) % 997
   return { v: label, ar: label, en: label, ...GROUP_PALETTE[h % GROUP_PALETTE.length] }
+}
+
+// Payment status follows the amounts; it is only chosen by hand while a row has no amounts yet
+function hasAmounts(r: LeotardOrder) {
+  return r.total_amount > 0 || r.paid_amount > 0
+}
+function payOf(r: LeotardOrder): string {
+  if (!hasAmounts(r)) return r.pay_status || ''
+  return r.paid_amount >= r.total_amount ? 'paid' : 'remaining'
 }
 
 function fmt(n: number) {
@@ -235,6 +277,16 @@ function Chip({ value, options, label, wide, isRtl, onChange }: {
   )
 }
 
+function Pill({ value, options, title, isRtl }: { value: string; options: Opt[]; title: string; isRtl: boolean }) {
+  const o = options.find(x => x.v === value)
+  if (!o) return null
+  return (
+    <span className="lsw-pill" title={title} style={{ '--bg': o.bg, '--fg': o.fg } as React.CSSProperties}>
+      {isRtl ? o.ar : o.en}
+    </span>
+  )
+}
+
 export default function LeotardOrders({ orders, students, slots, currentMonth, setupNeeded, isRtl, stock }: Props) {
   const supabase = useMemo(() => createClient(), [])
   const L = LABELS[isRtl ? 'ar' : 'en']
@@ -245,7 +297,11 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
   const [query, setQuery] = useState('')
   const [fBranch, setFBranch] = useState('')
   const [fPay, setFPay] = useState('')
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState(false)   // an add or delete failed
+  const [pending, setPending] = useState(0)     // edits being saved right now
+  const [unsaved, setUnsaved] = useState(0)     // rows with an edit that failed to save
+  const [savedOnce, setSavedOnce] = useState(false)
+  const failedPatches = useRef(new Map<string, Partial<LeotardOrder>>())
   const [adding, setAdding] = useState(false)
   const [focusId, setFocusId] = useState<string | null>(null)
   const [toDelete, setToDelete] = useState<LeotardOrder | null>(null)
@@ -277,7 +333,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
       .filter(({ r }) =>
         (!q || r.customer_name.toLowerCase().includes(q)) &&
         (!fBranch || r.branch === fBranch) &&
-        (!fPay || r.pay_status === fPay))
+        (!fPay || payOf(r) === fPay))
   }, [sheetRows, query, fBranch, fPay])
 
   const paid = visible.reduce((s, { r }) => s + r.paid_amount, 0)
@@ -297,10 +353,33 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     setRows(rs => rs.map(r => (r.id === id ? { ...r, ...patch } : r)))
   }
 
+  // A failed edit is kept per row and sent again with the row's next save or with Retry
   async function save(id: string, patch: Partial<LeotardOrder>) {
-    const { error } = await supabase.from('leotard_orders').update(patch).eq('id', id)
-    setFailed(!!error)
+    const full = { ...failedPatches.current.get(id), ...patch }
+    failedPatches.current.delete(id)
+    setPending(n => n + 1)
+    let ok = false
+    try {
+      const { error } = await supabase.from('leotard_orders').update(full).eq('id', id)
+      ok = !error
+    } catch { /* network failure */ }
+    if (ok) setSavedOnce(true)
+    else failedPatches.current.set(id, { ...full, ...failedPatches.current.get(id) })
+    setUnsaved(failedPatches.current.size)
+    setPending(n => n - 1)
   }
+
+  function retry() {
+    for (const id of Array.from(failedPatches.current.keys())) save(id, {})
+  }
+
+  // Warn before leaving while edits are still unsaved
+  useEffect(() => {
+    if (!pending && !unsaved) return
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [pending, unsaved])
 
   // Dropdowns and dates save immediately
   function change(id: string, patch: Partial<LeotardOrder>) {
@@ -316,16 +395,27 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     return field === 'paid_amount' ? { paid_amount: n } : { total_amount: n }
   }
 
+  // Changing an amount also sets the payment status
+  function withAmountStatus(r: LeotardOrder, patch: Partial<LeotardOrder>): Partial<LeotardOrder> {
+    const next = { ...r, ...patch }
+    return { ...patch, pay_status: hasAmounts(next) ? payOf(next) : null }
+  }
+
   function typing(id: string, field: TypedField, raw: string) {
     dirty.current.add(`${id}:${field}`)
-    patchLocal(id, typedPatch(field, raw))
+    const patch = typedPatch(field, raw)
+    setRows(rs => rs.map(r => r.id !== id ? r
+      : { ...r, ...(field === 'customer_name' ? patch : withAmountStatus(r, patch)) }))
   }
 
   function commit(id: string, field: TypedField, raw: string) {
     const key = `${id}:${field}`
     if (!dirty.current.has(key)) return
     dirty.current.delete(key)
-    save(id, typedPatch(field, field === 'customer_name' ? raw.trim() : raw))
+    if (field === 'customer_name') { save(id, typedPatch(field, raw.trim())); return }
+    const r = rows.find(x => x.id === id)
+    const patch = typedPatch(field, raw)
+    save(id, r ? withAmountStatus(r, patch) : patch)
   }
 
   async function addRow() {
@@ -352,6 +442,8 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     const { error } = await supabase.from('leotard_orders').delete().eq('id', id)
     if (error) { setFailed(true); return }
     setFailed(false)
+    failedPatches.current.delete(id)
+    setUnsaved(failedPatches.current.size)
     setRows(rs => rs.filter(r => r.id !== id))
   }
 
@@ -402,6 +494,11 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
           <div className="lsw-logo">{isRtl ? 'م' : 'L'}</div>
           <div><h1>{L.title}</h1><small>{activeLabel}</small></div>
         </div>
+        {!setupNeeded && (pending > 0 || unsaved > 0 || savedOnce) && (
+          <span role="status" className={`lsw-sync${pending ? '' : unsaved ? ' bad' : ' ok'}`}>
+            {pending ? L.saving : unsaved ? `${L.notSaved} (${unsaved})` : `✓ ${L.saved}`}
+          </span>
+        )}
         {!isStock && !setupNeeded && (
           <div className="lsw-tools">
             <input type="search" value={query} onChange={e => setQuery(e.target.value)}
@@ -437,7 +534,13 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
             <div className="lsw-stat"><span>{L.statNotDelivered}</span><b>{notDelivered}</b></div>
           </div>
 
-          {failed && <p className="lsw-err">{L.saveFailed}</p>}
+          {unsaved > 0 && (
+            <p className="lsw-err">
+              <span>{L.saveFailed}</span>
+              <button onClick={retry} disabled={pending > 0}>{L.retry}</button>
+            </p>
+          )}
+          {failed && <p className="lsw-err">{L.actionFailed}</p>}
 
           {/* Sheet */}
           <div className="lsw-wrap">
@@ -504,8 +607,10 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
                           onBlur={e => commit(r.id, 'total_amount', e.target.value)} />
                       </td>
                       <td>
-                        <Chip value={r.pay_status || ''} options={OPTIONS.payStatus} label={L.payStatus} isRtl={isRtl}
-                          onChange={v => change(r.id, { pay_status: v || null })} />
+                        {hasAmounts(r)
+                          ? <Pill value={payOf(r)} options={OPTIONS.payStatus} title={L.autoPay} isRtl={isRtl} />
+                          : <Chip value={r.pay_status || ''} options={OPTIONS.payStatus} label={L.payStatus} isRtl={isRtl}
+                              onChange={v => change(r.id, { pay_status: v || null })} />}
                       </td>
                       <td>
                         <Chip value={r.cash ? 'yes' : ''} options={OPTIONS.cash} label={L.cash} isRtl={isRtl}
