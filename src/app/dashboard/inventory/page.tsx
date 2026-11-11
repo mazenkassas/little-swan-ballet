@@ -4,6 +4,7 @@ import { Plus, Package, AlertTriangle } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { getTranslations, getLocale } from 'next-intl/server'
 import LeotardOrders, { type LeotardOrder } from './LeotardOrders'
+import { LEOTARD_ORDER_COLUMNS } from './leotardColumns'
 
 export default async function InventoryPage() {
   const locale  = await getLocale()
@@ -14,30 +15,19 @@ export default async function InventoryPage() {
   const { data: products } = await supabase
     .from('products').select('*').eq('is_active', true).order('name')
 
-  const [ordersRes, studentsRes, classesRes] = await Promise.all([
-    supabase.from('leotard_orders').select('*').order('created_at', { ascending: false }).limit(2000),
+  // Selecting the columns by name makes this fail (and show the setup notice)
+  // until supabase/add_leotard_orders.sql has been run.
+  const [ordersRes, studentsRes] = await Promise.all([
+    supabase.from('leotard_orders').select(LEOTARD_ORDER_COLUMNS).order('created_at').limit(5000),
     supabase.from('students').select('id, name_ar').order('name_ar'),
-    supabase.from('classes').select('start_time, end_time').eq('is_active', true).order('start_time'),
   ])
-  const leotardOrders = (ordersRes.data || []) as LeotardOrder[]
+  const leotardOrders = (ordersRes.data || []) as unknown as LeotardOrder[]
   const setupNeeded   = !!ordersRes.error
 
-  // Class time slots as group suggestions, e.g. "5:30 - 7"
-  const slot = (time: string) => {
-    const [h, m] = time.split(':').map(Number)
-    const h12 = h % 12 || 12
-    return m ? `${h12}:${String(m).padStart(2, '0')}` : `${h12}`
-  }
-  const groupOptions = Array.from(new Set(
-    (classesRes.data || [])
-      .filter(c => c.start_time && c.end_time)
-      .map(c => `${slot(c.start_time)} - ${slot(c.end_time)}`),
-  ))
-
-  // Today in the academy's timezone (YYYY-MM-DD)
-  const today = new Intl.DateTimeFormat('en-CA', {
+  // Current month in the academy's timezone (YYYY-MM)
+  const currentMonth = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date())
+  }).format(new Date()).slice(0, 7)
 
   const ready      = products?.filter(p => p.type === 'ready_stock')    || []
   const madeToOrder = products?.filter(p => p.type === 'made_to_order') || []
@@ -85,6 +75,15 @@ export default async function InventoryPage() {
 
   return (
     <div style={{ padding: '24px 28px', background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+
+      {/* Monthly leotard sheets; the stock tab shows everything passed as `stock` */}
+      <LeotardOrders
+        orders={leotardOrders}
+        students={studentsRes.data || []}
+        currentMonth={currentMonth}
+        setupNeeded={setupNeeded}
+        isRtl={isRtl}
+        stock={<>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -140,17 +139,6 @@ export default async function InventoryPage() {
           </div>
         </div>
       )}
-
-      {/* Leotard orders (monthly sheet) */}
-      <LeotardOrders
-        orders={leotardOrders}
-        students={studentsRes.data || []}
-        groupOptions={groupOptions}
-        initialMonth={today.slice(0, 7)}
-        today={today}
-        setupNeeded={setupNeeded}
-        isRtl={isRtl}
-      />
 
       {/* Two-column grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -223,7 +211,7 @@ export default async function InventoryPage() {
             <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--txt1)' }}>{L.mtoProducts}</p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {madeToOrder.map(p => (
               <div key={p.id} style={{
                 background: 'var(--bg-card)', border: '1px solid var(--border)',
@@ -255,6 +243,9 @@ export default async function InventoryPage() {
           </div>
         </div>
       </div>
+
+        </>}
+      />
     </div>
   )
 }

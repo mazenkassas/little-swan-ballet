@@ -1,14 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Pencil, Trash2, X, Search, AlertTriangle, ShoppingBag } from 'lucide-react'
+import { LEOTARD_ORDER_COLUMNS } from './leotardColumns'
 
 export interface LeotardOrder {
   id: string
   customer_name: string
-  student_id: string | null
+  sheet_month: string | null
   branch: string | null
   order_date: string | null
   day_of_week: string | null
@@ -16,612 +15,519 @@ export interface LeotardOrder {
   size: string | null
   total_amount: number
   paid_amount: number
-  payment_method: 'cash' | 'instapay' | null
-  tailor_status: 'pending' | 'received'
-  delivery_status: 'pending' | 'delivered'
-  notes: string | null
+  pay_status: string | null
+  cash: boolean
+  instapay: boolean
+  tailor_status: string | null
+  delivery_status: string | null
   created_at: string
 }
+
 
 interface Props {
   orders: LeotardOrder[]
   students: { id: string; name_ar: string }[]
-  groupOptions: string[]
-  initialMonth: string
-  today: string
+  currentMonth: string
   setupNeeded: boolean
   isRtl: boolean
+  stock: React.ReactNode
 }
 
-const SIZES = ['5', '7', '9', '12', 'S', 'M', 'L', 'XL']
-const DAY_KEYS = ['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri'] as const
-const JS_DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-const DEFAULT_BRANCHES = ['ميامي']
+/* ── Options: single source for dropdown values, labels and colours ── */
+interface Opt { v: string; ar: string; en: string; bg: string; fg: string }
+const W = '#ffffff'
+
+const OPTIONS = {
+  branch: [
+    { v: 'miami',   ar: 'ميامي', en: 'Miami', bg: '#d4edbc', fg: '#11734b' },
+    { v: 'branch2', ar: 'كي…',   en: 'K…',    bg: '#c6dbe1', fg: '#215a6c' }, // full name cut off in the sheet
+  ],
+  day: [
+    { v: 'sat', ar: 'السبت',    en: 'Saturday',  bg: '#3d3d3d', fg: W },
+    { v: 'sun', ar: 'الاحد',    en: 'Sunday',    bg: '#473822', fg: W },
+    { v: 'mon', ar: 'الاثنين',  en: 'Monday',    bg: '#5a3286', fg: W },
+    { v: 'tue', ar: 'الثلاثاء', en: 'Tuesday',   bg: '#0a53a8', fg: W },
+    { v: 'wed', ar: 'الاربعاء', en: 'Wednesday', bg: '#11734b', fg: W },
+    { v: 'thu', ar: 'الخميس',   en: 'Thursday',  bg: '#b10202', fg: W },
+    { v: 'fri', ar: 'الجمعة',   en: 'Friday',    bg: '#215a6c', fg: W },
+  ],
+  group: [
+    { v: '12 - 2',      ar: '12 - 2',      en: '12 - 2',      bg: '#ffcfc9', fg: '#b10202' },
+    { v: '1 - 3',       ar: '1 - 3',       en: '1 - 3',       bg: '#ffc8aa', fg: '#753800' },
+    { v: '4 - 6',       ar: '4 - 6',       en: '4 - 6',       bg: '#d4edbc', fg: '#11734b' },
+    { v: '5 - 7',       ar: '5 - 7',       en: '5 - 7',       bg: '#bfe1f6', fg: '#0a53a8' },
+    { v: '5.30 - 7.30', ar: '5.30 - 7.30', en: '5.30 - 7.30', bg: '#bfe1f6', fg: '#0a53a8' },
+    { v: '6 - 8',       ar: '6 - 8',       en: '6 - 8',       bg: '#c6dbe1', fg: '#215a6c' },
+  ],
+  payStatus: [
+    { v: 'paid',      ar: 'خالص', en: 'Paid',      bg: '#11734b', fg: W },
+    { v: 'remaining', ar: 'باقي', en: 'Remaining', bg: '#b10202', fg: W },
+  ],
+  cash:     [{ v: 'yes', ar: 'كاش',      en: 'Cash',     bg: '#0a53a8', fg: W }],
+  instapay: [{ v: 'yes', ar: 'انستاباي', en: 'Instapay', bg: '#5a3286', fg: W }],
+  size: [
+    { v: '5',  ar: '5',  en: '5',  bg: '#e8eaed', fg: '#3d3d3d' },
+    { v: '7',  ar: '7',  en: '7',  bg: '#e6cff2', fg: '#5a3286' },
+    { v: '9',  ar: '9',  en: '9',  bg: '#c6dbe1', fg: '#215a6c' },
+    { v: '12', ar: '12', en: '12', bg: '#bfe1f6', fg: '#0a53a8' },
+    { v: 'S',  ar: 'S',  en: 'S',  bg: '#d4edbc', fg: '#11734b' },
+    { v: 'M',  ar: 'M',  en: 'M',  bg: '#ffe5a0', fg: '#473822' },
+    { v: 'L',  ar: 'L',  en: 'L',  bg: '#ffc8aa', fg: '#753800' },
+    { v: 'XL', ar: 'XL', en: 'XL', bg: '#ffcfc9', fg: '#b10202' },
+  ],
+  tailor: [
+    { v: 'received', ar: 'تم الاستلام',     en: 'Received',     bg: '#11734b', fg: W },
+    { v: 'pending',  ar: 'لم يتم الاستلام', en: 'Not received', bg: '#b10202', fg: W },
+  ],
+  delivery: [
+    { v: 'delivered', ar: 'تم الاستلام',     en: 'Received',     bg: '#11734b', fg: W },
+    { v: 'pending',   ar: 'لم يتم الاستلام', en: 'Not received', bg: '#b10202', fg: W },
+  ],
+} satisfies Record<string, Opt[]>
 
 const LABELS = {
   en: {
-    title: 'Leotard Orders', newOrder: 'New Order', editOrder: 'Edit Order',
-    allMonths: 'All months', search: 'Search by name…',
+    title: 'Leotards', stockTab: 'Leotard Stock', monthTab: 'Leotards',
+    search: 'Search by name…', allBranches: 'All branches', allPay: 'All payment statuses',
+    addRow: '+ Add row',
     num: '#', name: 'Name', branch: 'Branch', date: 'Date', day: 'Day', group: 'Group',
     paid: 'Paid', remaining: 'Remaining', total: 'Total', payStatus: 'Payment Status',
     cash: 'Cash', instapay: 'Instapay', size: 'Size',
     tailor: 'Received from Tailor', delivery: 'Delivered to Customer',
-    method: 'Payment Method', notes: 'Notes', none: '—', select: 'Select…',
-    paidFull: 'Paid', partial: 'Partial', unpaid: 'Unpaid',
-    received: 'Received', notReceived: 'Not received',
-    delivered: 'Delivered', notDelivered: 'Not delivered',
-    totals: 'Total', empty: 'No orders for this month', emptySearch: 'No matching orders',
-    save: 'Save', saving: 'Saving…', cancel: 'Cancel', edit: 'Edit', del: 'Delete',
-    delTitle: 'Delete this order?', delBody: 'This cannot be undone.',
-    nameRequired: 'Name is required', totalRequired: 'Total is required',
-    paidTooMuch: 'Paid amount cannot be more than the total',
-    saveFailed: 'Could not save. Please try again.',
+    statCount: 'Orders', statTotal: 'Total', statPaid: 'Paid', statRemaining: 'Remaining',
+    statNotDelivered: 'Not delivered to customer', footTotal: 'Total',
+    emptySheet: 'This sheet is empty — press "Add row" to start.',
+    emptySearch: 'No results match your search.',
+    delRow: 'Delete row', delTitle: 'Delete this row?', delBody: 'This cannot be undone.',
+    del: 'Delete', cancel: 'Cancel', unnamed: '(no name)',
+    saveFailed: 'The last change could not be saved. Check your connection and try again.',
     setupTitle: 'Leotard orders are not set up yet',
-    setupBody: 'Run the file supabase/add_leotard_orders.sql once in the Supabase SQL Editor, then refresh this page.',
-    days: { sat: 'Saturday', sun: 'Sunday', mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday' } as Record<string, string>,
-    toggleHint: 'Click to change',
+    setupBody: 'Run the file supabase/add_leotard_orders.sql in the Supabase SQL Editor, then refresh this page.',
   },
   ar: {
-    title: 'طلبات المايوهات', newOrder: 'طلب جديد', editOrder: 'تعديل الطلب',
-    allMonths: 'كل الشهور', search: 'بحث بالاسم…',
+    title: 'مايوهات', stockTab: 'ستوك المايوهات', monthTab: 'مايوهات شهر',
+    search: 'بحث بالاسم…', allBranches: 'كل الفروع', allPay: 'كل حالات الدفع',
+    addRow: '+ إضافة صف',
     num: 'م', name: 'الاسم', branch: 'الفرع', date: 'التاريخ', day: 'اليوم', group: 'الجروب',
     paid: 'المدفوع', remaining: 'الباقي', total: 'الاجمالي', payStatus: 'حالة الدفع',
     cash: 'كاش', instapay: 'انستاباي', size: 'المقاس',
     tailor: 'حالة الاستلام من الخياط', delivery: 'حالة التسليم للعميل',
-    method: 'طريقة الدفع', notes: 'ملاحظات', none: '—', select: 'اختر…',
-    paidFull: 'خالص', partial: 'جزئي', unpaid: 'لم يدفع',
-    received: 'تم الاستلام', notReceived: 'لم يتم الاستلام',
-    delivered: 'تم التسليم', notDelivered: 'لم يتم التسليم',
-    totals: 'الإجمالي', empty: 'لا توجد طلبات في هذا الشهر', emptySearch: 'لا توجد طلبات مطابقة',
-    save: 'حفظ', saving: 'جارٍ الحفظ…', cancel: 'إلغاء', edit: 'تعديل', del: 'حذف',
-    delTitle: 'حذف هذا الطلب؟', delBody: 'لا يمكن التراجع عن هذا الإجراء.',
-    nameRequired: 'الاسم مطلوب', totalRequired: 'الاجمالي مطلوب',
-    paidTooMuch: 'المدفوع لا يمكن أن يكون أكبر من الاجمالي',
-    saveFailed: 'تعذر الحفظ. حاول مرة أخرى.',
+    statCount: 'عدد الطلبات', statTotal: 'الاجمالي', statPaid: 'المدفوع', statRemaining: 'الباقي',
+    statNotDelivered: 'لم يُسلَّم للعميل', footTotal: 'الاجمالي',
+    emptySheet: 'الشيت فاضي — دوس "إضافة صف" عشان تبدأ.',
+    emptySearch: 'مفيش نتايج مطابقة للبحث.',
+    delRow: 'حذف الصف', delTitle: 'حذف هذا الصف؟', delBody: 'لا يمكن التراجع عن هذا الإجراء.',
+    del: 'حذف', cancel: 'إلغاء', unnamed: '(بدون اسم)',
+    saveFailed: 'تعذر حفظ آخر تعديل. تأكد من الاتصال وحاول مرة أخرى.',
     setupTitle: 'طلبات المايوهات غير مفعّلة بعد',
-    setupBody: 'شغّل الملف supabase/add_leotard_orders.sql مرة واحدة في Supabase SQL Editor ثم حدّث الصفحة.',
-    days: { sat: 'السبت', sun: 'الأحد', mon: 'الاثنين', tue: 'الثلاثاء', wed: 'الأربعاء', thu: 'الخميس', fri: 'الجمعة' } as Record<string, string>,
-    toggleHint: 'اضغط للتغيير',
+    setupBody: 'شغّل الملف supabase/add_leotard_orders.sql في Supabase SQL Editor ثم حدّث الصفحة.',
   },
 }
 
-const GREEN = '#3dab7e'
-const AMBER = '#e8960a'
-const RED = '#e04040'
-const BLUE = '#3b82f6'
-const PURPLE = '#8e5fd9'
-const PINK = '#d4667a'
+const CSS = `
+.lsw-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
+.lsw-brand{display:flex;align-items:center;gap:10px;margin-inline-end:auto}
+.lsw-logo{width:34px;height:34px;border-radius:8px;background:#11734b;color:#fff;display:grid;place-items:center;font-weight:700}
+.lsw-brand h1{font-size:19px;margin:0;color:var(--txt1);font-weight:700}
+.lsw-brand small{display:block;color:var(--txt2);font-size:12.5px}
+.lsw-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lsw-tools input,.lsw-tools select{height:38px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font:inherit;font-size:13px;background:var(--bg-card);color:var(--txt1)}
+.lsw-tools input{width:210px}
+.lsw-btn{height:38px;padding:0 16px;border:0;border-radius:8px;background:#d4667a;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.lsw-btn:hover{filter:brightness(1.08)}
+.lsw-btn:disabled{opacity:.6;cursor:default}
+.lsw-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
+.lsw-stat{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.lsw-stat span{display:block;color:var(--txt2);font-size:13px}
+.lsw-stat b{font-size:22px;color:var(--txt1);font-variant-numeric:tabular-nums}
+.lsw-stat.warn b{color:#e04040}
+.lsw-stat.ok b{color:#3dab7e}
+.lsw-err{margin:0 0 10px;padding:8px 12px;border-radius:8px;background:#e0404014;border:1px solid #e0404040;color:#e04040;font-size:12.5px;font-weight:600}
+.lsw-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:10px 10px 0 0;overflow:auto;max-height:calc(100vh - 330px);min-height:220px}
+.lsw-wrap table{direction:ltr;border-collapse:separate;border-spacing:0;width:100%;min-width:1560px}
+.lsw-wrap th,.lsw-wrap td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:0 8px;height:46px;text-align:center;white-space:nowrap;background:var(--bg-card);color:var(--txt1);font-size:14.5px}
+.lsw-wrap thead th{position:sticky;top:0;z-index:2;background:#f1c232;color:#1f1f1f;font-weight:700;font-size:16px;border-right-color:#2b2b2b;border-bottom:1px solid #2b2b2b}
+.lsw-wrap thead th.sm{font-size:13px}
+.lsw-wrap tbody tr:hover td{background:var(--bg-page)}
+.lsw-wrap td.idx{width:52px;color:var(--txt2);font-variant-numeric:tabular-nums}
+.lsw-wrap td.num,.lsw-wrap tfoot td{font-variant-numeric:tabular-nums}
+.lsw-wrap td.due{color:#e04040;font-weight:700}
+.lsw-wrap tfoot td{position:sticky;bottom:0;background:var(--bg-page);font-weight:700;border-top:1px solid var(--border);border-bottom:0}
+.lsw-wrap td.act,.lsw-wrap th.act{border-right:0;width:40px;padding:0 4px}
+.lsw-del{border:0;background:none;color:#e04040;font-size:18px;line-height:1;cursor:pointer;opacity:0;width:28px;height:28px;border-radius:6px;font-family:inherit}
+.lsw-wrap tr:hover .lsw-del,.lsw-del:focus{opacity:1}
+.lsw-del:hover{background:#e0404020}
+.lsw-wrap td input{width:100%;height:34px;border:1px solid transparent;border-radius:6px;background:transparent;font:inherit;text-align:center;color:inherit;padding:0 4px}
+.lsw-wrap td input:hover{border-color:var(--border)}
+.lsw-wrap td input:focus,.lsw-wrap td select:focus{outline:2px solid #d4667a;outline-offset:1px;border-color:transparent}
+.lsw-wrap td input[type=number]{width:84px;-moz-appearance:textfield;appearance:textfield}
+.lsw-wrap td input[type=number]::-webkit-inner-spin-button{display:none}
+.lsw-wrap td input[name=name]{min-width:150px}
+.lsw-chip{position:relative;display:inline-block;--bg:#e8eaed;--fg:#3d3d3d}
+.lsw-chip select{appearance:none;-webkit-appearance:none;border:0;border-radius:999px;background:var(--bg);color:var(--fg);font:inherit;font-weight:600;font-size:14px;height:28px;min-width:104px;padding:0 14px 0 30px;text-align:center;text-align-last:center;cursor:pointer}
+.lsw-chip.wide select{min-width:140px}
+.lsw-chip::after{content:"";position:absolute;left:12px;top:50%;margin-top:-2px;border:5px solid transparent;border-top-color:var(--fg);border-bottom:0;pointer-events:none}
+.lsw-chip option{background:#fff;color:#1f1f1f}
+.lsw-empty{padding:56px 20px;text-align:center;color:var(--txt2);font-size:14px}
+.lsw-stockpane{background:var(--bg-card);border:1px solid var(--border);border-radius:10px 10px 0 0;padding:20px}
+.lsw-tabs{display:flex;gap:2px;overflow-x:auto;padding:0 6px;background:var(--bg-page);border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px}
+.lsw-tab{border:0;background:none;font:inherit;font-size:13.5px;padding:11px 18px;cursor:pointer;color:var(--txt2);white-space:nowrap;border-top:3px solid transparent}
+.lsw-tab:hover{background:var(--bg-card)}
+.lsw-tab[aria-selected=true]{background:#d4667a1f;color:#d4667a;font-weight:700;border-top-color:#d4667a}
+.lsw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px}
+.lsw-modal{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:24px;width:100%;max-width:360px;text-align:center}
+.lsw-modal p{margin:0}
+.lsw-modal .btns{display:flex;gap:10px;justify-content:center;margin-top:18px}
+.lsw-modal button{border-radius:10px;padding:8px 20px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+@media (max-width:640px){.lsw-tools input{width:100%}}
+`
 
-function num(n: number) {
+const STOCK = 'stock'
+
+function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n)
 }
 
-function fmtDate(iso: string | null) {
-  if (!iso) return ''
-  const [y, m, d] = iso.slice(0, 10).split('-')
-  return `${Number(d)}/${Number(m)}/${y}`
+function addMonths(ym: string, delta: number) {
+  const [y, m] = ym.split('-').map(Number)
+  const d = new Date(y, m - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-function dayKeyFromDate(iso: string) {
-  const [y, m, d] = iso.split('-').map(Number)
-  if (!y || !m || !d) return ''
-  return JS_DAY_KEYS[new Date(y, m - 1, d).getDay()]
+function Chip({ value, options, label, wide, isRtl, onChange }: {
+  value: string; options: Opt[]; label: string; wide?: boolean; isRtl: boolean
+  onChange: (v: string) => void
+}) {
+  const o = options.find(x => x.v === value)
+  const style = (o ? { '--bg': o.bg, '--fg': o.fg } : {}) as React.CSSProperties
+  return (
+    <span className={`lsw-chip${wide ? ' wide' : ''}`} style={style}>
+      <select value={value} aria-label={label} dir={isRtl ? 'rtl' : 'ltr'} onChange={e => onChange(e.target.value)}>
+        <option value=""></option>
+        {options.map(x => <option key={x.v} value={x.v}>{isRtl ? x.ar : x.en}</option>)}
+        {value && !o && <option value={value}>{value}</option>}
+      </select>
+    </span>
+  )
 }
 
-function monthOf(o: LeotardOrder) {
-  return (o.order_date || o.created_at || '').slice(0, 7)
-}
-
-function payState(total: number, paid: number): 'paid' | 'partial' | 'unpaid' {
-  if (total > 0 && paid >= total) return 'paid'
-  if (paid > 0) return 'partial'
-  return 'unpaid'
-}
-
-const emptyForm = (today: string) => ({
-  customer_name: '', branch: DEFAULT_BRANCHES[0], order_date: today,
-  day_of_week: dayKeyFromDate(today), group_name: '', size: '',
-  total_amount: '', paid_amount: '', payment_method: 'cash',
-  tailor_status: 'pending', delivery_status: 'pending', notes: '',
-})
-type FormState = ReturnType<typeof emptyForm>
-
-export default function LeotardOrders({
-  orders, students, groupOptions, initialMonth, today, setupNeeded, isRtl,
-}: Props) {
-  const router = useRouter()
+export default function LeotardOrders({ orders, students, currentMonth, setupNeeded, isRtl, stock }: Props) {
   const supabase = useMemo(() => createClient(), [])
   const L = LABELS[isRtl ? 'ar' : 'en']
 
-  const [month, setMonth] = useState(initialMonth)
+  const [rows, setRows] = useState<LeotardOrder[]>(() =>
+    orders.map(o => ({ ...o, total_amount: Number(o.total_amount) || 0, paid_amount: Number(o.paid_amount) || 0 })))
+  const [active, setActive] = useState(currentMonth)
   const [query, setQuery] = useState('')
-  const [editing, setEditing] = useState<LeotardOrder | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState<FormState>(() => emptyForm(today))
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [saving, setSaving] = useState(false)
-  const [busyId, setBusyId] = useState<string | null>(null)
+  const [fBranch, setFBranch] = useState('')
+  const [fPay, setFPay] = useState('')
+  const [failed, setFailed] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [focusId, setFocusId] = useState<string | null>(null)
   const [toDelete, setToDelete] = useState<LeotardOrder | null>(null)
-  const [failed, setFailed] = useState('')
+  const dirty = useRef(new Set<string>())
+  const bodyRef = useRef<HTMLTableSectionElement>(null)
 
+  // Month tabs: two months back to three ahead, plus any month that has rows
   const months = useMemo(() => {
-    const set = new Set<string>([initialMonth])
-    orders.forEach(o => { const m = monthOf(o); if (m) set.add(m) })
-    return Array.from(set).sort().reverse()
-  }, [orders, initialMonth])
+    const set = new Set<string>()
+    for (let d = -2; d <= 3; d++) set.add(addMonths(currentMonth, d))
+    rows.forEach(r => { if (r.sheet_month) set.add(r.sheet_month) })
+    return Array.from(set).sort()
+  }, [rows, currentMonth])
 
-  const monthLabel = (m: string) => {
-    const [y, mo] = m.split('-').map(Number)
-    return new Intl.DateTimeFormat(isRtl ? 'ar-EG-u-nu-latn' : 'en-US', { month: 'long', year: 'numeric' })
-      .format(new Date(y, mo - 1, 1))
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split('-').map(Number)
+    const year = String(y) === currentMonth.slice(0, 4) ? '' : ` ${y}`
+    if (isRtl) return `${L.monthTab} ${m}${year}`
+    const name = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(y, m - 1, 1))
+    return `${L.monthTab} — ${name}${year}`
   }
 
-  const branchOptions = useMemo(() => {
-    const set = new Set<string>(DEFAULT_BRANCHES)
-    orders.forEach(o => { if (o.branch) set.add(o.branch) })
-    return Array.from(set)
-  }, [orders])
-
-  const allGroupOptions = useMemo(() => {
-    const set = new Set<string>(groupOptions)
-    orders.forEach(o => { if (o.group_name) set.add(o.group_name) })
-    return Array.from(set)
-  }, [orders, groupOptions])
-
-  const rows = useMemo(() => {
+  const isStock = active === STOCK
+  const sheetRows = useMemo(() => rows.filter(r => r.sheet_month === active), [rows, active])
+  const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return orders
-      .filter(o => month === 'all' || monthOf(o) === month)
-      .filter(o => !q || o.customer_name.toLowerCase().includes(q))
-      .sort((a, b) =>
-        (a.order_date || '9999').localeCompare(b.order_date || '9999') ||
-        a.created_at.localeCompare(b.created_at))
-  }, [orders, month, query])
+    return sheetRows
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) =>
+        (!q || r.customer_name.toLowerCase().includes(q)) &&
+        (!fBranch || r.branch === fBranch) &&
+        (!fPay || r.pay_status === fPay))
+  }, [sheetRows, query, fBranch, fPay])
 
-  const sums = useMemo(() => rows.reduce(
-    (s, o) => ({ paid: s.paid + Number(o.paid_amount), total: s.total + Number(o.total_amount) }),
-    { paid: 0, total: 0 },
-  ), [rows])
+  const paid = visible.reduce((s, { r }) => s + r.paid_amount, 0)
+  const total = visible.reduce((s, { r }) => s + r.total_amount, 0)
+  const rem = total - paid
+  const notDelivered = visible.filter(({ r }) => r.delivery_status !== 'delivered').length
 
-  function openNew() {
-    setEditing(null); setForm(emptyForm(today)); setErrors({}); setFailed(''); setShowForm(true)
+  useEffect(() => {
+    if (!focusId) return
+    const tr = bodyRef.current?.querySelector(`tr[data-id="${focusId}"]`)
+    tr?.scrollIntoView({ block: 'nearest' })
+    tr?.querySelector<HTMLInputElement>('input[name=name]')?.focus()
+    setFocusId(null)
+  }, [focusId, rows])
+
+  function patchLocal(id: string, patch: Partial<LeotardOrder>) {
+    setRows(rs => rs.map(r => (r.id === id ? { ...r, ...patch } : r)))
   }
 
-  function openEdit(o: LeotardOrder) {
-    setEditing(o)
-    setForm({
-      customer_name: o.customer_name, branch: o.branch || '', order_date: o.order_date || '',
-      day_of_week: o.day_of_week || '', group_name: o.group_name || '', size: o.size || '',
-      total_amount: String(Number(o.total_amount)), paid_amount: String(Number(o.paid_amount)),
-      payment_method: o.payment_method || '', tailor_status: o.tailor_status,
-      delivery_status: o.delivery_status, notes: o.notes || '',
-    })
-    setErrors({}); setFailed(''); setShowForm(true)
+  async function save(id: string, patch: Partial<LeotardOrder>) {
+    const { error } = await supabase.from('leotard_orders').update(patch).eq('id', id)
+    setFailed(!!error)
   }
 
-  function setField(key: keyof FormState, value: string) {
-    setForm(f => {
-      const next = { ...f, [key]: value }
-      if (key === 'order_date' && value) next.day_of_week = dayKeyFromDate(value)
-      return next
-    })
-    setErrors(prev => ({ ...prev, [key]: '' }))
+  // Dropdowns and dates save immediately
+  function change(id: string, patch: Partial<LeotardOrder>) {
+    patchLocal(id, patch)
+    save(id, patch)
   }
 
-  const formTotal = parseFloat(form.total_amount) || 0
-  const formPaid = parseFloat(form.paid_amount) || 0
-  const formRemaining = Math.max(formTotal - formPaid, 0)
-  const formState = payState(formTotal, formPaid)
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    const errs: Record<string, string> = {}
-    if (!form.customer_name.trim()) errs.customer_name = L.nameRequired
-    if (!form.total_amount.trim()) errs.total_amount = L.totalRequired
-    if (formPaid > formTotal) errs.paid_amount = L.paidTooMuch
-    if (Object.keys(errs).length) { setErrors(errs); return }
-
-    const name = form.customer_name.trim()
-    const payload = {
-      customer_name: name,
-      student_id: students.find(s => s.name_ar.trim() === name)?.id || null,
-      branch: form.branch.trim() || null,
-      order_date: form.order_date || null,
-      day_of_week: form.day_of_week || null,
-      group_name: form.group_name.trim() || null,
-      size: form.size || null,
-      total_amount: formTotal,
-      paid_amount: formPaid,
-      payment_method: form.payment_method || null,
-      tailor_status: form.tailor_status,
-      delivery_status: form.delivery_status,
-      notes: form.notes.trim() || null,
-    }
-
-    setSaving(true); setFailed('')
-    const { error } = editing
-      ? await supabase.from('leotard_orders').update(payload).eq('id', editing.id)
-      : await supabase.from('leotard_orders').insert(payload)
-    setSaving(false)
-    if (error) { setFailed(L.saveFailed); return }
-
-    if (month !== 'all') setMonth((payload.order_date || editing?.created_at || today).slice(0, 7))
-    setShowForm(false)
-    router.refresh()
+  // Typed cells update the screen while typing and save when the cell loses focus
+  type TypedField = 'customer_name' | 'paid_amount' | 'total_amount'
+  function typedPatch(field: TypedField, raw: string): Partial<LeotardOrder> {
+    if (field === 'customer_name') return { customer_name: raw }
+    const n = Math.max(Number(raw) || 0, 0)
+    return field === 'paid_amount' ? { paid_amount: n } : { total_amount: n }
   }
 
-  async function toggle(o: LeotardOrder, field: 'tailor_status' | 'delivery_status') {
-    const next = field === 'tailor_status'
-      ? (o.tailor_status === 'received' ? 'pending' : 'received')
-      : (o.delivery_status === 'delivered' ? 'pending' : 'delivered')
-    setBusyId(o.id)
-    await supabase.from('leotard_orders').update({ [field]: next }).eq('id', o.id)
-    setBusyId(null)
-    router.refresh()
+  function typing(id: string, field: TypedField, raw: string) {
+    dirty.current.add(`${id}:${field}`)
+    patchLocal(id, typedPatch(field, raw))
+  }
+
+  function commit(id: string, field: TypedField, raw: string) {
+    const key = `${id}:${field}`
+    if (!dirty.current.has(key)) return
+    dirty.current.delete(key)
+    save(id, typedPatch(field, field === 'customer_name' ? raw.trim() : raw))
+  }
+
+  async function addRow() {
+    if (isStock || adding) return
+    setQuery(''); setFBranch(''); setFPay('')
+    setAdding(true)
+    const { data, error } = await supabase
+      .from('leotard_orders')
+      .insert({ customer_name: '', sheet_month: active, total_amount: 0, paid_amount: 0 })
+      .select(LEOTARD_ORDER_COLUMNS)
+      .single()
+    setAdding(false)
+    if (error || !data) { setFailed(true); return }
+    const row = data as unknown as LeotardOrder
+    setFailed(false)
+    setRows(rs => [...rs, { ...row, total_amount: Number(row.total_amount) || 0, paid_amount: Number(row.paid_amount) || 0 }])
+    setFocusId(row.id)
   }
 
   async function confirmDelete() {
     if (!toDelete) return
-    setBusyId(toDelete.id)
-    await supabase.from('leotard_orders').delete().eq('id', toDelete.id)
-    setBusyId(null); setToDelete(null)
-    router.refresh()
+    const id = toDelete.id
+    setToDelete(null)
+    const { error } = await supabase.from('leotard_orders').delete().eq('id', id)
+    if (error) { setFailed(true); return }
+    setFailed(false)
+    setRows(rs => rs.filter(r => r.id !== id))
   }
 
-  // ── styles ────────────────────────────────────────────────
-  const th: React.CSSProperties = {
-    padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--txt2)',
-    textAlign: 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)',
-    background: 'var(--bg-page)',
-  }
-  const td: React.CSSProperties = {
-    padding: '9px 12px', fontSize: 12, color: 'var(--txt1)', textAlign: 'center',
-    whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)',
-  }
-  const pill = (color: string, clickable = false): React.CSSProperties => ({
-    display: 'inline-block', background: `${color}1f`, color, border: `1px solid ${color}40`,
-    borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 700,
-    whiteSpace: 'nowrap', fontFamily: 'inherit', cursor: clickable ? 'pointer' : 'default',
-  })
-  const lbl: React.CSSProperties = {
-    display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--txt2)', marginBottom: 6,
-  }
-  const field = (hasErr = false): React.CSSProperties => ({
-    width: '100%', padding: '9px 12px', borderRadius: 8,
-    border: `1px solid ${hasErr ? RED : 'var(--border)'}`,
-    background: 'var(--bg-page)', color: 'var(--txt1)',
-    fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
-  })
-  const errTxt: React.CSSProperties = { margin: '4px 0 0', color: RED, fontSize: 11 }
-  const req: React.CSSProperties = { color: RED, marginInlineStart: 3 }
-  const iconBtn = (color: string): React.CSSProperties => ({
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    width: 26, height: 26, borderRadius: 7, border: `1px solid ${color}40`,
-    background: `${color}12`, color, cursor: 'pointer',
-  })
-  const overlay: React.CSSProperties = {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 1000,
-    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+  const onEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') e.currentTarget.blur()
   }
 
-  const stateColor = { paid: GREEN, partial: AMBER, unpaid: RED }
-  const stateLabel = { paid: L.paidFull, partial: L.partial, unpaid: L.unpaid }
+  const tabs = [{ id: STOCK, label: L.stockTab }, ...months.map(m => ({ id: m, label: monthLabel(m) }))]
+  const activeLabel = tabs.find(t => t.id === active)?.label || ''
 
   return (
-    <div style={{ marginBottom: 28 }}>
-      {/* Section header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-        <div style={{
-          width: 30, height: 30, borderRadius: 8, background: `${PURPLE}18`, border: `1px solid ${PURPLE}28`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <ShoppingBag size={15} color={PURPLE} />
-        </div>
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--txt1)', flex: 1 }}>{L.title}</p>
+    <div>
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
 
-        {!setupNeeded && (
-          <>
-            <div style={{ position: 'relative' }}>
-              <Search size={13} color="var(--txt2)" style={{ position: 'absolute', top: 10, insetInlineStart: 10 }} />
-              <input
-                value={query} onChange={e => setQuery(e.target.value)} placeholder={L.search}
-                style={{ ...field(), width: 190, padding: '7px 12px', paddingInlineStart: 30, fontSize: 12 }}
-              />
-            </div>
-            <select value={month} onChange={e => setMonth(e.target.value)}
-              style={{ ...field(), width: 'auto', padding: '7px 10px', fontSize: 12, fontWeight: 600 }}>
-              <option value="all">{L.allMonths}</option>
-              {months.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
+      {/* Top bar */}
+      <div className="lsw-top">
+        <div className="lsw-brand">
+          <div className="lsw-logo">{isRtl ? 'م' : 'L'}</div>
+          <div><h1>{L.title}</h1><small>{activeLabel}</small></div>
+        </div>
+        {!isStock && !setupNeeded && (
+          <div className="lsw-tools">
+            <input type="search" value={query} onChange={e => setQuery(e.target.value)}
+              placeholder={L.search} aria-label={L.search} />
+            <select value={fBranch} onChange={e => setFBranch(e.target.value)} aria-label={L.allBranches}>
+              <option value="">{L.allBranches}</option>
+              {OPTIONS.branch.map(o => <option key={o.v} value={o.v}>{isRtl ? o.ar : o.en}</option>)}
             </select>
-            <button onClick={openNew} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6, background: PINK, color: '#fff',
-              padding: '8px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700,
-              border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              <Plus size={14} />{L.newOrder}
-            </button>
-          </>
+            <select value={fPay} onChange={e => setFPay(e.target.value)} aria-label={L.allPay}>
+              <option value="">{L.allPay}</option>
+              {OPTIONS.payStatus.map(o => <option key={o.v} value={o.v}>{isRtl ? o.ar : o.en}</option>)}
+            </select>
+            <button className="lsw-btn" onClick={addRow} disabled={adding}>{L.addRow}</button>
+          </div>
         )}
       </div>
 
-      {setupNeeded ? (
-        <div style={{
-          display: 'flex', alignItems: 'flex-start', gap: 10, background: `${AMBER}12`,
-          border: `1px solid ${AMBER}30`, borderRadius: 12, padding: '14px 16px',
-        }}>
-          <AlertTriangle size={16} color={AMBER} style={{ flexShrink: 0, marginTop: 1 }} />
-          <div>
-            <p style={{ margin: 0, color: AMBER, fontWeight: 700, fontSize: 13 }}>{L.setupTitle}</p>
-            <p style={{ margin: '3px 0 0', color: 'var(--txt2)', fontSize: 12 }}>{L.setupBody}</p>
-          </div>
+      {isStock ? (
+        <div className="lsw-stockpane">{stock}</div>
+      ) : setupNeeded ? (
+        <div className="lsw-stockpane">
+          <p style={{ margin: 0, color: '#e8960a', fontWeight: 700, fontSize: 14 }}>{L.setupTitle}</p>
+          <p style={{ margin: '4px 0 0', color: 'var(--txt2)', fontSize: 13 }}>{L.setupBody}</p>
         </div>
       ) : (
-        <div style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden',
-        }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <>
+          {/* Summary */}
+          <div className="lsw-stats">
+            <div className="lsw-stat"><span>{L.statCount}</span><b>{visible.length}</b></div>
+            <div className="lsw-stat"><span>{L.statTotal}</span><b>{fmt(total)}</b></div>
+            <div className="lsw-stat ok"><span>{L.statPaid}</span><b>{fmt(paid)}</b></div>
+            <div className={`lsw-stat${rem > 0 ? ' warn' : ''}`}><span>{L.statRemaining}</span><b>{fmt(rem)}</b></div>
+            <div className="lsw-stat"><span>{L.statNotDelivered}</span><b>{notDelivered}</b></div>
+          </div>
+
+          {failed && <p className="lsw-err">{L.saveFailed}</p>}
+
+          {/* Sheet */}
+          <div className="lsw-wrap">
+            <table>
               <thead>
                 <tr>
-                  <th style={th}>{L.num}</th>
-                  <th style={{ ...th, textAlign: 'start' }}>{L.name}</th>
-                  <th style={th}>{L.branch}</th>
-                  <th style={th}>{L.date}</th>
-                  <th style={th}>{L.day}</th>
-                  <th style={th}>{L.group}</th>
-                  <th style={th}>{L.paid}</th>
-                  <th style={th}>{L.remaining}</th>
-                  <th style={th}>{L.total}</th>
-                  <th style={th}>{L.payStatus}</th>
-                  <th style={th}>{L.cash}</th>
-                  <th style={th}>{L.instapay}</th>
-                  <th style={th}>{L.size}</th>
-                  <th style={th}>{L.tailor}</th>
-                  <th style={th}>{L.delivery}</th>
-                  <th style={th}></th>
+                  <th>{L.num}</th>
+                  <th>{L.name}</th>
+                  <th>{L.branch}</th>
+                  <th>{L.date}</th>
+                  <th>{L.day}</th>
+                  <th>{L.group}</th>
+                  <th>{L.paid}</th>
+                  <th>{L.remaining}</th>
+                  <th>{L.total}</th>
+                  <th>{L.payStatus}</th>
+                  <th>{L.cash}</th>
+                  <th>{L.instapay}</th>
+                  <th>{L.size}</th>
+                  <th className="sm">{L.tailor}</th>
+                  <th className="sm">{L.delivery}</th>
+                  <th className="act"></th>
                 </tr>
               </thead>
-              <tbody>
-                {rows.map((o, i) => {
-                  const total = Number(o.total_amount)
-                  const paid = Number(o.paid_amount)
-                  const remaining = Math.max(total - paid, 0)
-                  const st = payState(total, paid)
-                  const busy = busyId === o.id
+              <tbody ref={bodyRef}>
+                {visible.map(({ r, i }) => {
+                  const x = r.total_amount - r.paid_amount
                   return (
-                    <tr key={o.id} style={{ opacity: busy ? 0.5 : 1 }}>
-                      <td style={{ ...td, color: 'var(--txt2)' }}>{i + 1}</td>
-                      <td style={{ ...td, textAlign: 'start', fontWeight: 600 }} title={o.notes || undefined}>{o.customer_name}</td>
-                      <td style={td}>{o.branch ? <span style={pill(GREEN)}>{o.branch}</span> : L.none}</td>
-                      <td style={td} dir="ltr">{fmtDate(o.order_date) || L.none}</td>
-                      <td style={td}>{o.day_of_week ? L.days[o.day_of_week] : L.none}</td>
-                      <td style={td}>{o.group_name ? <span style={pill(BLUE)} dir="ltr">{o.group_name}</span> : L.none}</td>
-                      <td style={{ ...td, fontWeight: 600 }}>{num(paid)}</td>
-                      <td style={{ ...td, fontWeight: 700, color: remaining > 0 ? RED : 'var(--txt1)' }}>{num(remaining)}</td>
-                      <td style={{ ...td, fontWeight: 700 }}>{num(total)}</td>
-                      <td style={td}><span style={pill(stateColor[st])}>{stateLabel[st]}</span></td>
-                      <td style={td}>{o.payment_method === 'cash' ? <span style={pill(BLUE)}>{L.cash}</span> : ''}</td>
-                      <td style={td}>{o.payment_method === 'instapay' ? <span style={pill(PURPLE)}>{L.instapay}</span> : ''}</td>
-                      <td style={td}>{o.size ? <span style={pill('#8a8fa3')}>{o.size}</span> : L.none}</td>
-                      <td style={td}>
-                        <button disabled={busy} title={L.toggleHint} onClick={() => toggle(o, 'tailor_status')}
-                          style={pill(o.tailor_status === 'received' ? GREEN : AMBER, true)}>
-                          {o.tailor_status === 'received' ? L.received : L.notReceived}
-                        </button>
+                    <tr key={r.id} data-id={r.id}>
+                      <td className="idx">{i + 1}</td>
+                      <td>
+                        <input name="name" dir="auto" list="lsw-students" aria-label={L.name}
+                          defaultValue={r.customer_name} onKeyDown={onEnter}
+                          onChange={e => typing(r.id, 'customer_name', e.target.value)}
+                          onBlur={e => commit(r.id, 'customer_name', e.target.value)} />
                       </td>
-                      <td style={td}>
-                        <button disabled={busy} title={L.toggleHint} onClick={() => toggle(o, 'delivery_status')}
-                          style={pill(o.delivery_status === 'delivered' ? GREEN : AMBER, true)}>
-                          {o.delivery_status === 'delivered' ? L.delivered : L.notDelivered}
-                        </button>
+                      <td>
+                        <Chip value={r.branch || ''} options={OPTIONS.branch} label={L.branch} isRtl={isRtl}
+                          onChange={v => change(r.id, { branch: v || null })} />
                       </td>
-                      <td style={td}>
-                        <span style={{ display: 'inline-flex', gap: 6 }}>
-                          <button title={L.edit} aria-label={L.edit} onClick={() => openEdit(o)} style={iconBtn(BLUE)}><Pencil size={12} /></button>
-                          <button title={L.del} aria-label={L.del} onClick={() => setToDelete(o)} style={iconBtn(RED)}><Trash2 size={12} /></button>
-                        </span>
+                      <td>
+                        <input type="date" aria-label={L.date} defaultValue={r.order_date || ''}
+                          onChange={e => change(r.id, { order_date: e.target.value || null })} />
+                      </td>
+                      <td>
+                        <Chip value={r.day_of_week || ''} options={OPTIONS.day} label={L.day} isRtl={isRtl}
+                          onChange={v => change(r.id, { day_of_week: v || null })} />
+                      </td>
+                      <td>
+                        <Chip value={r.group_name || ''} options={OPTIONS.group} label={L.group} isRtl={false}
+                          onChange={v => change(r.id, { group_name: v || null })} />
+                      </td>
+                      <td className="num">
+                        <input type="number" min="0" step="1" aria-label={L.paid}
+                          defaultValue={r.paid_amount} onKeyDown={onEnter}
+                          onChange={e => typing(r.id, 'paid_amount', e.target.value)}
+                          onBlur={e => commit(r.id, 'paid_amount', e.target.value)} />
+                      </td>
+                      <td className={`num${x > 0 ? ' due' : ''}`}>{fmt(x)}</td>
+                      <td className="num">
+                        <input type="number" min="0" step="1" aria-label={L.total}
+                          defaultValue={r.total_amount} onKeyDown={onEnter}
+                          onChange={e => typing(r.id, 'total_amount', e.target.value)}
+                          onBlur={e => commit(r.id, 'total_amount', e.target.value)} />
+                      </td>
+                      <td>
+                        <Chip value={r.pay_status || ''} options={OPTIONS.payStatus} label={L.payStatus} isRtl={isRtl}
+                          onChange={v => change(r.id, { pay_status: v || null })} />
+                      </td>
+                      <td>
+                        <Chip value={r.cash ? 'yes' : ''} options={OPTIONS.cash} label={L.cash} isRtl={isRtl}
+                          onChange={v => change(r.id, { cash: v === 'yes' })} />
+                      </td>
+                      <td>
+                        <Chip value={r.instapay ? 'yes' : ''} options={OPTIONS.instapay} label={L.instapay} isRtl={isRtl}
+                          onChange={v => change(r.id, { instapay: v === 'yes' })} />
+                      </td>
+                      <td>
+                        <Chip value={r.size || ''} options={OPTIONS.size} label={L.size} isRtl={false}
+                          onChange={v => change(r.id, { size: v || null })} />
+                      </td>
+                      <td>
+                        <Chip wide value={r.tailor_status || ''} options={OPTIONS.tailor} label={L.tailor} isRtl={isRtl}
+                          onChange={v => change(r.id, { tailor_status: v || null })} />
+                      </td>
+                      <td>
+                        <Chip wide value={r.delivery_status || ''} options={OPTIONS.delivery} label={L.delivery} isRtl={isRtl}
+                          onChange={v => change(r.id, { delivery_status: v || null })} />
+                      </td>
+                      <td className="act">
+                        <button className="lsw-del" title={L.delRow} aria-label={L.delRow} onClick={() => setToDelete(r)}>×</button>
                       </td>
                     </tr>
                   )
                 })}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={16} style={{ ...td, padding: '36px 0', color: 'var(--txt2)', fontSize: 13, borderBottom: 'none' }}>
-                      {query.trim() ? L.emptySearch : L.empty}
-                    </td>
-                  </tr>
-                )}
               </tbody>
-              {rows.length > 0 && (
+              {visible.length > 0 && (
                 <tfoot>
                   <tr>
-                    <td colSpan={6} style={{ ...td, textAlign: 'start', fontWeight: 700, borderBottom: 'none', background: 'var(--bg-page)' }}>
-                      {L.totals} ({rows.length})
-                    </td>
-                    <td style={{ ...td, fontWeight: 800, color: GREEN, borderBottom: 'none', background: 'var(--bg-page)' }}>{num(sums.paid)}</td>
-                    <td style={{ ...td, fontWeight: 800, color: sums.total - sums.paid > 0 ? RED : 'var(--txt1)', borderBottom: 'none', background: 'var(--bg-page)' }}>{num(Math.max(sums.total - sums.paid, 0))}</td>
-                    <td style={{ ...td, fontWeight: 800, borderBottom: 'none', background: 'var(--bg-page)' }}>{num(sums.total)}</td>
-                    <td colSpan={7} style={{ ...td, borderBottom: 'none', background: 'var(--bg-page)' }}></td>
+                    <td></td>
+                    <td>{L.footTotal}</td>
+                    <td></td><td></td><td></td><td></td>
+                    <td>{fmt(paid)}</td>
+                    <td>{fmt(rem)}</td>
+                    <td>{fmt(total)}</td>
+                    <td></td><td></td><td></td><td></td><td></td><td></td>
+                    <td className="act"></td>
                   </tr>
                 </tfoot>
               )}
             </table>
+            {visible.length === 0 && (
+              <div className="lsw-empty">{sheetRows.length ? L.emptySearch : L.emptySheet}</div>
+            )}
           </div>
-        </div>
+          <datalist id="lsw-students">
+            {students.map(s => <option key={s.id} value={s.name_ar} />)}
+          </datalist>
+        </>
       )}
 
-      {/* Add / edit modal */}
-      {showForm && (
-        <div style={overlay} onClick={() => !saving && setShowForm(false)}>
-          <form onSubmit={handleSave} noValidate onClick={e => e.stopPropagation()} style={{
-            background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16,
-            width: '100%', maxWidth: 640, maxHeight: '92vh', overflowY: 'auto',
-            direction: isRtl ? 'rtl' : 'ltr',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '16px 20px', borderBottom: '1px solid var(--border)',
-            }}>
-              <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--txt1)' }}>
-                {editing ? L.editOrder : L.newOrder}
-              </p>
-              <button type="button" aria-label={L.cancel} onClick={() => setShowForm(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--txt2)', cursor: 'pointer', display: 'flex' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={{ padding: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={lbl}>{L.name}<span style={req}>*</span></label>
-                <input list="leotard-students" value={form.customer_name} autoFocus
-                  onChange={e => setField('customer_name', e.target.value)} style={field(!!errors.customer_name)} />
-                <datalist id="leotard-students">
-                  {students.map(s => <option key={s.id} value={s.name_ar} />)}
-                </datalist>
-                {errors.customer_name && <p style={errTxt}>{errors.customer_name}</p>}
-              </div>
-
-              <div>
-                <label style={lbl}>{L.branch}</label>
-                <input list="leotard-branches" value={form.branch}
-                  onChange={e => setField('branch', e.target.value)} style={field()} />
-                <datalist id="leotard-branches">
-                  {branchOptions.map(b => <option key={b} value={b} />)}
-                </datalist>
-              </div>
-
-              <div>
-                <label style={lbl}>{L.size}</label>
-                <select value={form.size} onChange={e => setField('size', e.target.value)} style={field()}>
-                  <option value="">{L.select}</option>
-                  {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-                  {form.size && !SIZES.includes(form.size) && <option value={form.size}>{form.size}</option>}
-                </select>
-              </div>
-
-              <div>
-                <label style={lbl}>{L.date}</label>
-                <input type="date" value={form.order_date}
-                  onChange={e => setField('order_date', e.target.value)} style={field()} />
-              </div>
-
-              <div>
-                <label style={lbl}>{L.day}</label>
-                <select value={form.day_of_week} onChange={e => setField('day_of_week', e.target.value)} style={field()}>
-                  <option value="">{L.select}</option>
-                  {DAY_KEYS.map(d => <option key={d} value={d}>{L.days[d]}</option>)}
-                </select>
-              </div>
-
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={lbl}>{L.group}</label>
-                <input list="leotard-groups" value={form.group_name} dir="ltr" placeholder="5 - 7"
-                  onChange={e => setField('group_name', e.target.value)}
-                  style={{ ...field(), textAlign: isRtl ? 'right' : 'left' }} />
-                <datalist id="leotard-groups">
-                  {allGroupOptions.map(g => <option key={g} value={g} />)}
-                </datalist>
-              </div>
-
-              <div>
-                <label style={lbl}>{L.total}<span style={req}>*</span></label>
-                <input type="number" min="0" value={form.total_amount} placeholder="0"
-                  onChange={e => setField('total_amount', e.target.value)} style={field(!!errors.total_amount)} />
-                {errors.total_amount && <p style={errTxt}>{errors.total_amount}</p>}
-              </div>
-
-              <div>
-                <label style={lbl}>{L.paid}</label>
-                <input type="number" min="0" value={form.paid_amount} placeholder="0"
-                  onChange={e => setField('paid_amount', e.target.value)} style={field(!!errors.paid_amount)} />
-                {errors.paid_amount && <p style={errTxt}>{errors.paid_amount}</p>}
-              </div>
-
-              <div style={{
-                gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-                background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px',
-              }}>
-                <span style={{ fontSize: 12, color: 'var(--txt2)' }}>{L.remaining}:</span>
-                <span style={{ fontSize: 15, fontWeight: 800, color: formRemaining > 0 ? RED : 'var(--txt1)' }}>{num(formRemaining)}</span>
-                <span style={{ flex: 1 }} />
-                <span style={{ fontSize: 12, color: 'var(--txt2)' }}>{L.payStatus}:</span>
-                <span style={pill(stateColor[formState])}>{stateLabel[formState]}</span>
-              </div>
-
-              <div>
-                <label style={lbl}>{L.method}</label>
-                <select value={form.payment_method} onChange={e => setField('payment_method', e.target.value)} style={field()}>
-                  <option value="">{L.none}</option>
-                  <option value="cash">{L.cash}</option>
-                  <option value="instapay">{L.instapay}</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={lbl}>{L.tailor}</label>
-                <select value={form.tailor_status} onChange={e => setField('tailor_status', e.target.value)} style={field()}>
-                  <option value="pending">{L.notReceived}</option>
-                  <option value="received">{L.received}</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={lbl}>{L.delivery}</label>
-                <select value={form.delivery_status} onChange={e => setField('delivery_status', e.target.value)} style={field()}>
-                  <option value="pending">{L.notDelivered}</option>
-                  <option value="delivered">{L.delivered}</option>
-                </select>
-              </div>
-
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={lbl}>{L.notes}</label>
-                <textarea rows={2} value={form.notes} onChange={e => setField('notes', e.target.value)}
-                  style={{ ...field(), resize: 'vertical' }} />
-              </div>
-
-              {failed && <p style={{ ...errTxt, gridColumn: '1 / -1', fontSize: 12 }}>{failed}</p>}
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, padding: '14px 20px', borderTop: '1px solid var(--border)' }}>
-              <button type="submit" disabled={saving} style={{
-                background: PINK, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 22px',
-                fontSize: 13, fontWeight: 700, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit',
-                opacity: saving ? 0.7 : 1,
-              }}>
-                {saving ? L.saving : L.save}
-              </button>
-              <button type="button" onClick={() => setShowForm(false)} disabled={saving} style={{
-                background: 'transparent', color: 'var(--txt1)', border: '1px solid var(--border)', borderRadius: 10,
-                padding: '9px 22px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-                {L.cancel}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {/* Month tabs */}
+      <nav className="lsw-tabs" role="tablist">
+        {tabs.map(t => (
+          <button key={t.id} className="lsw-tab" role="tab" aria-selected={t.id === active}
+            onClick={() => setActive(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </nav>
 
       {/* Delete confirmation */}
       {toDelete && (
-        <div style={overlay} onClick={() => setToDelete(null)}>
-          <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16,
-            padding: 24, width: '100%', maxWidth: 360, textAlign: 'center', direction: isRtl ? 'rtl' : 'ltr',
-          }}>
-            <AlertTriangle size={26} color={RED} />
-            <p style={{ margin: '10px 0 4px', fontSize: 15, fontWeight: 700, color: 'var(--txt1)' }}>{L.delTitle}</p>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--txt1)', fontWeight: 600 }}>{toDelete.customer_name}</p>
-            <p style={{ margin: '4px 0 18px', fontSize: 12, color: 'var(--txt2)' }}>{L.delBody}</p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={confirmDelete} disabled={busyId === toDelete.id} style={{
-                background: RED, color: '#fff', border: 'none', borderRadius: 10, padding: '8px 20px',
-                fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-              }}>{L.del}</button>
-              <button onClick={() => setToDelete(null)} style={{
-                background: 'transparent', color: 'var(--txt1)', border: '1px solid var(--border)', borderRadius: 10,
-                padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              }}>{L.cancel}</button>
+        <div className="lsw-overlay" onClick={() => setToDelete(null)}>
+          <div className="lsw-modal" onClick={e => e.stopPropagation()}>
+            <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--txt1)' }}>{L.delTitle}</p>
+            <p style={{ marginTop: 6, fontSize: 13, fontWeight: 600, color: 'var(--txt1)' }}>
+              {toDelete.customer_name || L.unnamed}
+            </p>
+            <p style={{ marginTop: 4, fontSize: 12, color: 'var(--txt2)' }}>{L.delBody}</p>
+            <div className="btns">
+              <button onClick={confirmDelete} style={{ background: '#e04040', color: '#fff', border: 'none' }}>{L.del}</button>
+              <button onClick={() => setToDelete(null)}
+                style={{ background: 'transparent', color: 'var(--txt1)', border: '1px solid var(--border)' }}>{L.cancel}</button>
             </div>
           </div>
         </div>
