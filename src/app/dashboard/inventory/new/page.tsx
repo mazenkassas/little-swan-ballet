@@ -183,7 +183,7 @@ export default function NewProductPage() {
                 style={field(!!errors.size)}
               >
                 <option value="">{L.sizeDefault}</option>
-                {['XS', 'S', 'M', 'L', 'XL', 'XXL'].map(s => (
+                {['5', '7', '9', '12', 'S', 'M', 'L', 'XL'].map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
