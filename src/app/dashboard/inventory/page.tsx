@@ -20,11 +20,15 @@ export default async function InventoryPage() {
     .order('order_date', { ascending: false })
 
   const ready      = products?.filter(p => p.type === 'ready_stock')    || []
+  const madeToOrder = products?.filter(p => p.type === 'made_to_order') || []
   const lowStock   = ready.filter(p => p.stock_qty <= 2)
 
   const L = isRtl ? {
     readyStock:   'المخزون الجاهز',
-    activeOrders: 'طلبات حسب الطلب',
+    activeOrders: 'الطلبات النشطة',
+    mtoProducts:  'منتجات حسب الطلب',
+    mtoBadge:     'حسب الطلب',
+    noMto:        'لا توجد منتجات حسب الطلب',
     size:         'مقاس',
     price:        'سعر البيع',
     lowTitle:     'تنبيه: مخزون منخفض',
@@ -41,6 +45,9 @@ export default async function InventoryPage() {
   } : {
     readyStock:   'Ready Stock',
     activeOrders: 'Active Orders',
+    mtoProducts:  'Made to Order Products',
+    mtoBadge:     'Made to order',
+    noMto:        'No made-to-order products',
     size:         'Size',
     price:        'Selling price',
     lowTitle:     'Low stock alert',
@@ -172,8 +179,50 @@ export default async function InventoryPage() {
           </div>
         </div>
 
-        {/* Active Orders */}
+        {/* Made to Order products + Active Orders */}
         <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{
+              width: 30, height: 30, borderRadius: 8,
+              background: '#8e5fd918', border: '1px solid #8e5fd928',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Package size={15} color="#8e5fd9" />
+            </div>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--txt1)' }}>{L.mtoProducts}</p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+            {madeToOrder.map(p => (
+              <div key={p.id} style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 12, padding: '14px 16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--txt1)' }}>{p.name}</p>
+                  <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--txt2)' }}>
+                    {L.size}: {p.size || '—'} · {L.price}: <span style={{ color: '#3dab7e', fontWeight: 700 }}>{formatCurrency(p.selling_price)}</span>
+                  </p>
+                </div>
+                <span style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 600, color: '#8e5fd9',
+                  background: '#8e5fd918', border: '1px solid #8e5fd928',
+                  borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap',
+                }}>{L.mtoBadge}</span>
+              </div>
+            ))}
+            {madeToOrder.length === 0 && (
+              <div style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 12, padding: '24px 0', textAlign: 'center',
+                color: 'var(--txt2)', fontSize: 13,
+              }}>
+                {L.noMto}
+              </div>
+            )}
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <div style={{
               width: 30, height: 30, borderRadius: 8,
