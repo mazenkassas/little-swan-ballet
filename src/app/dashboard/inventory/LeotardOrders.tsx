@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Search, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LEOTARD_ORDER_COLUMNS } from './leotardColumns'
 
@@ -103,6 +103,8 @@ const LABELS = {
     delRow: 'Delete row', delTitle: 'Delete this row?', delBody: 'This cannot be undone.',
     del: 'Delete', cancel: 'Cancel', unnamed: '(no name)',
     exportCsv: 'Export', clear: 'Clear filters', filterHint: 'Click to show only these rows',
+    all: 'All', fPay: 'Payment', fSize: 'Size', fTailor: 'From tailor', fDelivery: 'To customer',
+    showing: (n: number, of: number) => `Showing ${n} of ${of}`,
     addMonth: '+ Add month', addMonthTitle: 'Add a month sheet', month: 'Month', year: 'Year', add: 'Add',
     saveFailed: 'Some changes could not be saved. Check your connection, then press Retry.',
     actionFailed: 'That action failed. Check your connection and try again.',
@@ -126,6 +128,8 @@ const LABELS = {
     delRow: 'حذف الصف', delTitle: 'حذف هذا الصف؟', delBody: 'لا يمكن التراجع عن هذا الإجراء.',
     del: 'حذف', cancel: 'إلغاء', unnamed: '(بدون اسم)',
     exportCsv: 'تصدير', clear: 'مسح الفلاتر', filterHint: 'اضغط لعرض هذه الصفوف فقط',
+    all: 'الكل', fPay: 'الدفع', fSize: 'المقاس', fTailor: 'من الخياط', fDelivery: 'للعميل',
+    showing: (n: number, of: number) => `عرض ${n} من ${of}`,
     addMonth: '+ إضافة شهر', addMonthTitle: 'إضافة شيت شهر جديد', month: 'الشهر', year: 'السنة', add: 'إضافة',
     saveFailed: 'تعذر حفظ بعض التعديلات. تأكد من الاتصال ثم اضغط إعادة المحاولة.',
     actionFailed: 'تعذر تنفيذ العملية. تأكد من الاتصال وحاول مرة أخرى.',
@@ -175,6 +179,21 @@ const CSS = `
 .lsw-tabn{display:inline-block;margin-inline-start:8px;min-width:20px;padding:0 6px;border-radius:999px;background:color-mix(in srgb,var(--txt1) 12%,transparent);font-size:11.5px;font-weight:700;line-height:20px;text-align:center}
 .lsw-tab[aria-selected=true] .lsw-tabn{background:#ffffff38}
 .lsw-empty .lsw-btn{margin-top:14px}
+.lsw-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.lsw-search{display:flex;align-items:center;gap:8px;height:36px;min-width:230px;padding:0 14px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--txt2);transition:border-color .15s,box-shadow .15s}
+.lsw-search:focus-within{border-color:#d4667a;box-shadow:0 0 0 3px #d4667a26}
+.lsw-search input{border:0;outline:0;background:transparent;font:inherit;font-size:13px;color:var(--txt1);width:100%;height:100%}
+.lsw-filter{display:inline-flex;align-items:center;gap:6px;height:36px;padding-inline-start:14px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--txt2);font-size:12.5px;white-space:nowrap;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s}
+.lsw-filter:hover{border-color:#d4667a99}
+.lsw-filter:focus-within{border-color:#d4667a;box-shadow:0 0 0 3px #d4667a26}
+.lsw-filter select{appearance:none;-webkit-appearance:none;border:0;outline:0;height:34px;border-radius:999px;font:inherit;font-size:13px;font-weight:700;color:var(--txt1);cursor:pointer;padding:0 30px 0 2px;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a8f95' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center}
+.lsw-page.rtl .lsw-filter select{background-position:left 12px center;padding:0 2px 0 30px}
+.lsw-filter option{background:var(--bg-popup);color:var(--txt1);font-weight:400}
+.lsw-filter.on{border-color:#d4667a;background:color-mix(in srgb,#d4667a 14%,var(--surface));color:#d4667a}
+.lsw-filter.on select{color:#d4667a}
+.lsw-clear{border:0;background:none;color:#d4667a;font:inherit;font-size:13px;font-weight:700;cursor:pointer;height:36px;padding:0 10px;border-radius:999px}
+.lsw-clear:hover{background:#d4667a14}
+.lsw-fcount{margin-inline-start:auto;color:var(--txt2);font-size:12.5px;font-variant-numeric:tabular-nums}
 .lsw-stat.pink{--tone:#d4667a}
 .lsw-stat.info{--tone:#4a90d9}
 .lsw-stat.amber{--tone:#e8960a}
@@ -241,6 +260,10 @@ const CSS = `
 @media (max-width:640px){
 .lsw-page{padding:14px 12px}
 .lsw-tools{width:100%}
+.lsw-tools .lsw-btn.ghost{flex:1}
+.lsw-search{width:100%}
+.lsw-filter{flex:1 1 calc(50% - 4px);justify-content:space-between}
+.lsw-fcount{width:100%;margin:0}
 .lsw-tools input{width:100%}
 .lsw-tools select{flex:1;min-width:0}
 .lsw-tools .lsw-btn{width:100%}
@@ -332,6 +355,22 @@ function Pill({ value, options, title, isRtl }: { value: string; options: Opt[];
   )
 }
 
+/** A pill-shaped filter: a caption and a dropdown; it turns pink while a value is chosen */
+function Filter({ label, all, value, options, isRtl, onChange }: {
+  label: string; all: string; value: string; options: Opt[]; isRtl: boolean
+  onChange: (v: string) => void
+}) {
+  return (
+    <label className={`lsw-filter${value ? ' on' : ''}`}>
+      <span>{label}</span>
+      <select value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">{all}</option>
+        {options.map(o => <option key={o.v} value={o.v}>{isRtl ? o.ar : o.en}</option>)}
+      </select>
+    </label>
+  )
+}
+
 export default function LeotardOrders({ orders, students, slots, currentMonth, setupNeeded, isRtl, stock }: Props) {
   const supabase = useMemo(() => createClient(), [])
   const L = LABELS[isRtl ? 'ar' : 'en']
@@ -341,7 +380,9 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
   const [active, setActive] = useState(currentMonth)
   const [query, setQuery] = useState('')
   const [fPay, setFPay] = useState('')
-  const [fDel, setFDel] = useState(false)       // only rows not delivered to the customer
+  const [fSize, setFSize] = useState('')
+  const [fTailor, setFTailor] = useState('')    // 'received' | 'pending'
+  const [fDelivery, setFDelivery] = useState('') // 'delivered' | 'pending'
   const [failed, setFailed] = useState(false)   // an add or delete failed
   const [pending, setPending] = useState(0)     // edits being saved right now
   const [unsaved, setUnsaved] = useState(0)     // rows with an edit that failed to save
@@ -423,10 +464,13 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
       .filter(({ r }) =>
         (!q || r.customer_name.toLowerCase().includes(q)) &&
         (!fPay || payOf(r) === fPay) &&
-        (!fDel || r.delivery_status !== 'delivered'))
-  }, [sheetRows, query, fPay, fDel])
-  const filtering = !!query.trim() || !!fPay || fDel
-  const clearFilters = () => { setQuery(''); setFPay(''); setFDel(false) }
+        (!fSize || r.size === fSize) &&
+        // "pending" also covers rows where the status was never chosen
+        (!fTailor || (r.tailor_status === 'received') === (fTailor === 'received')) &&
+        (!fDelivery || (r.delivery_status === 'delivered') === (fDelivery === 'delivered')))
+  }, [sheetRows, query, fPay, fSize, fTailor, fDelivery])
+  const filtering = !!query.trim() || !!fPay || !!fSize || !!fTailor || !!fDelivery
+  const clearFilters = () => { setQuery(''); setFPay(''); setFSize(''); setFTailor(''); setFDelivery('') }
 
   const paid = visible.reduce((s, { r }) => s + r.paid_amount, 0)
   const total = visible.reduce((s, { r }) => s + r.total_amount, 0)
@@ -628,13 +672,6 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
         )}
         {!isStock && !setupNeeded && (
           <div className="lsw-tools">
-            <input type="search" value={query} onChange={e => setQuery(e.target.value)}
-              placeholder={L.search} aria-label={L.search} />
-            <select value={fPay} onChange={e => setFPay(e.target.value)} aria-label={L.allPay}>
-              <option value="">{L.allPay}</option>
-              {OPTIONS.payStatus.map(o => <option key={o.v} value={o.v}>{isRtl ? o.ar : o.en}</option>)}
-            </select>
-            {filtering && <button className="lsw-btn ghost" onClick={clearFilters}>{L.clear}</button>}
             <button className="lsw-btn ghost" onClick={exportCsv} disabled={!visible.length}>{L.exportCsv}</button>
             <button className="lsw-btn" onClick={addRow} disabled={adding}>{L.addRow}</button>
           </div>
@@ -650,6 +687,21 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
         </div>
       ) : (
         <>
+          {/* Search and filters */}
+          <div className="lsw-filters">
+            <label className="lsw-search">
+              <Search size={15} />
+              <input type="search" value={query} onChange={e => setQuery(e.target.value)}
+                placeholder={L.search} aria-label={L.search} />
+            </label>
+            <Filter label={L.fPay} all={L.all} value={fPay} options={OPTIONS.payStatus} isRtl={isRtl} onChange={setFPay} />
+            <Filter label={L.fSize} all={L.all} value={fSize} options={OPTIONS.size} isRtl={isRtl} onChange={setFSize} />
+            <Filter label={L.fTailor} all={L.all} value={fTailor} options={OPTIONS.tailor} isRtl={isRtl} onChange={setFTailor} />
+            <Filter label={L.fDelivery} all={L.all} value={fDelivery} options={OPTIONS.delivery} isRtl={isRtl} onChange={setFDelivery} />
+            {filtering && <button className="lsw-clear" onClick={clearFilters}>✕ {L.clear}</button>}
+            {filtering && <span className="lsw-fcount">{L.showing(visible.length, sheetRows.length)}</span>}
+          </div>
+
           {/* Summary */}
           <div className="lsw-stats">
             <div className="lsw-stat pink"><span>{L.statCount}</span><b>{visible.length}</b></div>
@@ -660,9 +712,9 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
               onClick={() => setFPay(fPay === 'remaining' ? '' : 'remaining')}>
               <span>{L.statRemaining}</span><b>{fmt(rem)}</b>
             </button>
-            <button type="button" title={L.filterHint} aria-pressed={fDel}
+            <button type="button" title={L.filterHint} aria-pressed={fDelivery === 'pending'}
               className={`lsw-stat click amber${notDelivered > 0 ? '' : ' calm'}`}
-              onClick={() => setFDel(!fDel)}>
+              onClick={() => setFDelivery(fDelivery === 'pending' ? '' : 'pending')}>
               <span>{L.statNotDelivered}</span><b>{notDelivered}</b>
             </button>
           </div>
