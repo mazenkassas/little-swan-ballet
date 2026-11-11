@@ -7,7 +7,7 @@ import Link from 'next/link'
 
 type Term   = { id: string; name: string }
 type Grade  = { id: string; name: string }
-type Class  = { id: string; name: string; days_of_week?: string[]; start_time?: string }
+type Class  = { id: string; name: string; days_of_week?: string[]; start_time?: string; grade_id?: string | null; term_id?: string | null }
 type Plan   = { id: string; name: string; price: string | number; sessions_count: number }
 
 const LABELS = {
@@ -128,23 +128,30 @@ function classLabel(c: Class) {
 type FormFields = 'name_ar' | 'name_en' | 'date_of_birth' | 'parent_phone' | 'grade_id' | 'term_id' | 'class_id' | 'plan_id' | 'discounted_monthly_fees' | 'discount_end_date'
 
 export default function NewStudentForm({
-  terms, grades, classes, plans, locale,
+  terms, grades, classes, plans, locale, initialClassId,
 }: {
   terms:   Term[]
   grades:  Grade[]
   classes: Class[]
   plans:   Plan[]
   locale:  string
+  initialClassId?: string
 }) {
   const router   = useRouter()
   const supabase = createClient()
   const isRtl    = locale === 'ar'
   const L        = LABELS[isRtl ? 'ar' : 'en']
 
+  // Opened from a class on the daily page → pre-fill Grade, Term & Group from that class
+  const presetClass = initialClassId ? classes.find(c => c.id === initialClassId) : undefined
+  const backHref    = presetClass ? '/dashboard/daily' : '/dashboard/students'
+
   const [form, setForm] = useState({
     name_ar: '', name_en: '', date_of_birth: '',
     parent_phone: '', parent_name: '',
-    grade_id: '', term_id: '', class_id: '',
+    grade_id: presetClass?.grade_id || '',
+    term_id:  presetClass?.term_id  || '',
+    class_id: presetClass?.id       || '',
     notes: '',
     plan_id: '',
     discounted_monthly_fees: '',
@@ -332,7 +339,7 @@ export default function NewStudentForm({
         background: 'var(--bg-card)', borderBottom: '1px solid var(--border)',
         padding: '10px 28px', display: 'flex', alignItems: 'center', gap: 12,
       }}>
-        <Link href="/dashboard/students" style={{
+        <Link href={backHref} style={{
           background: '#d4667a', borderRadius: 8, padding: '7px 16px',
           color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
         }}>
@@ -539,7 +546,7 @@ export default function NewStudentForm({
             }}>
               {loading ? L.saving : L.save}
             </button>
-            <Link href="/dashboard/students" style={{
+            <Link href={backHref} style={{
               background: 'var(--bg-card)', border: '1px solid var(--border)',
               borderRadius: 10, padding: '10px 20px', color: 'var(--txt2)',
               fontSize: 13, fontWeight: 600, textDecoration: 'none',

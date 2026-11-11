@@ -374,6 +374,24 @@ export default function DailySessionCard({
           </div>
         </div>
 
+        {/* Add Student — opens the new-student form pre-filled with this class */}
+        {session.class_id && (
+          <span
+            role="link"
+            tabIndex={0}
+            onClick={e => { e.stopPropagation(); router.push(`/dashboard/students/new?class_id=${session.class_id}`) }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault(); e.stopPropagation()
+                router.push(`/dashboard/students/new?class_id=${session.class_id}`)
+              }
+            }}
+            style={{ flexShrink: 0, background: '#d4667a', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer' }}
+          >
+            + {locale === 'ar' ? 'إضافة طالبة' : 'Add Student'}
+          </span>
+        )}
+
         <ChevronDown
           size={15}
           color="var(--txt2)"
