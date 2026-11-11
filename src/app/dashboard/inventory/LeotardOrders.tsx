@@ -30,6 +30,7 @@ interface Props {
   currentMonth: string
   setupNeeded: boolean
   isRtl: boolean
+  slots: ClassSlot[]
   stock: React.ReactNode
 }
 
@@ -184,6 +185,29 @@ const CSS = `
 
 const STOCK = 'stock'
 
+/** A class time slot on one weekday, e.g. { day: 'fri', label: '12 - 2' } */
+export interface ClassSlot { day: string; label: string }
+
+const JS_DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+function dayOfDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return y && m && d ? JS_DAYS[new Date(y, m - 1, d).getDay()] : ''
+}
+
+// Colours for groups that are not in OPTIONS.group
+const GROUP_PALETTE = [
+  { bg: '#ffcfc9', fg: '#b10202' }, { bg: '#ffc8aa', fg: '#753800' }, { bg: '#ffe5a0', fg: '#473822' },
+  { bg: '#d4edbc', fg: '#11734b' }, { bg: '#bfe1f6', fg: '#0a53a8' }, { bg: '#c6dbe1', fg: '#215a6c' },
+  { bg: '#e6cff2', fg: '#5a3286' },
+]
+function groupOpt(label: string): Opt {
+  const known = OPTIONS.group.find(o => o.v === label)
+  if (known) return known
+  let h = 0
+  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) % 997
+  return { v: label, ar: label, en: label, ...GROUP_PALETTE[h % GROUP_PALETTE.length] }
+}
+
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n)
 }
@@ -211,7 +235,7 @@ function Chip({ value, options, label, wide, isRtl, onChange }: {
   )
 }
 
-export default function LeotardOrders({ orders, students, currentMonth, setupNeeded, isRtl, stock }: Props) {
+export default function LeotardOrders({ orders, students, slots, currentMonth, setupNeeded, isRtl, stock }: Props) {
   const supabase = useMemo(() => createClient(), [])
   const L = LABELS[isRtl ? 'ar' : 'en']
 
@@ -331,6 +355,36 @@ export default function LeotardOrders({ orders, students, currentMonth, setupNee
     setRows(rs => rs.filter(r => r.id !== id))
   }
 
+  // Groups offered in a row: the classes held on the weekday of the row's date
+  // (or of its day, when no date is set). With neither, every group is offered.
+  const groupsByDay = useMemo(() => {
+    const map: Record<string, Opt[]> = { all: [] }
+    for (const s of slots) {
+      const list = (map[s.day] ||= [])
+      if (!list.some(o => o.v === s.label)) list.push(groupOpt(s.label))
+      if (!map.all.some(o => o.v === s.label)) map.all.push(groupOpt(s.label))
+    }
+    return map
+  }, [slots])
+
+  function groupsFor(r: LeotardOrder): Opt[] {
+    const day = (r.order_date && dayOfDate(r.order_date)) || r.day_of_week || ''
+    if (!day) return groupsByDay.all.length ? groupsByDay.all : OPTIONS.group
+    return groupsByDay[day] || []
+  }
+
+  // Picking a date also sets the day, and clears a group that is not held on that day
+  function changeDate(r: LeotardOrder, value: string) {
+    const patch: Partial<LeotardOrder> = { order_date: value || null }
+    const day = value ? dayOfDate(value) : ''
+    if (day) {
+      patch.day_of_week = day
+      const allowed = groupsByDay[day] || []
+      if (r.group_name && !allowed.some(o => o.v === r.group_name)) patch.group_name = null
+    }
+    change(r.id, patch)
+  }
+
   const onEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') e.currentTarget.blur()
   }
@@ -426,14 +480,14 @@ export default function LeotardOrders({ orders, students, currentMonth, setupNee
                       </td>
                       <td>
                         <input type="date" aria-label={L.date} defaultValue={r.order_date || ''}
-                          onChange={e => change(r.id, { order_date: e.target.value || null })} />
+                          onChange={e => changeDate(r, e.target.value)} />
                       </td>
                       <td>
                         <Chip value={r.day_of_week || ''} options={OPTIONS.day} label={L.day} isRtl={isRtl}
                           onChange={v => change(r.id, { day_of_week: v || null })} />
                       </td>
                       <td>
-                        <Chip value={r.group_name || ''} options={OPTIONS.group} label={L.group} isRtl={false}
+                        <Chip value={r.group_name || ''} options={groupsFor(r)} label={L.group} isRtl={false}
                           onChange={v => change(r.id, { group_name: v || null })} />
                       </td>
                       <td className="num">
