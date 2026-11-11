@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
-import { createClient } from '@/lib/supabase/client'
+import { updateCoach } from '../../actions'
 import Link from 'next/link'
 
 const LABELS = {
@@ -62,7 +62,6 @@ export default function EditCoachForm({ coach }: { coach: CoachRecord }) {
   const locale   = useLocale()
   const isRtl    = locale === 'ar'
   const L        = LABELS[isRtl ? 'ar' : 'en']
-  const supabase = createClient()
 
   const [loading,      setLoading]      = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -142,18 +141,16 @@ export default function EditCoachForm({ coach }: { coach: CoachRecord }) {
     if (Object.keys(allErrors).length > 0) return
 
     setLoading(true)
-    const payload: Record<string, unknown> = {
+    const { error: err } = await updateCoach(coach.id, {
       name_ar:     form.name_ar,
       name_en:     form.name_en,
       email:       form.email,
       phone:       form.phone,
       hourly_rate: parseFloat(form.hourly_rate),
       is_active:   isActive,
-    }
-    if (form.password) payload.password_hash = form.password
-
-    const { error: err } = await supabase.from('coaches').update(payload).eq('id', coach.id)
-    if (err) { setServerErr(err.message); setLoading(false) }
+      password:    form.password || undefined,
+    })
+    if (err) { setServerErr(err); setLoading(false) }
     else router.push('/dashboard/coaches')
   }
 

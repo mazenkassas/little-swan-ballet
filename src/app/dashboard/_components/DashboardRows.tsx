@@ -11,6 +11,16 @@ export default async function DashboardRows() {
   const supabase = await createClient()
   const today  = format(new Date(), 'yyyy-MM-dd')
 
+  // Coach check-ins: use the academy's time zone (server runs in UTC on Vercel)
+  const TZ = 'Africa/Cairo'
+  const isRtl = locale === 'ar'
+  const cairoToday = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  const cairoOffset = (new Intl.DateTimeFormat('en-US', { timeZone: TZ, timeZoneName: 'longOffset' })
+    .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value ?? 'GMT+02:00').replace('GMT', '') || '+00:00'
+  const fmtClock = (iso: string) => new Date(iso).toLocaleTimeString(isRtl ? 'ar-EG' : 'en-US', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })
+  const coachName = (c: { name_ar?: string | null; name_en?: string | null } | null | undefined) =>
+    (isRtl ? (c?.name_ar || c?.name_en) : (c?.name_en || c?.name_ar)) || '?'
+
   const [
     { data: paymentRequired },
     { data: todayClasses },
@@ -35,9 +45,9 @@ export default async function DashboardRows() {
       .order('created_at', { ascending: false }),
     supabase
       .from('coach_attendance')
-      .select('*, coach:coaches(name_ar)')
-      .gte('check_in_time', today + 'T00:00:00')
-      .lte('check_in_time', today + 'T23:59:59')
+      .select('*, coach:coaches(name_ar, name_en)')
+      .gte('check_in_time', `${cairoToday}T00:00:00${cairoOffset}`)
+      .lte('check_in_time', `${cairoToday}T23:59:59${cairoOffset}`)
       .order('check_in_time', { ascending: false }),
   ])
 
@@ -187,22 +197,24 @@ export default async function DashboardRows() {
             {coachAttendance && coachAttendance.length > 0 ? coachAttendance.map((att: any) => (
               <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 18px', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(74,144,217,0.15)', color: '#4a90d9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-                  {(att.coach?.name_ar || '?')[0]}
+                  {coachName(att.coach)[0]}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>{att.coach?.name_ar}</p>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>{coachName(att.coach)}</p>
                   <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>
-                    {t('checkIn')}: {att.check_in_time ? new Date(att.check_in_time).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                    {t('checkIn')}: {att.check_in_time ? fmtClock(att.check_in_time) : '—'}
                   </p>
                 </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ textAlign: 'end', flexShrink: 0 }}>
                   {att.check_out_time ? (
                     <>
                       <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--txt1)', margin: 0 }}>
-                        {t('checkOut')}: {new Date(att.check_out_time).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                        {t('checkOut')}: {fmtClock(att.check_out_time)}
                       </p>
-                      {att.hours_worked && (
-                        <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0 }}>{att.hours_worked.toFixed(1)}h</p>
+                      {att.hours_worked != null && (
+                        <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0 }}>
+                          {t('hoursWorked', { hours: Number(att.hours_worked).toLocaleString(isRtl ? 'ar-EG' : 'en-US', { maximumFractionDigits: 1 }) })}
+                        </p>
                       )}
                     </>
                   ) : (

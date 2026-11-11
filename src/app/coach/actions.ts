@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { emailPattern } from '@/lib/emailMatch'
 import { revalidatePath } from 'next/cache'
 
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -17,8 +18,9 @@ async function getCoachId(supabase: Awaited<ReturnType<typeof createClient>>, em
   const { data } = await supabase
     .from('coaches')
     .select('id')
-    .eq('email', email)
+    .ilike('email', emailPattern(email))
     .eq('can_login', true)
+    .eq('is_active', true)
     .maybeSingle()
   return data?.id ?? null
 }
@@ -87,12 +89,13 @@ export async function coachCheckOut(
 
   const { data: existing } = await supabase
     .from('coach_attendance')
-    .select('check_in_time, coach_id')
+    .select('check_in_time, check_out_time, coach_id')
     .eq('id', attendanceId)
     .single()
 
   if (!existing) return { error: 'Record not found' }
   if (existing.coach_id !== coachId) return { error: 'Unauthorized' }
+  if (existing.check_out_time) return { error: 'Already checked out' }
 
   const checkInTime = new Date(existing.check_in_time)
   const checkOutTime = new Date()
@@ -118,6 +121,21 @@ export async function confirmAttendanceRecord(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return { error: 'Not authenticated' }
+
+  const coachId = await getCoachId(supabase, user.email)
+  if (!coachId) return { error: 'Coach record not found' }
+
+  // Only allow confirming attendance for sessions of this coach's own classes
+  const { data: record } = await supabase
+    .from('attendance')
+    .select('id, session:sessions(class:classes(default_coach_id))')
+    .eq('id', attendanceId)
+    .maybeSingle()
+  if (!record) return { error: 'Record not found' }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const session: any = Array.isArray(record.session) ? record.session[0] : record.session
+  const cls = Array.isArray(session?.class) ? session.class[0] : session?.class
+  if (cls?.default_coach_id !== coachId) return { error: 'Unauthorized' }
 
   const { error } = await supabase
     .from('attendance')

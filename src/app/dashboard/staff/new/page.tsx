@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
-import { createClient } from '@/lib/supabase/client'
+import { createStaff } from '../actions'
 import Link from 'next/link'
 
 const LABELS = {
@@ -95,7 +95,6 @@ export default function NewStaffPage() {
   const locale   = useLocale()
   const isRtl    = locale === 'ar'
   const L        = LABELS[isRtl ? 'ar' : 'en']
-  const supabase = createClient()
 
   const [loading,      setLoading]      = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -175,19 +174,16 @@ export default function NewStaffPage() {
     if (Object.keys(allErrors).length > 0) return
 
     setLoading(true)
-    const payload: Record<string, unknown> = {
-      name:          form.name_ar,
-      name_en:       form.name_en,
-      email:         form.email,
-      password_hash: form.password,
-      role:          form.role,
-      phone:         form.phone,
-      is_active:     true,
-    }
-    if (form.hourly_rate) payload.monthly_salary = parseFloat(form.hourly_rate)
-
-    const { error: err } = await supabase.from('staff').insert(payload)
-    if (err) { setServerErr(err.message); setLoading(false) }
+    const { error: err } = await createStaff({
+      name:           form.name_ar,
+      name_en:        form.name_en,
+      email:          form.email,
+      password:       form.password,
+      role:           form.role,
+      phone:          form.phone,
+      monthly_salary: form.hourly_rate ? parseFloat(form.hourly_rate) : undefined,
+    })
+    if (err) { setServerErr(err); setLoading(false) }
     else router.push('/dashboard/staff')
   }
 

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { emailPattern } from '@/lib/emailMatch'
 import { redirect } from 'next/navigation'
 import { getLocale } from 'next-intl/server'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
@@ -18,7 +19,7 @@ export default async function CoachOverviewPage() {
   const { data: coach } = await supabase
     .from('coaches')
     .select('id, name_ar, name_en, hourly_rate')
-    .eq('email', user.email!)
+    .ilike('email', emailPattern(user.email!))
     .eq('can_login', true)
     .maybeSingle()
   if (!coach) redirect('/login')
