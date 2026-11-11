@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
@@ -8,6 +8,7 @@ import { ChevronDown } from 'lucide-react'
 import {
   computeSubscriptionStartDate,
   computeDeduction,
+  computeRefund,
   sessionCountsForStudent,
   isStudentOnHoliday,
   getActiveSubForClass,
@@ -34,16 +35,28 @@ export default function DailySessionCard({
 
   const [attendance,      setAttendance]      = useState<Record<string, AttStatus>>(initial)
   const [notes,           setNotes]           = useState<Record<string, string>>({})
-  const [saving,          setSaving]          = useState(false)
-  const [saved,           setSaved]           = useState(false)
-  const [showReminder,    setShowReminder]    = useState(false)
+  const [pendingSaves,    setPendingSaves]    = useState(0)
+  const [savedOnce,       setSavedOnce]       = useState(false)
+  const [saveError,       setSaveError]       = useState(false)
+  // What is actually stored in the DB, per student — source of truth for auto-save
+  const savedRef = useRef<Record<string, { id: string; status: AttStatus }>>(
+    Object.fromEntries(
+      existingAttendance
+        .filter((a: any) => a.status !== 'make_up')
+        .map((a: any) => [a.student_id, { id: a.id, status: a.status }]),
+    ),
+  )
+  const saveQueueRef      = useRef<Record<string, Promise<void>>>({})
+  const remainingRef      = useRef<Record<string, number>>({})
+  const sessionStatusRef  = useRef<string>(session.status)
+  const [remainingOverride, setRemainingOverride] = useState<Record<string, number>>({})
+  const [showReminder,   setShowReminder]    = useState(false)
   const [confirmPayFor,   setConfirmPayFor]   = useState<any>(null)
   const [paying,          setPaying]          = useState(false)
   const [paidStudentIds,  setPaidStudentIds]  = useState<Set<string>>(new Set())
   const [payMethod,       setPayMethod]       = useState<'cash' | 'instapay'>('cash')
   const [selectedCoachId, setSelectedCoachId] = useState<string>(session.coach_id || '')
-  const [saveStatus,       setSaveStatus]       = useState<{ allowed: boolean; reason: string }>({ allowed: false, reason: '' })
-  const [attendanceOpen,   setAttendanceOpen]   = useState(true)
+  const [isLive,           setIsLive]           = useState(false)
   const [makeups,             setMakeups]             = useState<any[]>(makeupStudents || [])
   const [showMakeupAdd,       setShowMakeupAdd]       = useState(false)
   const [makeupSearch,        setMakeupSearch]        = useState('')
@@ -67,44 +80,23 @@ export default function DailySessionCard({
       setShowReminder(new Date() >= reminderStart)
     }
 
-    function checkSaveStatus() {
+    // Highlights the card while the class is running (attendance itself is editable any time)
+    function checkLive() {
       const today = new Date().toISOString().split('T')[0]
-      if (session.date !== today) {
-        setSaveStatus({ allowed: false, reason: locale === 'ar' ? 'يمكن تسجيل الحضور فقط في يوم الحصة' : "Attendance can only be saved on the session's day" })
-        return
-      }
       const startTime = session.class?.start_time
       const endTime   = session.class?.end_time
-      if (!startTime || !endTime) { setSaveStatus({ allowed: true, reason: '' }); return }
+      if (session.date !== today || !startTime || !endTime) { setIsLive(false); return }
       const now = new Date()
       const [sh, sm] = startTime.split(':').map(Number)
       const [eh, em] = endTime.split(':').map(Number)
       const classStart = new Date(); classStart.setHours(sh, sm, 0, 0)
       const classEnd   = new Date(); classEnd.setHours(eh, em, 0, 0)
-      const graceEnd   = new Date(classEnd.getTime() + 30 * 60 * 1000)
-      if (now < classStart) {
-        setSaveStatus({ allowed: false, reason: locale === 'ar' ? `الحصة تبدأ الساعة ${fmt12(startTime)}` : `Class starts at ${fmt12(startTime)}` })
-      } else if (now > graceEnd) {
-        setSaveStatus({ allowed: false, reason: locale === 'ar' ? 'انتهى وقت تسجيل الحضور' : 'Attendance window has closed' })
-      } else {
-        setSaveStatus({ allowed: true, reason: '' })
-      }
-    }
-
-    function checkAttendanceOpen() {
-      const today = new Date().toISOString().split('T')[0]
-      if (session.date !== today) { setAttendanceOpen(false); return }
-      const startTime = session.class?.start_time
-      if (!startTime) { setAttendanceOpen(true); return }
-      const [sh, sm] = startTime.split(':').map(Number)
-      const classStart = new Date(); classStart.setHours(sh, sm, 0, 0)
-      setAttendanceOpen(new Date() >= classStart)
+      setIsLive(now >= classStart && now <= new Date(classEnd.getTime() + 30 * 60 * 1000))
     }
 
     checkReminder()
-    checkSaveStatus()
-    checkAttendanceOpen()
-    const id = setInterval(() => { checkReminder(); checkSaveStatus(); checkAttendanceOpen() }, 60_000)
+    checkLive()
+    const id = setInterval(() => { checkReminder(); checkLive() }, 60_000)
     return () => clearInterval(id)
   }, [session, locale])
 
@@ -116,7 +108,11 @@ export default function DailySessionCard({
   }
 
   function getActiveSub(student: any) {
-    return getActiveSubForClass(student.subscriptions, session.class_id)
+    const sub = getActiveSubForClass(student?.subscriptions, session.class_id)
+    if (sub && remainingOverride[sub.id] !== undefined) {
+      return { ...sub, remaining_sessions: remainingOverride[sub.id] }
+    }
+    return sub
   }
 
   const enrolledIds = new Set(students.map((s: any) => s.id))
@@ -178,44 +174,98 @@ export default function DailySessionCard({
     await supabase.from('sessions').update({ coach_id: coachId || null }).eq('id', session.id)
   }
 
-  async function save() {
-    setSaving(true)
-    const entries = Object.entries(attendance).filter(([, v]) => v !== null)
-    for (const [studentId, status] of entries) {
-      const existing = existingAttendance.find((a: any) => a.student_id === studentId)
-      if (existing) {
-        await supabase.from('attendance').update({ status }).eq('id', existing.id)
-      } else {
-        await supabase.from('attendance').insert({ session_id: session.id, student_id: studentId, status })
+  // Writes one student's attendance to the DB and keeps the subscription
+  // session count in sync (deduct on first mark, give back when cleared).
+  async function persistAttendance(studentId: string, status: AttStatus) {
+    const prev       = savedRef.current[studentId]
+    const prevStatus = prev?.status ?? null
+    if (prevStatus === status) return
+
+    if (status === null) {
+      if (prev) {
+        const { error } = await supabase.from('attendance').delete().eq('id', prev.id)
+        if (error) throw error
       }
-      const student = students.find((s: any) => s.id === studentId)
-      const sub = getActiveSub(student)
-      const prevStatus = initial[studentId]
+      delete savedRef.current[studentId]
+    } else if (prev) {
+      const { error } = await supabase.from('attendance').update({ status }).eq('id', prev.id)
+      if (error) throw error
+      savedRef.current[studentId] = { id: prev.id, status }
+    } else {
+      const { data, error } = await supabase.from('attendance')
+        .insert({ session_id: session.id, student_id: studentId, status })
+        .select('id').single()
+      if (error || !data) throw error ?? new Error('attendance insert failed')
+      savedRef.current[studentId] = { id: data.id, status }
+    }
+
+    const student = students.find((s: any) => s.id === studentId)
+    const sub = getActiveSubForClass(student?.subscriptions, session.class_id)
+    if (sub) {
+      const remaining = remainingRef.current[sub.id] ?? sub.remaining_sessions ?? 0
+      const total     = sub.total_sessions ?? 4
       const counts = sessionCountsForStudent({
         holiday: activeHoliday,
         studentId,
-        subStartDate: sub?.start_date,
+        subStartDate: sub.start_date,
         sessionDate: session.date,
       })
-      const { shouldDeduct, newRemaining, nextCycleStart } = computeDeduction({
-        status,
-        prevStatus,
-        remainingSessions: sub?.remaining_sessions ?? 0,
-        totalSessions: sub?.total_sessions ?? 4,
+      const deduction = computeDeduction({
+        status, prevStatus,
+        remainingSessions: remaining,
+        totalSessions: total,
         sessionCounts: counts,
         classDays: session.class?.days_of_week || [],
         sessionDate: session.date,
       })
-      if (shouldDeduct && sub) {
-        const updates: Record<string, any> = { remaining_sessions: newRemaining }
-        if (nextCycleStart) updates.next_cycle_start = nextCycleStart
-        await supabase.from('subscriptions').update(updates).eq('id', sub.id)
+      const refund = computeRefund({
+        status, prevStatus,
+        remainingSessions: remaining,
+        totalSessions: total,
+        sessionCounts: counts,
+      })
+      let updates: Record<string, any> | null = null
+      if (deduction.shouldDeduct) {
+        updates = { remaining_sessions: deduction.newRemaining }
+        if (deduction.nextCycleStart) updates.next_cycle_start = deduction.nextCycleStart
+      } else if (refund.shouldRefund) {
+        updates = { remaining_sessions: refund.newRemaining }
+        if (remaining === 0) updates.next_cycle_start = null
+      }
+      if (updates) {
+        const { error } = await supabase.from('subscriptions').update(updates).eq('id', sub.id)
+        if (error) throw error
+        const newRemaining: number = updates.remaining_sessions
+        remainingRef.current[sub.id] = newRemaining
+        setRemainingOverride(o => ({ ...o, [sub.id]: newRemaining }))
       }
     }
-    await supabase.from('sessions').update({ status: 'completed' }).eq('id', session.id)
-    setSaving(false)
-    setSaved(true)
-    router.refresh()
+
+    // Session is "completed" as soon as any attendance is recorded
+    const nextSessionStatus = Object.keys(savedRef.current).length > 0 ? 'completed' : 'scheduled'
+    if (sessionStatusRef.current !== nextSessionStatus) {
+      const { error } = await supabase.from('sessions').update({ status: nextSessionStatus }).eq('id', session.id)
+      if (error) throw error
+      sessionStatusRef.current = nextSessionStatus
+    }
+  }
+
+  // Click on the present / absent toggle saves immediately.
+  // Clicking the already-selected one clears the mark.
+  function markAttendance(studentId: string, val: AttStatus) {
+    const next: AttStatus = attendance[studentId] === val ? null : val
+    setAttendance(a => ({ ...a, [studentId]: next }))
+    setSaveError(false)
+    setPendingSaves(n => n + 1)
+    // Saves for the same student run one after another so quick clicks can't race
+    saveQueueRef.current[studentId] = (saveQueueRef.current[studentId] ?? Promise.resolve())
+      .then(() => persistAttendance(studentId, next))
+      .then(() => { setSavedOnce(true); router.refresh() })
+      .catch(() => {
+        setAttendance(a => ({ ...a, [studentId]: savedRef.current[studentId]?.status ?? null }))
+        setSaveError(true)
+      })
+      .finally(() => setPendingSaves(n => n - 1))
   }
 
   function getSubscriptionStartDate(student: any): string {
@@ -290,9 +340,9 @@ export default function DailySessionCard({
   return (
     <div id={`session-${session.id}`} style={{
       background: 'var(--bg-card)',
-      border: `1px solid ${saveStatus.allowed ? '#d4667a40' : 'var(--border)'}`,
+      border: `1px solid ${isLive ? '#d4667a40' : 'var(--border)'}`,
       borderRadius: 14,
-      boxShadow: saveStatus.allowed ? '0 4px 20px rgba(212,102,122,0.10)' : '0 1px 3px rgba(0,0,0,0.06)',
+      boxShadow: isLive ? '0 4px 20px rgba(212,102,122,0.10)' : '0 1px 3px rgba(0,0,0,0.06)',
       overflow: 'hidden',
       marginBottom: 12,
     }}>
@@ -302,7 +352,7 @@ export default function DailySessionCard({
         onClick={() => setOpen(o => !o)}
         style={{
           width: '100%', border: 'none', cursor: 'pointer',
-          background: saveStatus.allowed ? '#fdf0f2' : 'transparent',
+          background: isLive ? '#fdf0f2' : 'transparent',
           padding: '12px 18px',
           display: 'flex', alignItems: 'center', gap: 16,
           textAlign: isRtl ? 'right' : 'left',
@@ -565,14 +615,14 @@ export default function DailySessionCard({
                               { val: 'present' as AttStatus, label: '✓', color: '#3dab7e' },
                               { val: 'absent'  as AttStatus, label: '✗', color: '#e04040' },
                             ]).map(btn => {
-                              const btnDisabled = isPay || !attendanceOpen
+                              // Payment-required students can't get a new mark, but an existing one stays editable
+                              const btnDisabled = isPay && status === null
                               const sel = status === btn.val
                               return (
                                 <button
                                   key={btn.val!}
-                                  onClick={() => setAttendance(a => ({ ...a, [student.id]: a[student.id] === btn.val ? null : btn.val }))}
+                                  onClick={() => markAttendance(student.id, btn.val)}
                                   disabled={btnDisabled}
-                                  title={!attendanceOpen && session.class?.start_time ? (locale === 'ar' ? `تبدأ الحصة ${fmt12(session.class.start_time)}` : `Class starts at ${fmt12(session.class.start_time)}`) : undefined}
                                   style={{
                                     background: sel ? btn.color : 'transparent',
                                     color: sel ? '#fff' : 'var(--txt2)',
@@ -675,9 +725,7 @@ export default function DailySessionCard({
               {!showMakeupAdd ? (
                 <button
                   onClick={() => { setShowMakeupAdd(true); setMakeupSearch(''); setSelectedMakeupStud(null); setMakeupOriginalClass('') }}
-                  disabled={!attendanceOpen}
-                  title={!attendanceOpen && session.class?.start_time ? (locale === 'ar' ? `تبدأ الحصة ${fmt12(session.class.start_time)}` : `Class starts at ${fmt12(session.class.start_time)}`) : undefined}
-                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 12px', fontSize: 11, fontWeight: 600, cursor: attendanceOpen ? 'pointer' : 'not-allowed', color: 'var(--txt2)', opacity: attendanceOpen ? 1 : 0.5, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--txt2)', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                 >
                   + {locale === 'ar' ? 'إضافة تعويض' : 'Add makeup'}
                 </button>
@@ -717,19 +765,14 @@ export default function DailySessionCard({
               )}
             </div>
 
-            {/* Right: save button */}
-            <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: isRtl ? 'flex-start' : 'flex-end', gap: 4 }}>
-              <button
-                onClick={save}
-                disabled={saving || saved || markedCount === 0 || !saveStatus.allowed}
-                style={{ background: saved ? '#3dab7e' : '#d4667a', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 28px', fontSize: 13, fontWeight: 700, cursor: saving || saved || markedCount === 0 || !saveStatus.allowed ? 'default' : 'pointer', opacity: markedCount === 0 || !saveStatus.allowed ? 0.4 : 1, fontFamily: 'inherit', transition: 'opacity 0.15s', boxShadow: saved || markedCount === 0 || !saveStatus.allowed ? 'none' : '0 2px 8px #d4667a40' }}
-              >
-                {saving ? t('saving') : saved ? t('saved') : t('saveAttendance')}
-              </button>
-              {!saved && !saveStatus.allowed && saveStatus.reason && (
-                <p style={{ margin: 0, fontSize: 10, color: '#e8960a', fontWeight: 500 }}>⚠ {saveStatus.reason}</p>
-              )}
-            </div>
+            {/* Right: auto-save status */}
+            <span style={{ fontSize: 11, fontWeight: 600, color: saveError ? '#e04040' : pendingSaves > 0 ? 'var(--txt2)' : '#3dab7e' }}>
+              {saveError
+                ? (locale === 'ar' ? '⚠ تعذّر الحفظ — حاولي مرة أخرى' : '⚠ Could not save — please try again')
+                : pendingSaves > 0 ? t('saving')
+                : savedOnce ? t('saved')
+                : ''}
+            </span>
           </div>
         </div>
       )}
