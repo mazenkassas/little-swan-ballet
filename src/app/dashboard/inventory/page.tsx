@@ -26,7 +26,10 @@ export default async function InventoryPage() {
     readyStock:   'المخزون الجاهز',
     activeOrders: 'طلبات حسب الطلب',
     size:         'مقاس',
-    cost:         'تكلفة',
+    price:        'سعر البيع',
+    lowTitle:     'تنبيه: مخزون منخفض',
+    lowHint:      (n: number) => n === 1 ? 'منتج واحد يحتاج إلى إعادة تخزين' : n === 2 ? 'منتجان يحتاجان إلى إعادة تخزين' : `${n} منتجات تحتاج إلى إعادة تخزين`,
+    left:         (n: number) => n <= 0 ? 'نفذ من المخزون' : n === 1 ? 'باقي قطعة واحدة' : n === 2 ? 'باقي قطعتان' : `باقي ${n} قطع`,
     pieces:       'قطعة',
     sell:         'بيع',
     noReady:      'لا توجد منتجات جاهزة',
@@ -39,7 +42,10 @@ export default async function InventoryPage() {
     readyStock:   'Ready Stock',
     activeOrders: 'Active Orders',
     size:         'Size',
-    cost:         'Cost',
+    price:        'Selling price',
+    lowTitle:     'Low stock alert',
+    lowHint:      (n: number) => n === 1 ? '1 product needs restocking' : `${n} products need restocking`,
+    left:         (n: number) => n <= 0 ? 'Out of stock' : n === 1 ? '1 piece left' : `${n} pieces left`,
     pieces:       'pcs',
     sell:         'Sell',
     noReady:      'No ready stock products',
@@ -81,11 +87,29 @@ export default async function InventoryPage() {
           borderRadius: 12, padding: '12px 16px', marginBottom: 20,
         }}>
           <AlertTriangle size={16} color="#e8960a" style={{ flexShrink: 0, marginTop: 1 }} />
-          <div>
-            <p style={{ color: '#e8960a', fontWeight: 700, fontSize: 12, margin: '0 0 3px' }}>{t('lowStockTitle')}</p>
-            <p style={{ color: '#e8960a', fontSize: 11, margin: 0, opacity: 0.75 }}>
-              {lowStock.map(p => `${p.name} (${p.stock_qty} ${t('lowStockPiece')})`).join(' • ')}
-            </p>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ color: '#e8960a', fontWeight: 700, fontSize: 13, margin: 0 }}>{L.lowTitle}</p>
+            <p style={{ color: 'var(--txt2)', fontSize: 11, margin: '2px 0 10px' }}>{L.lowHint(lowStock.length)}</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {lowStock.map(p => {
+                const out = p.stock_qty <= 0
+                const c   = out ? '#e04040' : '#e8960a'
+                return (
+                  <span key={p.id} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    background: 'var(--bg-card)', border: `1px solid ${c}40`,
+                    borderRadius: 999, padding: '4px 6px', paddingInlineStart: 12, fontSize: 12,
+                  }}>
+                    <bdi style={{ color: 'var(--txt1)', fontWeight: 600 }}>{p.name}</bdi>
+                    {p.size && <span style={{ color: 'var(--txt2)', fontSize: 11 }}>{L.size}: {p.size}</span>}
+                    <span style={{
+                      background: `${c}1f`, color: c, fontWeight: 700, fontSize: 11,
+                      borderRadius: 999, padding: '2px 8px', whiteSpace: 'nowrap',
+                    }}>{L.left(p.stock_qty)}</span>
+                  </span>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -116,7 +140,7 @@ export default async function InventoryPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--txt1)' }}>{p.name}</p>
                   <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--txt2)' }}>
-                    {L.size}: {p.size || '—'} · {L.cost}: {formatCurrency(p.cost_price)}
+                    {L.size}: {p.size || '—'} · {L.price}: <span style={{ color: '#3dab7e', fontWeight: 700 }}>{formatCurrency(p.selling_price)}</span>
                   </p>
                 </div>
                 <div style={{ textAlign: 'center', flexShrink: 0 }}>
@@ -126,15 +150,14 @@ export default async function InventoryPage() {
                   }}>{p.stock_qty}</p>
                   <p style={{ margin: 0, fontSize: 10, color: 'var(--txt2)' }}>{L.pieces}</p>
                 </div>
-                <div style={{ textAlign: 'center', flexShrink: 0 }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#3dab7e' }}>{formatCurrency(p.selling_price)}</p>
-                  <Link href={`/dashboard/inventory/sell/${p.id}`} style={{
-                    display: 'block', marginTop: 2, fontSize: 11, fontWeight: 600,
-                    color: '#d4667a', textDecoration: 'none',
-                  }}>
-                    {L.sell}
-                  </Link>
-                </div>
+                <Link href={`/dashboard/inventory/sell/${p.id}`} style={{
+                  flexShrink: 0, fontSize: 12, fontWeight: 600,
+                  color: '#d4667a', textDecoration: 'none',
+                  border: '1px solid #d4667a40', background: '#d4667a12',
+                  borderRadius: 8, padding: '5px 12px',
+                }}>
+                  {L.sell}
+                </Link>
               </div>
             ))}
             {ready.length === 0 && (
