@@ -58,6 +58,8 @@ export default function DailySessionCard({
   const [payMethod,       setPayMethod]       = useState<'cash' | 'instapay'>('cash')
   const [selectedCoachId, setSelectedCoachId] = useState<string>(session.coach_id || '')
   const [isLive,           setIsLive]           = useState(false)
+  // True once the class has begun (or its day has passed) — unmarked students are then highlighted
+  const [hasStarted,       setHasStarted]       = useState(false)
   const [makeups,             setMakeups]             = useState<any[]>(makeupStudents || [])
   const [showMakeupAdd,       setShowMakeupAdd]       = useState(false)
   const [makeupSearch,        setMakeupSearch]        = useState('')
@@ -93,9 +95,21 @@ export default function DailySessionCard({
       setIsLive(now >= classStart && now <= new Date(classEnd.getTime() + 30 * 60 * 1000))
     }
 
+    function checkStarted() {
+      const today = new Date().toISOString().split('T')[0]
+      if (session.date < today) { setHasStarted(true); return }
+      if (session.date > today) { setHasStarted(false); return }
+      const startTime = session.class?.start_time
+      if (!startTime) { setHasStarted(true); return }
+      const [sh, sm] = startTime.split(':').map(Number)
+      const classStart = new Date(); classStart.setHours(sh, sm, 0, 0)
+      setHasStarted(new Date() >= classStart)
+    }
+
     checkReminder()
     checkLive()
-    const id = setInterval(() => { checkReminder(); checkLive() }, 60_000)
+    checkStarted()
+    const id = setInterval(() => { checkReminder(); checkLive(); checkStarted() }, 60_000)
     return () => clearInterval(id)
   }, [session, locale])
 
@@ -316,6 +330,12 @@ export default function DailySessionCard({
   const absentCount       = Object.values(attendance).filter(v => v === 'absent').length
   const markedCount       = Object.values(attendance).filter(v => v !== null).length
 
+  // Unmarked students are highlighted once the class has started or marking has begun
+  const highlightUnmarked = hasStarted || markedCount > 0
+  const notMarkedCount    = highlightUnmarked
+    ? visibleStudents.filter((s: any) => (attendance[s.id] ?? null) === null && !isStudentOnHoliday(activeHoliday, s.id)).length
+    : 0
+
   const payRequiredCount  = visibleStudents.filter((s: any) => {
     if (paidStudentIds.has(s.id)) return false
     const sub = getActiveSub(s)
@@ -528,8 +548,10 @@ export default function DailySessionCard({
                   const statusClr = isLocallyPaid ? '#3dab7e' : isPending ? '#4a90d9' : isPay ? '#e04040' : noSub ? '#888' : '#3dab7e'
 
                   const studentOnHoliday = isStudentOnHoliday(activeHoliday, student.id)
-                  const rowAccent = studentOnHoliday ? '#3dab7e' : status === 'present' ? '#3dab7e' : status === 'absent' ? '#e04040' : 'transparent'
-                  const rowBg = studentOnHoliday ? '#3dab7e05' : isLocallyPaid ? '#3dab7e06' : isPay ? '#e8960a08' : status === 'absent' ? '#e0404005' : status === 'present' ? '#3dab7e05' : i % 2 === 1 ? 'var(--bg-page)' : 'transparent'
+                  // Attendance still missing for this student (class has started, or others are already marked)
+                  const notMarked = status === null && !studentOnHoliday && highlightUnmarked
+                  const rowAccent = studentOnHoliday ? '#3dab7e' : status === 'present' ? '#3dab7e' : status === 'absent' ? '#e04040' : notMarked ? '#e8960a' : 'transparent'
+                  const rowBg = studentOnHoliday ? '#3dab7e05' : notMarked ? '#e8960a22' : isLocallyPaid ? '#3dab7e06' : isPay ? '#e8960a08' : status === 'absent' ? '#e0404005' : status === 'present' ? '#3dab7e05' : i % 2 === 1 ? 'var(--bg-page)' : 'transparent'
                   const mf = student.monthly_fees || 0
                   const df = student.discounted_monthly_fees
                   const hasDiscount = df && df > 0 && df < mf
@@ -737,6 +759,7 @@ export default function DailySessionCard({
               {presentCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#3dab7e', background: '#3dab7e14', border: '1px solid #3dab7e28', borderRadius: 20, padding: '3px 10px' }}>✓ {presentCount}</span>}
               {absentCount > 0  && <span style={{ fontSize: 11, fontWeight: 700, color: '#e04040', background: '#e0404014', border: '1px solid #e0404028', borderRadius: 20, padding: '3px 10px' }}>✗ {absentCount}</span>}
               {payRequiredCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#e8960a', background: '#e8960a14', border: '1px solid #e8960a28', borderRadius: 20, padding: '3px 10px' }}>💳 {payRequiredCount}</span>}
+              {notMarkedCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#e8960a', background: '#e8960a14', border: '1px solid #e8960a28', borderRadius: 20, padding: '3px 10px' }}>⚠ {notMarkedCount} {locale === 'ar' ? 'بدون تسجيل' : 'not marked'}</span>}
               <span style={{ fontSize: 11, color: 'var(--txt2)' }}>{markedCount}/{visibleStudents.length} {isRtl ? 'مسجّل' : 'marked'}</span>
 
               <button
