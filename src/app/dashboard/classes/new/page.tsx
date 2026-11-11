@@ -70,11 +70,13 @@ const DAY_KEYS = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thurs
 
 const HOURS: { value: string; en: string; ar: string }[] = []
 for (let h = 7; h <= 22; h++) {
-  const value = `${String(h).padStart(2, '0')}:00`
+  const hh    = String(h).padStart(2, '0')
   const h12   = h > 12 ? h - 12 : h
   const suffix = h < 12 ? 'AM' : 'PM'
   const suffixAr = h < 12 ? 'ص' : 'م'
-  HOURS.push({ value, en: `${h12} ${suffix}`, ar: `${h12} ${suffixAr}` })
+  HOURS.push({ value: `${hh}:00`, en: `${h12} ${suffix}`, ar: `${h12} ${suffixAr}` })
+  // Half-hour slot (last slot stays 10 PM)
+  if (h < 22) HOURS.push({ value: `${hh}:30`, en: `${h12}:30 ${suffix}`, ar: `${h12}:30 ${suffixAr}` })
 }
 
 type Errors = Partial<Record<string, string>>
