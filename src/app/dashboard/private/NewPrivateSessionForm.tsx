@@ -12,13 +12,15 @@ for (let h = 7; h <= 22; h++) {
   const suffix   = h < 12 ? 'AM' : 'PM'
   const suffixAr = h < 12 ? 'ص' : 'م'
   HOURS.push({ value, en: `${h12} ${suffix}`, ar: `${h12} ${suffixAr}` })
+  // Half-hour slot (the list ends at 10 PM)
+  if (h < 22) HOURS.push({ value: `${String(h).padStart(2, '0')}:30`, en: `${h12}:30 ${suffix}`, ar: `${h12}:30 ${suffixAr}` })
 }
 
 function computeDuration(start: string, end: string): number {
   if (!start || !end) return 0
-  const [sh] = start.split(':').map(Number)
-  const [eh] = end.split(':').map(Number)
-  return Math.max(0, eh - sh)
+  const [sh, sm = 0] = start.split(':').map(Number)
+  const [eh, em = 0] = end.split(':').map(Number)
+  return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60)
 }
 
 export default function NewPrivateSessionForm({

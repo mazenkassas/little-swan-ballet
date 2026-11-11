@@ -12,6 +12,8 @@ for (let h = 7; h <= 22; h++) {
   const suffix   = h < 12 ? 'AM' : 'PM'
   const suffixAr = h < 12 ? 'ص' : 'م'
   HOURS.push({ value, en: `${h12} ${suffix}`, ar: `${h12} ${suffixAr}` })
+  // Half-hour slot (the list ends at 10 PM)
+  if (h < 22) HOURS.push({ value: `${String(h).padStart(2, '0')}:30`, en: `${h12}:30 ${suffix}`, ar: `${h12}:30 ${suffixAr}` })
 }
 
 function hhmm(time: string | null | undefined): string {
