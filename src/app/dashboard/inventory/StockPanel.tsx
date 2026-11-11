@@ -30,6 +30,7 @@ const LABELS = {
     noReady: 'لا توجد منتجات جاهزة', noMto: 'لا توجد منتجات حسب الطلب', noMatch: 'لا توجد نتائج مطابقة',
     size: 'مقاس', price: 'سعر البيع', pieces: 'قطعة', sell: 'بيع',
     search: 'بحث باسم المنتج…', allSizes: 'كل المقاسات', lowOnly: 'المخزون المنخفض فقط',
+    statReady: 'منتجات جاهزة', statPieces: 'إجمالي القطع', statLow: 'مخزون منخفض',
     lowTitle: 'تنبيه: مخزون منخفض',
     lowHint: (n: number) => n === 1 ? 'منتج واحد يحتاج إلى إعادة تخزين' : n === 2 ? 'منتجان يحتاجان إلى إعادة تخزين' : `${n} منتجات تحتاج إلى إعادة تخزين`,
     left: (n: number) => n <= 0 ? 'نفذ من المخزون' : n === 1 ? 'باقي قطعة واحدة' : n === 2 ? 'باقي قطعتان' : `باقي ${n} قطع`,
@@ -39,6 +40,7 @@ const LABELS = {
     noReady: 'No ready stock products', noMto: 'No made-to-order products', noMatch: 'No matching products',
     size: 'Size', price: 'Selling price', pieces: 'pcs', sell: 'Sell',
     search: 'Search by product name…', allSizes: 'All sizes', lowOnly: 'Low stock only',
+    statReady: 'Ready products', statPieces: 'Total pieces', statLow: 'Low stock',
     lowTitle: 'Low stock alert',
     lowHint: (n: number) => n === 1 ? '1 product needs restocking' : `${n} products need restocking`,
     left: (n: number) => n <= 0 ? 'Out of stock' : n === 1 ? '1 piece left' : `${n} pieces left`,
@@ -54,11 +56,19 @@ const CSS = `
 .lst-low input{accent-color:#e8960a}
 .lst-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:20px}
 .lst-list{display:flex;flex-direction:column;gap:8px}
-.lst-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.lst-stats{margin-bottom:20px}
+.lst-stats .lsw-stat{background:var(--bg-page)}
+.lst-stats .lsw-stat:last-child{grid-column:auto}
+.lst-tools input[type=search]:focus,.lst-tools select:focus{outline:0;border-color:#d4667a;box-shadow:0 0 0 3px #d4667a26}
+.lst-card{background:var(--bg-page);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;transition:border-color .15s,transform .15s,box-shadow .15s}
+.lst-card:hover{border-color:#d4667a66;transform:translateY(-1px);box-shadow:0 4px 14px #0000001a}
+.lst-qty{flex-shrink:0;min-width:56px;text-align:center;border-radius:10px;padding:4px 8px;background:var(--bg-card);border:1px solid var(--border)}
+.lst-sell{flex-shrink:0;font-size:12px;font-weight:700;color:#fff;text-decoration:none;background:#d4667a;border-radius:8px;padding:7px 14px}
+.lst-sell:hover{filter:brightness(1.08)}
 .lst-card.low{border-color:#e8960a55}
 .lst-card.out{border-color:#e0404055}
 .lst-count{color:var(--txt2);font-size:12px;font-weight:600}
-.lst-none{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:32px 0;text-align:center;color:var(--txt2);font-size:13px}
+.lst-none{background:var(--bg-page);border-style:dashed !important;border:1px solid var(--border);border-radius:12px;padding:32px 0;text-align:center;color:var(--txt2);font-size:13px}
 @media (max-width:640px){
 .lst-tools input[type=search]{width:100%}
 .lst-tools select,.lst-low{flex:1;min-width:0}
@@ -161,6 +171,16 @@ export default function StockPanel({ products, isRtl, title, subtitle, addLabel 
         </Link>
       </div>
 
+      {/* Summary */}
+      {products.length > 0 && (
+        <div className="lsw-stats lst-stats">
+          <div className="lsw-stat ok"><span>{L.statReady}</span><b>{allReady.length}</b></div>
+          <div className="lsw-stat info"><span>{L.statPieces}</span><b>{allReady.reduce((s, p) => s + Math.max(p.stock_qty, 0), 0)}</b></div>
+          <div className={`lsw-stat${lowStock.length ? ' amber' : ''}`}><span>{L.statLow}</span><b>{lowStock.length}</b></div>
+          <div className="lsw-stat pink"><span>{L.mtoProducts}</span><b>{products.length - allReady.length}</b></div>
+        </div>
+      )}
+
       {/* Low stock alert (always shows every low product, whatever the filters are) */}
       {lowStock.length > 0 && (
         <div style={{
@@ -227,19 +247,14 @@ export default function StockPanel({ products, isRtl, title, subtitle, addLabel 
               return (
                 <div key={p.id} className={`lst-card${out ? ' out' : low ? ' low' : ''}`}>
                   {details(p)}
-                  <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                  <div className="lst-qty">
                     <p style={{
                       margin: 0, fontSize: 22, fontWeight: 800,
                       color: out ? '#e04040' : low ? '#e8960a' : 'var(--txt1)',
                     }}>{p.stock_qty}</p>
                     <p style={{ margin: 0, fontSize: 10, color: 'var(--txt2)' }}>{L.pieces}</p>
                   </div>
-                  <Link href={`/dashboard/inventory/sell/${p.id}`} style={{
-                    flexShrink: 0, fontSize: 12, fontWeight: 600,
-                    color: '#d4667a', textDecoration: 'none',
-                    border: '1px solid #d4667a40', background: '#d4667a12',
-                    borderRadius: 8, padding: '5px 12px',
-                  }}>
+                  <Link href={`/dashboard/inventory/sell/${p.id}`} className="lst-sell">
                     {L.sell}
                   </Link>
                 </div>

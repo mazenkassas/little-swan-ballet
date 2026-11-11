@@ -101,6 +101,7 @@ const LABELS = {
     emptySearch: 'No results match your search.',
     delRow: 'Delete row', delTitle: 'Delete this row?', delBody: 'This cannot be undone.',
     del: 'Delete', cancel: 'Cancel', unnamed: '(no name)',
+    addMonth: '+ Add month', addMonthTitle: 'Add a month sheet', month: 'Month', year: 'Year', add: 'Add',
     saveFailed: 'Some changes could not be saved. Check your connection, then press Retry.',
     actionFailed: 'That action failed. Check your connection and try again.',
     saving: 'Saving…', saved: 'All changes saved', notSaved: 'Not saved', retry: 'Retry',
@@ -122,6 +123,7 @@ const LABELS = {
     emptySearch: 'مفيش نتايج مطابقة للبحث.',
     delRow: 'حذف الصف', delTitle: 'حذف هذا الصف؟', delBody: 'لا يمكن التراجع عن هذا الإجراء.',
     del: 'حذف', cancel: 'إلغاء', unnamed: '(بدون اسم)',
+    addMonth: '+ إضافة شهر', addMonthTitle: 'إضافة شيت شهر جديد', month: 'الشهر', year: 'السنة', add: 'إضافة',
     saveFailed: 'تعذر حفظ بعض التعديلات. تأكد من الاتصال ثم اضغط إعادة المحاولة.',
     actionFailed: 'تعذر تنفيذ العملية. تأكد من الاتصال وحاول مرة أخرى.',
     saving: 'جارٍ الحفظ…', saved: 'تم حفظ كل التعديلات', notSaved: 'لم يُحفظ', retry: 'إعادة المحاولة',
@@ -138,29 +140,38 @@ const CSS = `
 .lsw-sync.bad{color:#e04040;background:#e0404014;border-color:#e0404040}
 .lsw-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
 .lsw-brand{display:flex;align-items:center;gap:10px;margin-inline-end:auto}
-.lsw-logo{width:34px;height:34px;border-radius:8px;background:#11734b;color:#fff;display:grid;place-items:center;font-weight:700}
-.lsw-brand h1{font-size:19px;margin:0;color:var(--txt1);font-weight:700}
+.lsw-logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#e58fa0,#c9506a);color:#fff;display:grid;place-items:center;font-weight:700;font-size:17px;box-shadow:0 4px 12px #d4667a40}
+.lsw-brand h1{font-size:20px;margin:0;color:var(--txt1);font-weight:800;line-height:1.2}
 .lsw-brand small{display:block;color:var(--txt2);font-size:12.5px}
 .lsw-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.lsw-tools input,.lsw-tools select{height:38px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font:inherit;font-size:13px;background:var(--bg-card);color:var(--txt1)}
+.lsw-tools input,.lsw-tools select{height:38px;border:1px solid var(--border);border-radius:10px;padding:0 12px;font:inherit;font-size:13px;background:var(--bg-card);color:var(--txt1);transition:border-color .15s,box-shadow .15s}
+.lsw-tools input:focus,.lsw-tools select:focus{outline:0;border-color:#d4667a;box-shadow:0 0 0 3px #d4667a26}
 .lsw-tools input{width:210px}
 .lsw-btn{height:38px;padding:0 16px;border:0;border-radius:8px;background:#d4667a;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .lsw-btn:hover{filter:brightness(1.08)}
 .lsw-btn:disabled{opacity:.6;cursor:default}
 .lsw-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
-.lsw-stat{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
-.lsw-stat span{display:block;color:var(--txt2);font-size:13px}
-.lsw-stat b{font-size:22px;color:var(--txt1);font-variant-numeric:tabular-nums}
+.lsw-stat{--tone:var(--border);position:relative;overflow:hidden;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px 16px}
+.lsw-stat::before{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:4px;background:var(--tone)}
+.lsw-stat span{display:block;color:var(--txt2);font-size:12px;font-weight:600}
+.lsw-stat b{display:block;margin-top:2px;font-size:22px;line-height:1.25;color:var(--txt1);font-variant-numeric:tabular-nums}
+.lsw-stat.pink{--tone:#d4667a}
+.lsw-stat.info{--tone:#4a90d9}
+.lsw-stat.amber{--tone:#e8960a}
+.lsw-stat.amber b{color:#e8960a}
+.lsw-stat.warn{--tone:#e04040}
 .lsw-stat.warn b{color:#e04040}
+.lsw-stat.ok{--tone:#3dab7e}
 .lsw-stat.ok b{color:#3dab7e}
 .lsw-err{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 10px;padding:8px 12px;border-radius:8px;background:#e0404014;border:1px solid #e0404040;color:#e04040;font-size:12.5px;font-weight:600}
 .lsw-err button{border:0;border-radius:6px;background:#e04040;color:#fff;font:inherit;font-weight:700;padding:5px 14px;cursor:pointer}
 .lsw-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:10px 10px 0 0;overflow:auto;max-height:calc(100vh - 330px);min-height:220px}
 .lsw-wrap table{direction:ltr;border-collapse:separate;border-spacing:0;width:100%;min-width:1560px}
 .lsw-wrap th,.lsw-wrap td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:0 8px;height:46px;text-align:center;white-space:nowrap;background:var(--bg-card);color:var(--txt1);font-size:14.5px}
-.lsw-wrap thead th{position:sticky;top:0;z-index:2;background:#f1c232;color:#1f1f1f;font-weight:700;font-size:16px;border-right-color:#2b2b2b;border-bottom:1px solid #2b2b2b}
-.lsw-wrap thead th.sm{font-size:13px}
-.lsw-wrap tbody tr:hover td{background:var(--bg-page)}
+.lsw-wrap thead th{position:sticky;top:0;z-index:2;background:#f1c232;color:#1f1f1f;font-weight:700;font-size:14.5px;border-right-color:#00000026;border-bottom:1px solid #00000033}
+.lsw-wrap thead th.sm{font-size:12.5px}
+.lsw-wrap tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--bg-page) 55%,var(--bg-card))}
+.lsw-wrap tbody tr:hover td{background:color-mix(in srgb,#d4667a 10%,var(--bg-card))}
 .lsw-wrap td.idx{width:52px;color:var(--txt2);font-variant-numeric:tabular-nums}
 .lsw-wrap td.num,.lsw-wrap tfoot td{font-variant-numeric:tabular-nums}
 .lsw-wrap td.due{color:#e04040;font-weight:700}
@@ -182,14 +193,22 @@ const CSS = `
 .lsw-chip select{appearance:none;-webkit-appearance:none;border:0;border-radius:999px;background:var(--bg);color:var(--fg);font:inherit;font-weight:600;font-size:14px;height:28px;min-width:104px;padding:0 14px 0 30px;text-align:center;text-align-last:center;cursor:pointer}
 .lsw-chip.wide select{min-width:140px}
 .lsw-chip::after{content:"";position:absolute;left:12px;top:50%;margin-top:-2px;border:5px solid transparent;border-top-color:var(--fg);border-bottom:0;pointer-events:none}
+.lsw-chip.empty select{background:transparent;color:var(--txt2);box-shadow:inset 0 0 0 1px var(--border)}
+.lsw-chip.empty::after{border-top-color:var(--txt2);opacity:.7}
 .lsw-chip option{background:#fff;color:#1f1f1f}
 .lsw-pill{display:inline-block;border-radius:999px;background:var(--bg);color:var(--fg);font-weight:600;font-size:14px;height:28px;line-height:28px;min-width:104px;padding:0 14px;cursor:default}
 .lsw-empty{padding:56px 20px;text-align:center;color:var(--txt2);font-size:14px}
 .lsw-stockpane{background:var(--bg-card);border:1px solid var(--border);border-radius:10px 10px 0 0;padding:20px}
-.lsw-tabs{display:flex;gap:2px;overflow-x:auto;padding:0 6px;background:var(--bg-page);border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px}
-.lsw-tab{border:0;background:none;font:inherit;font-size:13.5px;padding:11px 18px;cursor:pointer;color:var(--txt2);white-space:nowrap;border-top:3px solid transparent}
-.lsw-tab:hover{background:var(--bg-card)}
-.lsw-tab[aria-selected=true]{background:#d4667a1f;color:#d4667a;font-weight:700;border-top-color:#d4667a}
+.lsw-tabbar{display:flex;align-items:stretch;background:var(--bg-page);border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px}
+.lsw-tabs{display:flex;gap:4px;overflow-x:auto;padding:6px;flex:1;min-width:0;scrollbar-width:thin}
+.lsw-addmonth{flex-shrink:0;margin:6px;border:1px dashed #d4667a99;border-radius:8px;background:none;color:#d4667a;font:inherit;font-size:13px;font-weight:700;padding:0 14px;cursor:pointer;white-space:nowrap}
+.lsw-addmonth:hover{background:#d4667a14;border-style:solid}
+.lsw-modal .fields{display:flex;gap:10px;justify-content:center;margin-top:16px}
+.lsw-modal label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--txt2);text-align:start}
+.lsw-modal select{height:38px;min-width:120px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font:inherit;font-size:13px;background:var(--bg-page);color:var(--txt1)}
+.lsw-tab{border:0;background:none;font:inherit;font-size:13.5px;padding:8px 16px;border-radius:8px;cursor:pointer;color:var(--txt2);white-space:nowrap;transition:background .15s,color .15s}
+.lsw-tab:hover{background:var(--bg-card);color:var(--txt1)}
+.lsw-tab[aria-selected=true]{background:#d4667a;color:#fff;font-weight:700;box-shadow:0 2px 8px #d4667a40}
 .lsw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px}
 .lsw-modal{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:24px;width:100%;max-width:360px;text-align:center}
 .lsw-modal p{margin:0}
@@ -212,11 +231,13 @@ const CSS = `
 .lsw-wrap thead th{font-size:14px}
 .lsw-wrap td input[name=name]{min-width:120px}
 .lsw-stockpane{padding:14px}
-.lsw-tab{padding:11px 14px}
+.lsw-tab{padding:8px 12px}
+.lsw-addmonth{padding:0 10px}
 }
 `
 
 const STOCK = 'stock'
+const EXTRA_MONTHS_KEY = 'lsw-extra-months'
 
 /** A class time slot on one weekday, e.g. { day: 'fri', label: '12 - 2' } */
 export interface ClassSlot { day: string; label: string }
@@ -267,7 +288,7 @@ function Chip({ value, options, label, wide, isRtl, onChange }: {
   const o = options.find(x => x.v === value)
   const style = (o ? { '--bg': o.bg, '--fg': o.fg } : {}) as React.CSSProperties
   return (
-    <span className={`lsw-chip${wide ? ' wide' : ''}`} style={style}>
+    <span className={`lsw-chip${wide ? ' wide' : ''}${value ? '' : ' empty'}`} style={style}>
       <select value={value} aria-label={label} dir={isRtl ? 'rtl' : 'ltr'} onChange={e => onChange(e.target.value)}>
         <option value=""></option>
         {options.map(x => <option key={x.v} value={x.v}>{isRtl ? x.ar : x.en}</option>)}
@@ -305,6 +326,17 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
   const [adding, setAdding] = useState(false)
   const [focusId, setFocusId] = useState<string | null>(null)
   const [toDelete, setToDelete] = useState<LeotardOrder | null>(null)
+  // Months added with "Add month". They are remembered in this browser until they hold a row.
+  const [extraMonths, setExtraMonths] = useState<string[]>([])
+  const [monthForm, setMonthForm] = useState<{ y: number; m: number } | null>(null)
+  const tabsRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(EXTRA_MONTHS_KEY) || '[]')
+      if (Array.isArray(saved)) setExtraMonths(saved.filter(x => /^\d{4}-\d{2}$/.test(String(x))))
+    } catch { /* storage unavailable */ }
+  }, [])
   const dirty = useRef(new Set<string>())
   const bodyRef = useRef<HTMLTableSectionElement>(null)
 
@@ -313,8 +345,32 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     const set = new Set<string>()
     for (let d = -2; d <= 3; d++) set.add(addMonths(currentMonth, d))
     rows.forEach(r => { if (r.sheet_month) set.add(r.sheet_month) })
+    extraMonths.forEach(m => set.add(m))
     return Array.from(set).sort()
-  }, [rows, currentMonth])
+  }, [rows, currentMonth, extraMonths])
+
+  // "Add month" suggests the month after the last tab
+  function openMonthForm() {
+    const [y, m] = addMonths(months[months.length - 1], 1).split('-').map(Number)
+    setMonthForm({ y, m })
+  }
+
+  function addMonth() {
+    if (!monthForm) return
+    const ym = `${monthForm.y}-${String(monthForm.m).padStart(2, '0')}`
+    if (!months.includes(ym)) {
+      const list = [...extraMonths, ym]
+      setExtraMonths(list)
+      try { localStorage.setItem(EXTRA_MONTHS_KEY, JSON.stringify(list)) } catch { /* storage unavailable */ }
+    }
+    setActive(ym)
+    setMonthForm(null)
+  }
+
+  // Keep the selected tab in view
+  useEffect(() => {
+    tabsRef.current?.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [active, months])
 
   const monthLabel = (ym: string) => {
     const [y, m] = ym.split('-').map(Number)
@@ -527,11 +583,11 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
         <>
           {/* Summary */}
           <div className="lsw-stats">
-            <div className="lsw-stat"><span>{L.statCount}</span><b>{visible.length}</b></div>
-            <div className="lsw-stat"><span>{L.statTotal}</span><b>{fmt(total)}</b></div>
+            <div className="lsw-stat pink"><span>{L.statCount}</span><b>{visible.length}</b></div>
+            <div className="lsw-stat info"><span>{L.statTotal}</span><b>{fmt(total)}</b></div>
             <div className="lsw-stat ok"><span>{L.statPaid}</span><b>{fmt(paid)}</b></div>
             <div className={`lsw-stat${rem > 0 ? ' warn' : ''}`}><span>{L.statRemaining}</span><b>{fmt(rem)}</b></div>
-            <div className="lsw-stat"><span>{L.statNotDelivered}</span><b>{notDelivered}</b></div>
+            <div className={`lsw-stat${notDelivered > 0 ? ' amber' : ''}`}><span>{L.statNotDelivered}</span><b>{notDelivered}</b></div>
           </div>
 
           {unsaved > 0 && (
@@ -665,14 +721,51 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
       )}
 
       {/* Month tabs */}
-      <nav className="lsw-tabs" role="tablist">
-        {tabs.map(t => (
-          <button key={t.id} className="lsw-tab" role="tab" aria-selected={t.id === active}
-            onClick={() => setActive(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      <div className="lsw-tabbar">
+        <nav className="lsw-tabs" role="tablist" ref={tabsRef}>
+          {tabs.map(t => (
+            <button key={t.id} className="lsw-tab" role="tab" aria-selected={t.id === active}
+              onClick={() => setActive(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+        {!setupNeeded && <button className="lsw-addmonth" onClick={openMonthForm}>{L.addMonth}</button>}
+      </div>
+
+      {/* Add month */}
+      {monthForm && (() => {
+        const thisYear = Number(currentMonth.slice(0, 4))
+        const years = Array.from(new Set([thisYear - 1, thisYear, thisYear + 1, thisYear + 2, monthForm.y])).sort()
+        const monthName = (m: number) => isRtl ? String(m)
+          : new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(2000, m - 1, 1))
+        return (
+          <div className="lsw-overlay" onClick={() => setMonthForm(null)}>
+            <div className="lsw-modal" onClick={e => e.stopPropagation()}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--txt1)' }}>{L.addMonthTitle}</p>
+              <div className="fields">
+                <label>
+                  {L.month}
+                  <select value={monthForm.m} onChange={e => setMonthForm({ ...monthForm, m: Number(e.target.value) })}>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{monthName(m)}</option>)}
+                  </select>
+                </label>
+                <label>
+                  {L.year}
+                  <select value={monthForm.y} onChange={e => setMonthForm({ ...monthForm, y: Number(e.target.value) })}>
+                    {years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="btns">
+                <button onClick={addMonth} style={{ background: '#d4667a', color: '#fff', border: 'none' }}>{L.add}</button>
+                <button onClick={() => setMonthForm(null)}
+                  style={{ background: 'transparent', color: 'var(--txt1)', border: '1px solid var(--border)' }}>{L.cancel}</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Delete confirmation */}
       {toDelete && (
