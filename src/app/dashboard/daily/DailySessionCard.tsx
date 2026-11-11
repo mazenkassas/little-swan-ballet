@@ -352,7 +352,7 @@ export default function DailySessionCard({
         onClick={() => setOpen(o => !o)}
         style={{
           width: '100%', border: 'none', cursor: 'pointer',
-          background: isLive ? '#fdf0f2' : 'transparent',
+          background: isLive ? '#d4667a14' : 'transparent',
           padding: '12px 18px',
           display: 'flex', alignItems: 'center', gap: 16,
           textAlign: isRtl ? 'right' : 'left',
@@ -730,7 +730,7 @@ export default function DailySessionCard({
                   + {locale === 'ar' ? 'إضافة تعويض' : 'Add makeup'}
                 </button>
               ) : (
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff8e6', border: '1px solid #e8960a40', borderRadius: 8, padding: '5px 8px' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#e8960a14', border: '1px solid #e8960a40', borderRadius: 8, padding: '5px 8px' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#e8960a' }}>🔄</span>
                   <div style={{ position: 'relative' }}>
                     <input
@@ -739,7 +739,7 @@ export default function DailySessionCard({
                       onFocus={() => setMakeupSearchOpen(true)}
                       onBlur={() => setTimeout(() => setMakeupSearchOpen(false), 150)}
                       placeholder={locale === 'ar' ? 'ابحثي...' : 'Search student...'}
-                      style={{ background: '#fff', border: '1px solid #e8960a50', borderRadius: 6, padding: '4px 8px', fontSize: 11, color: 'var(--txt1)', fontFamily: 'inherit', outline: 'none', minWidth: 150 }}
+                      style={{ background: 'var(--bg-page)', border: '1px solid #e8960a50', borderRadius: 6, padding: '4px 8px', fontSize: 11, color: 'var(--txt1)', fontFamily: 'inherit', outline: 'none', minWidth: 150 }}
                     />
                     {makeupSearchOpen && filteredMakeupStudents.length > 0 && (
                       <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200, background: 'var(--bg-popup)', border: '1px solid var(--border)', borderRadius: 8, marginTop: 2, maxHeight: 180, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
