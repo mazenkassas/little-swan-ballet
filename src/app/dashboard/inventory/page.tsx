@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, Package, AlertTriangle, ShoppingBag } from 'lucide-react'
+import { Plus, Package, AlertTriangle } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { getTranslations, getLocale } from 'next-intl/server'
+import LeotardOrders, { type LeotardOrder } from './LeotardOrders'
 
 export default async function InventoryPage() {
   const locale  = await getLocale()
@@ -13,11 +14,30 @@ export default async function InventoryPage() {
   const { data: products } = await supabase
     .from('products').select('*').eq('is_active', true).order('name')
 
-  const { data: orders } = await supabase
-    .from('product_orders')
-    .select('*, student:students(name_ar), product:products(name)')
-    .neq('status', 'delivered')
-    .order('order_date', { ascending: false })
+  const [ordersRes, studentsRes, classesRes] = await Promise.all([
+    supabase.from('leotard_orders').select('*').order('created_at', { ascending: false }).limit(2000),
+    supabase.from('students').select('id, name_ar').order('name_ar'),
+    supabase.from('classes').select('start_time, end_time').eq('is_active', true).order('start_time'),
+  ])
+  const leotardOrders = (ordersRes.data || []) as LeotardOrder[]
+  const setupNeeded   = !!ordersRes.error
+
+  // Class time slots as group suggestions, e.g. "5:30 - 7"
+  const slot = (time: string) => {
+    const [h, m] = time.split(':').map(Number)
+    const h12 = h % 12 || 12
+    return m ? `${h12}:${String(m).padStart(2, '0')}` : `${h12}`
+  }
+  const groupOptions = Array.from(new Set(
+    (classesRes.data || [])
+      .filter(c => c.start_time && c.end_time)
+      .map(c => `${slot(c.start_time)} - ${slot(c.end_time)}`),
+  ))
+
+  // Today in the academy's timezone (YYYY-MM-DD)
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
 
   const ready      = products?.filter(p => p.type === 'ready_stock')    || []
   const madeToOrder = products?.filter(p => p.type === 'made_to_order') || []
@@ -121,6 +141,17 @@ export default async function InventoryPage() {
         </div>
       )}
 
+      {/* Leotard orders (monthly sheet) */}
+      <LeotardOrders
+        orders={leotardOrders}
+        students={studentsRes.data || []}
+        groupOptions={groupOptions}
+        initialMonth={today.slice(0, 7)}
+        today={today}
+        setupNeeded={setupNeeded}
+        isRtl={isRtl}
+      />
+
       {/* Two-column grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
@@ -219,56 +250,6 @@ export default async function InventoryPage() {
                 color: 'var(--txt2)', fontSize: 13,
               }}>
                 {L.noMto}
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <div style={{
-              width: 30, height: 30, borderRadius: 8,
-              background: '#8e5fd918', border: '1px solid #8e5fd928',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <ShoppingBag size={15} color="#8e5fd9" />
-            </div>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--txt1)' }}>{L.activeOrders}</p>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {orders?.map((order: any) => (
-              <div key={order.id} style={{
-                background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 12, padding: '14px 16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-              }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--txt1)' }}>{order.student?.name_ar}</p>
-                  <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--txt2)' }}>
-                    {order.product?.name} · {L.size}: {order.size}
-                  </p>
-                </div>
-                <select
-                  defaultValue={order.status}
-                  style={{
-                    background: 'var(--bg-page)', border: '1px solid var(--border)',
-                    borderRadius: 8, padding: '5px 10px', fontSize: 11, fontWeight: 600,
-                    color: 'var(--txt2)', outline: 'none', fontFamily: 'inherit', flexShrink: 0,
-                  }}
-                >
-                  <option value="pending">{L.pending}</option>
-                  <option value="in_production">{L.inProd}</option>
-                  <option value="done">{L.done}</option>
-                  <option value="delivered">{L.delivered}</option>
-                </select>
-              </div>
-            ))}
-            {(!orders || orders.length === 0) && (
-              <div style={{
-                background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 12, padding: '40px 0', textAlign: 'center',
-                color: 'var(--txt2)', fontSize: 13,
-              }}>
-                {L.noOrders}
               </div>
             )}
           </div>
