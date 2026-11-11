@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LEOTARD_ORDER_COLUMNS } from './leotardColumns'
 
@@ -198,10 +199,10 @@ const CSS = `
 .lsw-wrap tfoot td{z-index:2}
 .lsw-wrap th:nth-child(2),.lsw-wrap td:nth-child(2){position:sticky;left:0;z-index:1;border-right:1px solid var(--border)}
 .lsw-wrap thead th:nth-child(2),.lsw-wrap tfoot td:nth-child(2){z-index:3}
-.lsw-wrap td.act,.lsw-wrap th.act{width:40px;padding:0 4px}
-.lsw-del{border:0;background:none;color:#e04040;font-size:18px;line-height:1;cursor:pointer;opacity:0;width:28px;height:28px;border-radius:6px;font-family:inherit}
-.lsw-wrap tr:hover .lsw-del,.lsw-del:focus{opacity:1}
-.lsw-del:hover{background:#e0404020}
+.lsw-wrap td.act,.lsw-wrap th.act{width:52px;padding:0 6px;position:sticky;right:0;z-index:1;border-left:1px solid var(--border)}
+.lsw-wrap thead th.act,.lsw-wrap tfoot td.act{z-index:3}
+.lsw-del{display:inline-grid;place-items:center;border:1px solid #e0404040;background:#e0404012;color:#e04040;cursor:pointer;width:32px;height:32px;border-radius:8px;transition:background .15s,color .15s}
+.lsw-del:hover,.lsw-del:focus-visible{background:#e04040;color:#fff;outline:0}
 .lsw-wrap td input{width:100%;height:34px;border:1px solid transparent;border-radius:6px;background:transparent;font:inherit;text-align:center;color:inherit;padding:0 4px}
 .lsw-wrap td input:hover{border-color:var(--border)}
 .lsw-wrap td input:focus,.lsw-wrap td select:focus{outline:2px solid #d4667a;outline-offset:1px;border-color:transparent}
@@ -233,7 +234,6 @@ const CSS = `
 .lsw-modal p{margin:0}
 .lsw-modal .btns{display:flex;gap:10px;justify-content:center;margin-top:18px}
 .lsw-modal button{border-radius:10px;padding:8px 20px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
-@media (hover:none){.lsw-del{opacity:1}}
 @media (max-width:640px){
 .lsw-page{padding:14px 12px}
 .lsw-tools{width:100%}
@@ -759,7 +759,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
                           onChange={v => change(r.id, { delivery_status: v || null })} />
                       </td>
                       <td className="act">
-                        <button className="lsw-del" title={L.delRow} aria-label={L.delRow} onClick={() => setToDelete(r)}>×</button>
+                        <button className="lsw-del" title={L.delRow} aria-label={L.delRow} onClick={() => setToDelete(r)}><Trash2 size={16} /></button>
                       </td>
                     </tr>
                   )
