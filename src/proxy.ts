@@ -35,20 +35,32 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && isDashboard) {
-    const { data: staffData, error: staffError } = await supabase
+    const email = (user.email ?? '').trim().replace(/[\\%_]/g, '\\$&')
+    const { data: staffData } = await supabase
       .from('staff')
-      .select('role')
-      .eq('email', user.email)
-      .single()
+      .select('role, is_active')
+      .ilike('email', email)
+      .maybeSingle()
 
-    const role = staffData?.role
+    // Not an active staff member → no dashboard access.
+    if (!staffData || staffData.is_active === false) {
+      const { data: coach } = await supabase
+        .from('coaches')
+        .select('id')
+        .ilike('email', email)
+        .eq('can_login', true)
+        .eq('is_active', true)
+        .maybeSingle()
+      if (coach) return NextResponse.redirect(new URL('/coach', request.url))
 
-    console.log('=== PROXY DEBUG ===')
-    console.log('USER EMAIL:', user.email)
-    console.log('ROLE FROM DB:', role)
-    console.log('STAFF ERROR:', staffError)
-    console.log('PATH:', request.nextUrl.pathname)
-    console.log('===================')
+      // Unknown or deactivated account: sign out (keeping the cleared cookies) and go to login
+      await supabase.auth.signOut()
+      const res = NextResponse.redirect(new URL('/login', request.url))
+      supabaseResponse.cookies.getAll().forEach(c => res.cookies.set(c))
+      return res
+    }
+
+    const role = staffData.role
 
     if (role === 'super_admin') return supabaseResponse
 
@@ -64,18 +76,13 @@ export async function proxy(request: NextRequest) {
       const pathParts = request.nextUrl.pathname.split('/')
       const page = pathParts[2]
 
-      console.log('PAGE EXTRACTED:', page)
-
       if (page && page !== '') {
-        const { data: permission, error: permError } = await supabase
+        const { data: permission } = await supabase
           .from('role_permissions')
           .select('id')
           .eq('role', role)
           .eq('page', page)
-          .single()
-
-        console.log('PERMISSION:', permission)
-        console.log('PERM ERROR:', permError)
+          .maybeSingle()
 
         if (!permission) {
           return NextResponse.redirect(new URL('/dashboard', request.url))

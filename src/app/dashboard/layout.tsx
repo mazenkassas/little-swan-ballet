@@ -1,4 +1,5 @@
 import DashboardShell from '@/components/layout/DashboardShell'
+import { emailPattern } from '@/lib/emailMatch'
 import ThemeToggle from '@/components/layout/ThemeToggle'
 import LanguageToggle from '@/components/layout/LanguageToggle'
 import { createClient } from '@/lib/supabase/server'
@@ -14,7 +15,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     const { data: coachRecord } = await supabase
       .from('coaches')
       .select('id')
-      .eq('email', user.email)
+      .ilike('email', emailPattern(user.email))
       .eq('can_login', true)
       .eq('is_active', true)
       .maybeSingle()

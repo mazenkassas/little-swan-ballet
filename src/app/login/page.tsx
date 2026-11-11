@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { emailPattern } from '@/lib/emailMatch'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Sun, Moon } from 'lucide-react'
@@ -107,7 +108,7 @@ export default function LoginPage() {
       const { data: coachRow } = await supabase
         .from('coaches')
         .select('id')
-        .eq('email', data.user?.email ?? '')
+        .ilike('email', emailPattern(data.user?.email ?? ''))
         .eq('can_login', true)
         .eq('is_active', true)
         .maybeSingle()

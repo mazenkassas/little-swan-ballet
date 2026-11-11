@@ -1,4 +1,5 @@
 import CoachShell from '@/components/layout/CoachShell'
+import { emailPattern } from '@/lib/emailMatch'
 import ThemeToggle from '@/components/layout/ThemeToggle'
 import LanguageToggle from '@/components/layout/LanguageToggle'
 import { createClient } from '@/lib/supabase/server'
@@ -16,8 +17,9 @@ export default async function CoachLayout({ children }: { children: React.ReactN
   const { data: coach } = await supabase
     .from('coaches')
     .select('id, name_ar, name_en')
-    .eq('email', user.email!)
+    .ilike('email', emailPattern(user.email!))
     .eq('can_login', true)
+    .eq('is_active', true)
     .maybeSingle()
 
   if (!coach) redirect('/dashboard')

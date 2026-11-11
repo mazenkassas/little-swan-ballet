@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
-import { createClient } from '@/lib/supabase/client'
+import { createCoach } from '../actions'
 import Link from 'next/link'
 
 const LABELS = {
@@ -87,7 +87,6 @@ export default function NewCoachPage() {
   const locale   = useLocale()
   const isRtl    = locale === 'ar'
   const L        = LABELS[isRtl ? 'ar' : 'en']
-  const supabase = createClient()
 
   const [loading,      setLoading]      = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -168,17 +167,16 @@ export default function NewCoachPage() {
 
     setLoading(true)
 
-    const { error: err } = await supabase.from('coaches').insert({
-      name_ar:       form.name_ar,
-      name_en:       form.name_en,
-      phone:         form.phone,
-      email:         form.email,
-      password_hash: form.password,
-      hourly_rate:   parseFloat(form.hourly_rate),
-      can_login:     true,
+    const { error: err } = await createCoach({
+      name_ar:     form.name_ar,
+      name_en:     form.name_en,
+      phone:       form.phone,
+      email:       form.email,
+      password:    form.password,
+      hourly_rate: parseFloat(form.hourly_rate),
     })
 
-    if (err) { setServerErr(err.message); setLoading(false) }
+    if (err) { setServerErr(err); setLoading(false) }
     else router.push('/dashboard/coaches')
   }
 
