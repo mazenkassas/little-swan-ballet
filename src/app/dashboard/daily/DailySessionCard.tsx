@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { ChevronDown } from 'lucide-react'
 import {
@@ -416,10 +417,10 @@ export default function DailySessionCard({
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
             {markedCount > 0
-              ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--txt1)' }}>{markedCount}/{visibleStudents.length}</span>
+              ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--txt1)' }}>{presentCount}/{visibleStudents.length}</span>
               : <span style={{ fontSize: 11, color: 'var(--txt2)' }}>{locale === 'ar' ? 'لم يبدأ' : 'Not started'}</span>}
             <div style={{ width: 48, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
-              <div style={{ width: `${visibleStudents.length > 0 ? (markedCount / visibleStudents.length) * 100 : 0}%`, height: '100%', background: '#d4667a', transition: 'width 0.3s' }} />
+              <div style={{ width: `${visibleStudents.length > 0 ? (presentCount / visibleStudents.length) * 100 : 0}%`, height: '100%', background: '#d4667a', transition: 'width 0.3s' }} />
             </div>
           </div>
         </div>
@@ -529,14 +530,19 @@ export default function DailySessionCard({
                       {/* Student */}
                       <td style={{ ...td(true), paddingInlineStart: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                          <span style={{ width: 20, flexShrink: 0, fontSize: 11, fontWeight: 700, color: 'var(--txt2)', textAlign: 'center', direction: 'ltr' }}>{i + 1}.</span>
                           <div style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: '#d4667a15', border: '1px solid #d4667a25', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#d4667a' }}>
                             {initial}
                           </div>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--txt1)' }}>
+                              <Link
+                                href={`/dashboard/students/${student.id}`}
+                                title={locale === 'ar' ? 'عرض ملف الطالبة' : 'View student'}
+                                style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--txt1)', textDecoration: 'none', cursor: 'pointer' }}
+                              >
                                 {locale === 'en' && student.name_en ? student.name_en : student.name_ar}
-                              </p>
+                              </Link>
                               {activeHoliday && activeHoliday.student_ids?.length && activeHoliday.student_ids.includes(student.id) && (
                                 <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, background: '#3dab7e18', color: '#3dab7e', border: '1px solid #3dab7e30', whiteSpace: 'nowrap', lineHeight: 1.6 }}>
                                   🎌 {locale === 'ar' ? 'إجازة' : 'Holiday'}
@@ -673,12 +679,13 @@ export default function DailySessionCard({
                     <tr key={m.attendanceId} style={{ background: '#fff8e640', borderTop: '1px dashed #e8960a40' }}>
                       <td style={{ ...td(true), paddingInlineStart: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ width: 20, flexShrink: 0 }} />
                           <div style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: '#e8960a15', border: '1px solid #e8960a25', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#e8960a' }}>
                             {mkInitial}
                           </div>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--txt1)' }}>{mkName}</p>
+                              <Link href={`/dashboard/students/${m.id}`} style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--txt1)', textDecoration: 'none' }}>{mkName}</Link>
                               <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, background: '#e8960a18', color: '#e8960a', border: '1px solid #e8960a30', whiteSpace: 'nowrap' }}>
                                 🔄 {locale === 'ar' ? 'تعويض' : 'Make-up'}
                               </span>
