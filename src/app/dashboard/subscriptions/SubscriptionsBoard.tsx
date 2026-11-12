@@ -22,6 +22,10 @@ export type SubRow = {
   startDate: string | null
   endDate: string | null
   expectedEnd: string | null
+  /** first class after the package ends — when the next package starts */
+  renewalDate: string | null
+  /** due = on or before today, soon = within 7 days */
+  renewalWhen: 'due' | 'soon' | 'later' | null
   state: 'ok' | 'low' | 'due' | 'none' | 'upcoming'
 }
 
@@ -49,6 +53,8 @@ const T = {
     empty: 'No students match',
     start: 'Start',
     end: 'End',
+    renewal: 'Renewal',
+    renewalHint: 'Next package starts on this day (first class after the package ends). Click to renew.',
     expected: 'expected',
     setEnd: 'Set end',
     saveDates: 'Save',
@@ -103,6 +109,8 @@ const T = {
     empty: 'لا توجد نتائج',
     start: 'البداية',
     end: 'النهاية',
+    renewal: 'التجديد',
+    renewalHint: 'تبدأ الباقة الجديدة في هذا اليوم (أول حصة بعد انتهاء الباقة). اضغط للتجديد.',
     expected: 'متوقع',
     setEnd: 'حدد النهاية',
     saveDates: 'حفظ',
@@ -241,7 +249,7 @@ export default function SubscriptionsBoard({ rows, isRtl, canEdit, autoCount }: 
                 </button>
 
                 {/* Start / End date buttons */}
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', minWidth: 0 }}>
                   <DateChip label={L.start} value={r.startDate ? fmtDate(r.startDate, isRtl) : '—'} disabled={!r.subscriptionId || !canEdit}
                     title={!r.subscriptionId ? L.needPackage : undefined} onClick={() => setEditing(editing === r.key ? null : r.key)} active={editing === r.key} />
                   <DateChip label={L.end}
@@ -249,6 +257,10 @@ export default function SubscriptionsBoard({ rows, isRtl, canEdit, autoCount }: 
                     muted={!r.endDate} disabled={!r.subscriptionId || !canEdit}
                     title={!r.subscriptionId ? L.needPackage : !r.endDate && r.expectedEnd ? L.expected : undefined}
                     onClick={() => setEditing(editing === r.key ? null : r.key)} active={editing === r.key} />
+                  {r.subscriptionId && (
+                    <RenewalChip label={L.renewal} date={r.renewalDate ? fmtDate(r.renewalDate, isRtl) : '—'} when={r.renewalWhen}
+                      title={L.renewalHint} onClick={() => setOpen(r)} />
+                  )}
                 </div>
 
                 {/* Status */}
@@ -266,6 +278,25 @@ export default function SubscriptionsBoard({ rows, isRtl, canEdit, autoCount }: 
 
       {open && <StudentPanel row={open} isRtl={isRtl} onClose={() => setOpen(null)} />}
     </div>
+  )
+}
+
+const RENEWAL_COLOR = { due: '#e04040', soon: '#e8960a', later: '#4a90d9' } as const
+
+function RenewalChip({ label, date, when, title, onClick }: {
+  label: string; date: string; when: SubRow['renewalWhen']; title: string; onClick: () => void
+}) {
+  const c = RENEWAL_COLOR[when ?? 'later']
+  return (
+    <button onClick={onClick} title={title} style={{
+      display: 'grid', gap: 1, textAlign: 'start', minWidth: 92, padding: '5px 10px', borderRadius: 10,
+      border: `1px solid ${c}55`, background: c + '14', cursor: 'pointer',
+    }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: c }}>
+        <RefreshCw size={11} /> {label}
+      </span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: c, whiteSpace: 'nowrap' }}>{date}</span>
+    </button>
   )
 }
 

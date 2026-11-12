@@ -34,6 +34,8 @@ export default async function SubscriptionsPage() {
   ])
   // Calendar-based end date of each package (holidays and make-ups move it on)
   const autoEnd = new Map(computed.filter(p => p.schedule.ok).map(p => [p.id, p.schedule.endDate]))
+  // Renewal date = first class after the package ends (where the next package starts)
+  const autoNext = new Map(computed.filter(p => p.schedule.ok).map(p => [p.id, p.schedule.nextStart]))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const one = (x: any) => (Array.isArray(x) ? x[0] : x)
@@ -52,7 +54,7 @@ export default async function SubscriptionsPage() {
       for (const sub of packages) {
         const c: Cls | null = one(sub.class) ?? null
         const otherGroups = groups.filter(g => g.id !== sub.class_id).map(g => g.name)
-        rows.push(makeRow(st, c, sub, otherGroups, today, autoEnd.get(sub.id) ?? null))
+        rows.push(makeRow(st, c, sub, otherGroups, today, autoEnd.get(sub.id) ?? null, autoNext.get(sub.id) ?? null))
       }
     } else if (groups.length) {
       for (const g of groups) rows.push(makeRow(st, g, null, [], today))
@@ -72,7 +74,14 @@ function makeRow(
   otherGroups: string[],
   today: string,
   autoEndDate: string | null = null,
+  renewalDate: string | null = null,
 ): SubRow {
+  const in7 = new Date(today + 'T00:00:00Z')
+  in7.setUTCDate(in7.getUTCDate() + 7)
+  const renewalWhen: SubRow['renewalWhen'] = !sub || !renewalDate ? null
+    : renewalDate <= today ? 'due'
+    : renewalDate <= in7.toISOString().slice(0, 10) ? 'soon'
+    : 'later'
   let state: SubRow['state'] = 'none'
   if (sub) {
     if (sub.start_date > today) state = 'upcoming'
@@ -94,6 +103,8 @@ function makeRow(
     startDate: sub?.start_date ?? null,
     endDate: sub?.end_date ?? null,
     expectedEnd: sub ? (sub.end_date ?? autoEndDate ?? getNthClassDate(c?.days_of_week || [], sub.start_date, sub.total_sessions)) : null,
+    renewalDate: sub ? renewalDate : null,
+    renewalWhen,
     state,
   }
 }
