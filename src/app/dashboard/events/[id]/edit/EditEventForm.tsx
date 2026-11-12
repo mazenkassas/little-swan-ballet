@@ -6,15 +6,24 @@ import Link from 'next/link'
 import { updateEvent } from '../../actions'
 
 const TYPE_COLORS: Record<string, string> = {
-  recital:     '#d4667a',
-  tv_show:     '#4a90d9',
-  workshop:    '#8e5fd9',
-  competition: '#e8960a',
+  annual_performance: '#d4667a',
+  tv_show:            '#4a90d9',
+  event:              '#3dab7e',
+  recital:            '#d4667a',
+  workshop:           '#8e5fd9',
+  competition:        '#e8960a',
 }
 
+// Same choices as the New Event form
 const EVENT_TYPES = [
+  { value: 'annual_performance', en: 'Annual Performance', ar: 'عرض سنوي' },
+  { value: 'tv_show',            en: 'TV Show',            ar: 'عرض تلفزيوني' },
+  { value: 'event',              en: 'Event',              ar: 'فعالية' },
+]
+
+// Older types — only shown when editing an event that already has one
+const LEGACY_TYPES = [
   { value: 'recital',     en: 'Recital',     ar: 'عرض' },
-  { value: 'tv_show',     en: 'TV Show',     ar: 'تلفزيون' },
   { value: 'workshop',    en: 'Workshop',    ar: 'ورشة' },
   { value: 'competition', en: 'Competition', ar: 'مسابقة' },
 ]
@@ -66,7 +75,7 @@ export default function EditEventForm({ event, isRtl }: Props) {
 
   const [form, setFormState] = useState({
     name:             event.name     ?? '',
-    type:             event.type     ?? 'recital',
+    type:             event.type     ?? 'annual_performance',
     date:             event.date     ?? '',
     price:            event.price    != null ? String(event.price) : '',
     payment_deadline: event.payment_deadline ?? '',
@@ -154,7 +163,7 @@ export default function EditEventForm({ event, isRtl }: Props) {
             <div>
               <label style={lbl}>{L.type}<span style={req}>*</span></label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {EVENT_TYPES.map(t => {
+                {[...EVENT_TYPES, ...LEGACY_TYPES.filter(t => t.value === event.type)].map(t => {
                   const active = form.type === t.value
                   const color  = TYPE_COLORS[t.value]
                   return (

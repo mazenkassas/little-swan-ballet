@@ -12,7 +12,7 @@ export type ExamResult = 'pass' | 'fail' | 'pending'
 export type LocationStatus = 'valid' | 'invalid' | 'pending'
 export type ProductType = 'ready_stock' | 'made_to_order'
 export type OrderStatus = 'pending' | 'in_production' | 'done' | 'delivered'
-export type EventType = 'recital' | 'tv_show' | 'workshop' | 'competition'
+export type EventType = 'annual_performance' | 'tv_show' | 'event' | 'recital' | 'workshop' | 'competition'
 export type StaffRole = 'super_admin' | 'admin' | 'staff'
 export type SubscriptionStatus = 'active' | 'expired' | 'suspended'
 
