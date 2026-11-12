@@ -29,6 +29,7 @@ export default async function StudentDetailPage({
     { data: payments },
     { data: enrollments },
     { data: gradeRow },
+    { data: attendanceRows },
   ] = await Promise.all([
     supabase.from('subscriptions').select('*, plan:subscription_plans(name)').eq('student_id', id).order('created_at', { ascending: false }),
     supabase.from('payments').select('*').eq('student_id', id).order('date', { ascending: false }),
@@ -39,7 +40,31 @@ export default async function StudentDetailPage({
     student.grade_id
       ? supabase.from('grades').select('name').eq('id', student.grade_id).single()
       : Promise.resolve({ data: null }),
+    supabase.from('attendance')
+      .select('id, status, session:sessions!attendance_session_id_fkey(id, date, class:classes(name, start_time, end_time), coach:coaches(name_ar, name_en))')
+      .eq('student_id', id),
   ])
+
+  // Attendance history — newest session first
+  const attendanceHistory = ((attendanceRows as any[]) || [])
+    .filter(a => a.session?.date)
+    .sort((a, b) =>
+      b.session.date.localeCompare(a.session.date) ||
+      (b.session.class?.start_time || '').localeCompare(a.session.class?.start_time || ''))
+  const presentTotal = attendanceHistory.filter(a => a.status === 'present').length
+  const absentTotal  = attendanceHistory.filter(a => a.status === 'absent').length
+  const makeupTotal  = attendanceHistory.filter(a => a.status === 'make_up').length
+  const countedTotal = presentTotal + absentTotal
+  const attendanceRate = countedTotal > 0 ? Math.round((presentTotal / countedTotal) * 100) : null
+
+  const ATT_META: Record<string, { label: string; color: string }> = {
+    present: { label: isRtl ? '✓ حاضرة' : '✓ Present', color: '#3dab7e' },
+    absent:  { label: isRtl ? '✗ غائبة' : '✗ Absent',  color: '#e04040' },
+    make_up: { label: isRtl ? '🔄 تعويض' : '🔄 Make-up', color: '#e8960a' },
+  }
+  const dayNames = isRtl
+    ? ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+    : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
   const currentClass = enrollments?.[enrollments.length - 1]
   const gradeName    = currentClass?.class?.grade?.name ?? (gradeRow as any)?.name ?? null
@@ -356,6 +381,88 @@ export default async function StudentDetailPage({
           )}
         </div>
 
+      </div>
+
+      {/* ── Attendance History ── */}
+      <div style={{ ...card, overflow: 'hidden', marginTop: 16 }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt1)', margin: 0 }}>
+            {isRtl ? 'سجل الحضور' : 'Attendance History'}
+          </p>
+          {attendanceHistory.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#3dab7e', background: '#3dab7e14', border: '1px solid #3dab7e28', borderRadius: 20, padding: '3px 10px' }}>
+                ✓ {presentTotal} {isRtl ? 'حضور' : 'present'}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#e04040', background: '#e0404014', border: '1px solid #e0404028', borderRadius: 20, padding: '3px 10px' }}>
+                ✗ {absentTotal} {isRtl ? 'غياب' : 'absent'}
+              </span>
+              {makeupTotal > 0 && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#e8960a', background: '#e8960a14', border: '1px solid #e8960a28', borderRadius: 20, padding: '3px 10px' }}>
+                  🔄 {makeupTotal} {isRtl ? 'تعويض' : 'make-up'}
+                </span>
+              )}
+              {attendanceRate !== null && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--txt1)', background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 20, padding: '3px 10px' }}>
+                  {isRtl ? 'نسبة الحضور' : 'Attendance rate'} {attendanceRate}%
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {attendanceHistory.length > 0 ? (
+          <div style={{ overflow: 'auto', maxHeight: 440 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+              <thead>
+                <tr>
+                  <th style={{ ...th, position: 'sticky', top: 0, width: 36 }}>#</th>
+                  <th style={{ ...th, position: 'sticky', top: 0 }}>{isRtl ? 'التاريخ' : 'Date'}</th>
+                  <th style={{ ...th, position: 'sticky', top: 0 }}>{isRtl ? 'اليوم'   : 'Day'}</th>
+                  <th style={{ ...th, position: 'sticky', top: 0 }}>{isRtl ? 'الحصة'   : 'Class'}</th>
+                  <th style={{ ...th, position: 'sticky', top: 0 }}>{isRtl ? 'المدربة' : 'Coach'}</th>
+                  <th style={{ ...th, position: 'sticky', top: 0 }}>{isRtl ? 'الحضور'  : 'Attendance'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attendanceHistory.map((a: any, idx: number) => {
+                  const meta  = ATT_META[a.status] ?? { label: a.status, color: '#b89990' }
+                  const cls   = a.session.class
+                  const coach = a.session.coach
+                  const time  = cls?.start_time
+                    ? `${fmt12h(cls.start_time)}${cls.end_time ? ` – ${fmt12h(cls.end_time)}` : ''}`
+                    : ''
+                  return (
+                    <tr key={a.id}>
+                      <td style={{ ...td, fontSize: 11, color: 'var(--txt2)' }}>{attendanceHistory.length - idx}</td>
+                      <td style={{ ...td, fontSize: 12, fontWeight: 500, color: 'var(--txt1)', whiteSpace: 'nowrap' }}>{formatDate(a.session.date)}</td>
+                      <td style={{ ...td, fontSize: 11, color: 'var(--txt2)', whiteSpace: 'nowrap' }}>
+                        {dayNames[new Date(a.session.date + 'T00:00:00').getDay()]}
+                      </td>
+                      <td style={{ ...td, fontSize: 11, color: 'var(--txt2)' }}>
+                        <span style={{ color: 'var(--txt1)', fontWeight: 500 }}>{cls?.name || '—'}</span>
+                        {time && !(cls?.name || '').includes(time) && <span style={{ marginInlineStart: 6, direction: 'ltr', display: 'inline-block' }}>{time}</span>}
+                      </td>
+                      <td style={{ ...td, fontSize: 11, color: 'var(--txt2)' }}>
+                        {coach ? (isRtl ? coach.name_ar : (coach.name_en || coach.name_ar)) : '—'}
+                      </td>
+                      <td style={td}>
+                        <span style={{ display: 'inline-flex', background: meta.color + '18', color: meta.color, fontSize: 10, fontWeight: 700, padding: '2px 9px', borderRadius: 20, border: `1px solid ${meta.color}28`, whiteSpace: 'nowrap' }}>
+                          {meta.label}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--txt2)' }}>
+            <p style={{ fontSize: 22, marginBottom: 8 }}>🗓️</p>
+            <p style={{ fontSize: 12, fontWeight: 500 }}>{isRtl ? 'لا يوجد سجل حضور بعد' : 'No attendance recorded yet'}</p>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getLocale } from 'next-intl/server'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
-import { Clock, AlertTriangle, Users, Star } from 'lucide-react'
+import { Clock, AlertTriangle, Users, Star, Calendar as CalendarDays } from 'lucide-react'
 
 export default async function CoachDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id }   = await params
@@ -17,7 +17,7 @@ export default async function CoachDetailPage({ params }: { params: Promise<{ id
   const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
   const monthEnd   = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
-  const [{ data: attendance }, { data: privateSessions }] = await Promise.all([
+  const [{ data: attendance }, { data: privateSessions }, { data: coachClasses }] = await Promise.all([
     supabase
       .from('coach_attendance')
       .select('*, session:sessions(date, class:classes(name))')
@@ -32,7 +32,38 @@ export default async function CoachDetailPage({ params }: { params: Promise<{ id
       .gte('date', monthStart)
       .lte('date', monthEnd)
       .order('date', { ascending: false }),
+    // Active groups this coach is assigned to
+    supabase
+      .from('classes')
+      .select('id, name, days_of_week, start_time, end_time, max_capacity, hall:halls(name), grade:grades(name), term:terms(name), class_students(student:students(status))')
+      .eq('default_coach_id', id)
+      .eq('is_active', true)
+      .order('start_time'),
   ])
+
+  const WEEK_ORDER = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+  const DAY_AR: Record<string, string> = {
+    Saturday: 'السبت', Sunday: 'الأحد', Monday: 'الاثنين', Tuesday: 'الثلاثاء',
+    Wednesday: 'الأربعاء', Thursday: 'الخميس', Friday: 'الجمعة',
+  }
+  const firstDayIndex = (c: any) => {
+    const idxs = (c.days_of_week || []).map((d: string) => WEEK_ORDER.indexOf(d)).filter((n: number) => n >= 0)
+    return idxs.length ? Math.min(...idxs) : 99
+  }
+  // Ordered through the week, then by start time
+  const assignedClasses = ((coachClasses as any[]) || []).slice().sort((a, b) =>
+    firstDayIndex(a) - firstDayIndex(b) || (a.start_time || '').localeCompare(b.start_time || ''))
+  const classStudentCount = (c: any) =>
+    (c.class_students || []).filter((cs: any) => cs.student?.status === 'active').length
+  const assignedStudentsTotal = assignedClasses.reduce((s, c) => s + classStudentCount(c), 0)
+
+  function fmt12(time: string | null) {
+    if (!time) return ''
+    const [hh, mm] = time.split(':').map(Number)
+    const h12 = hh % 12 || 12
+    const sfx = isRtl ? (hh < 12 ? 'ص' : 'م') : (hh < 12 ? 'AM' : 'PM')
+    return mm === 0 ? `${h12} ${sfx}` : `${h12}:${String(mm).padStart(2, '0')} ${sfx}`
+  }
 
   const classAttendance = (attendance || []).filter(a => a.session_id !== null)
   const classHours      = classAttendance.reduce((s, a) => s + (a.hours_worked || 0), 0)
@@ -163,6 +194,86 @@ export default async function CoachDetailPage({ params }: { params: Promise<{ id
               <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--txt2)' }}>{k.sub}</p>
             </div>
           ))}
+        </div>
+
+        {/* ── Assigned Classes ─────────────────────────────────────────────── */}
+        <div style={{ marginBottom: 20, background: 'var(--bg-card)', border: '1px solid #4a90d922', borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{
+            padding: '14px 20px', borderBottom: '1px solid #4a90d920',
+            background: '#4a90d908',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: '#4a90d918', border: '1px solid #4a90d928', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CalendarDays size={15} color="#4a90d9" />
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#4a90d9' }}>
+                  {isRtl ? 'المجموعات المسندة' : 'Assigned Classes'}
+                </p>
+                <p style={{ margin: 0, fontSize: 11, color: 'var(--txt2)' }}>
+                  {isRtl ? 'المجموعات النشطة التي تدرّبها' : 'Active groups this coach teaches'}
+                </p>
+              </div>
+            </div>
+            {assignedClasses.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#4a90d9', background: '#4a90d918', border: '1px solid #4a90d928', borderRadius: 20, padding: '3px 12px' }}>
+                  {assignedClasses.length} {isRtl ? 'مجموعة' : (assignedClasses.length === 1 ? 'class' : 'classes')}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt2)', background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 20, padding: '3px 12px' }}>
+                  👥 {assignedStudentsTotal} {isRtl ? 'طالبة' : 'students'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {assignedClasses.length === 0 ? (
+            <p style={{ margin: 0, textAlign: 'center', padding: '32px', color: 'var(--txt2)', fontSize: 13 }}>
+              {isRtl ? 'لا توجد مجموعات مسندة لهذه المدربة' : 'No classes are assigned to this coach'}
+            </p>
+          ) : (
+            <div style={{ padding: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12 }}>
+              {assignedClasses.map((c: any) => {
+                const count    = classStudentCount(c)
+                const capacity = c.max_capacity || 0
+                const pct      = capacity > 0 ? Math.min(100, Math.round((count / capacity) * 100)) : 0
+                const isFull   = capacity > 0 && count >= capacity
+                const title    = [c.grade?.name, c.term?.name].filter(Boolean).join(' · ') || c.name
+                const days     = (c.days_of_week || []).map((d: string) => (isRtl ? (DAY_AR[d] || d) : d))
+                const time     = c.start_time ? `${fmt12(c.start_time)}${c.end_time ? ` – ${fmt12(c.end_time)}` : ''}` : ''
+                return (
+                  <Link key={c.id} href={`/dashboard/classes/${c.id}`} style={{
+                    display: 'block', textDecoration: 'none',
+                    background: 'var(--bg-page)', border: '1px solid var(--border)',
+                    borderInlineStart: '3px solid #4a90d9',
+                    borderRadius: 12, padding: '12px 14px',
+                  }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, color: 'var(--txt1)' }}>{title}</p>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>
+                      {days.map((d: string) => (
+                        <span key={d} style={{ fontSize: 10, fontWeight: 700, color: '#4a90d9', background: '#4a90d918', border: '1px solid #4a90d928', borderRadius: 20, padding: '2px 8px' }}>
+                          {d}
+                        </span>
+                      ))}
+                    </div>
+                    <p style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--txt2)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      {time && <span style={{ direction: 'ltr' }}>🕐 {time}</span>}
+                      {c.hall?.name && <span>📍 {c.hall.name}</span>}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: isFull ? '#e8960a' : '#4a90d9', borderRadius: 3 }} />
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: isFull ? '#e8960a' : 'var(--txt1)', whiteSpace: 'nowrap' }}>
+                        👥 {count}{capacity > 0 ? ` / ${capacity}` : ''}
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* ── Group Classes Log ────────────────────────────────────────────── */}

@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { ChevronDown } from 'lucide-react'
 import {
   computeSubscriptionStartDate,
   computeDeduction,
+  computeRefund,
   sessionCountsForStudent,
   isStudentOnHoliday,
   getActiveSubForClass,
@@ -34,23 +36,35 @@ export default function DailySessionCard({
 
   const [attendance,      setAttendance]      = useState<Record<string, AttStatus>>(initial)
   const [notes,           setNotes]           = useState<Record<string, string>>({})
-  const [saving,          setSaving]          = useState(false)
-  const [saved,           setSaved]           = useState(false)
-  const [showReminder,    setShowReminder]    = useState(false)
+  const [pendingSaves,    setPendingSaves]    = useState(0)
+  const [savedOnce,       setSavedOnce]       = useState(false)
+  const [saveError,       setSaveError]       = useState(false)
+  // What is actually stored in the DB, per student — source of truth for auto-save
+  const savedRef = useRef<Record<string, { id: string; status: AttStatus }>>(
+    Object.fromEntries(
+      existingAttendance
+        .filter((a: any) => a.status !== 'make_up')
+        .map((a: any) => [a.student_id, { id: a.id, status: a.status }]),
+    ),
+  )
+  const saveQueueRef      = useRef<Record<string, Promise<void>>>({})
+  const remainingRef      = useRef<Record<string, number>>({})
+  const sessionStatusRef  = useRef<string>(session.status)
+  const [remainingOverride, setRemainingOverride] = useState<Record<string, number>>({})
+  const [showReminder,   setShowReminder]    = useState(false)
   const [confirmPayFor,   setConfirmPayFor]   = useState<any>(null)
   const [paying,          setPaying]          = useState(false)
   const [paidStudentIds,  setPaidStudentIds]  = useState<Set<string>>(new Set())
   const [payMethod,       setPayMethod]       = useState<'cash' | 'instapay'>('cash')
   const [selectedCoachId, setSelectedCoachId] = useState<string>(session.coach_id || '')
-  const [saveStatus,       setSaveStatus]       = useState<{ allowed: boolean; reason: string }>({ allowed: false, reason: '' })
-  const [attendanceOpen,   setAttendanceOpen]   = useState(true)
+  const [isLive,           setIsLive]           = useState(false)
+  // True once the class has begun (or its day has passed) — unmarked students are then highlighted
+  const [hasStarted,       setHasStarted]       = useState(false)
   const [makeups,             setMakeups]             = useState<any[]>(makeupStudents || [])
   const [showMakeupAdd,       setShowMakeupAdd]       = useState(false)
   const [makeupSearch,        setMakeupSearch]        = useState('')
-  const [makeupSearchOpen,    setMakeupSearchOpen]    = useState(false)
   const [selectedMakeupStud,  setSelectedMakeupStud]  = useState<any>(null)
-  const [makeupOriginalClass, setMakeupOriginalClass] = useState('')
-  const [fetchingMakeupClass, setFetchingMakeupClass] = useState(false)
+  const [makeupError,         setMakeupError]         = useState(false)
   const [addingMakeup,        setAddingMakeup]        = useState(false)
   const [open, setOpen] = useState(session.status !== 'completed')
 
@@ -67,44 +81,35 @@ export default function DailySessionCard({
       setShowReminder(new Date() >= reminderStart)
     }
 
-    function checkSaveStatus() {
+    // Highlights the card while the class is running (attendance itself is editable any time)
+    function checkLive() {
       const today = new Date().toISOString().split('T')[0]
-      if (session.date !== today) {
-        setSaveStatus({ allowed: false, reason: locale === 'ar' ? 'يمكن تسجيل الحضور فقط في يوم الحصة' : "Attendance can only be saved on the session's day" })
-        return
-      }
       const startTime = session.class?.start_time
       const endTime   = session.class?.end_time
-      if (!startTime || !endTime) { setSaveStatus({ allowed: true, reason: '' }); return }
+      if (session.date !== today || !startTime || !endTime) { setIsLive(false); return }
       const now = new Date()
       const [sh, sm] = startTime.split(':').map(Number)
       const [eh, em] = endTime.split(':').map(Number)
       const classStart = new Date(); classStart.setHours(sh, sm, 0, 0)
       const classEnd   = new Date(); classEnd.setHours(eh, em, 0, 0)
-      const graceEnd   = new Date(classEnd.getTime() + 30 * 60 * 1000)
-      if (now < classStart) {
-        setSaveStatus({ allowed: false, reason: locale === 'ar' ? `الحصة تبدأ الساعة ${fmt12(startTime)}` : `Class starts at ${fmt12(startTime)}` })
-      } else if (now > graceEnd) {
-        setSaveStatus({ allowed: false, reason: locale === 'ar' ? 'انتهى وقت تسجيل الحضور' : 'Attendance window has closed' })
-      } else {
-        setSaveStatus({ allowed: true, reason: '' })
-      }
+      setIsLive(now >= classStart && now <= new Date(classEnd.getTime() + 30 * 60 * 1000))
     }
 
-    function checkAttendanceOpen() {
+    function checkStarted() {
       const today = new Date().toISOString().split('T')[0]
-      if (session.date !== today) { setAttendanceOpen(false); return }
+      if (session.date < today) { setHasStarted(true); return }
+      if (session.date > today) { setHasStarted(false); return }
       const startTime = session.class?.start_time
-      if (!startTime) { setAttendanceOpen(true); return }
+      if (!startTime) { setHasStarted(true); return }
       const [sh, sm] = startTime.split(':').map(Number)
       const classStart = new Date(); classStart.setHours(sh, sm, 0, 0)
-      setAttendanceOpen(new Date() >= classStart)
+      setHasStarted(new Date() >= classStart)
     }
 
     checkReminder()
-    checkSaveStatus()
-    checkAttendanceOpen()
-    const id = setInterval(() => { checkReminder(); checkSaveStatus(); checkAttendanceOpen() }, 60_000)
+    checkLive()
+    checkStarted()
+    const id = setInterval(() => { checkReminder(); checkLive(); checkStarted() }, 60_000)
     return () => clearInterval(id)
   }, [session, locale])
 
@@ -116,7 +121,11 @@ export default function DailySessionCard({
   }
 
   function getActiveSub(student: any) {
-    return getActiveSubForClass(student.subscriptions, session.class_id)
+    const sub = getActiveSubForClass(student?.subscriptions, session.class_id)
+    if (sub && remainingOverride[sub.id] !== undefined) {
+      return { ...sub, remaining_sessions: remainingOverride[sub.id] }
+    }
+    return sub
   }
 
   const enrolledIds = new Set(students.map((s: any) => s.id))
@@ -124,46 +133,58 @@ export default function DailySessionCard({
   const baseMakeupStudents = (allStudents || []).filter(
     (s: any) => !enrolledIds.has(s.id) && !makeupIds.has(s.id)
   )
-  const filteredMakeupStudents = makeupSearch
+  const makeupQuery = makeupSearch.trim()
+  const filteredMakeupStudents = makeupQuery
     ? baseMakeupStudents.filter((s: any) => {
-        const q = makeupSearch.toLowerCase()
-        return (s.name_ar || '').includes(makeupSearch) || (s.name_en || '').toLowerCase().includes(q)
+        const q = makeupQuery.toLowerCase()
+        return (s.name_ar || '').includes(makeupQuery) || (s.name_en || '').toLowerCase().includes(q)
       })
     : baseMakeupStudents
 
-  async function selectMakeupStudent(student: any) {
-    setSelectedMakeupStud(student)
-    setMakeupSearch(locale === 'en' && student.name_en ? student.name_en : student.name_ar)
-    setMakeupSearchOpen(false)
-    setFetchingMakeupClass(true)
-    const { data } = await supabase
-      .from('class_students')
-      .select('class:classes(id, name)')
-      .eq('student_id', student.id)
-      .limit(1)
-      .maybeSingle()
-    setMakeupOriginalClass((data as any)?.class?.name || '')
-    setFetchingMakeupClass(false)
+  // The group a visiting student normally belongs to (shown in the makeup picker)
+  function homeClassName(student: any): string {
+    const classes = (student?.class_students || []).map((cs: any) => cs.class).filter(Boolean)
+    const home = classes.find((c: any) => c.is_active !== false && c.id !== session.class_id) || classes[0]
+    return home?.name || ''
+  }
+
+  function openMakeupPicker() {
+    setMakeupSearch('')
+    setSelectedMakeupStud(null)
+    setMakeupError(false)
+    setShowMakeupAdd(true)
+  }
+
+  function closeMakeupPicker() {
+    if (addingMakeup) return
+    setShowMakeupAdd(false)
+    setMakeupSearch('')
+    setSelectedMakeupStud(null)
+    setMakeupError(false)
   }
 
   async function addMakeup() {
-    if (!selectedMakeupStud) return
+    if (!selectedMakeupStud || addingMakeup) return
     setAddingMakeup(true)
-    const { data: att } = await supabase.from('attendance').insert({
+    setMakeupError(false)
+    const { data: att, error } = await supabase.from('attendance').insert({
       session_id: session.id, student_id: selectedMakeupStud.id, status: 'make_up',
     }).select('id').single()
-    if (att) {
-      setMakeups(prev => [...prev, {
-        id: selectedMakeupStud.id,
-        name_ar: selectedMakeupStud.name_ar,
-        name_en: selectedMakeupStud.name_en,
-        attendanceId: att.id,
-        originalClass: makeupOriginalClass ? { name: makeupOriginalClass } : null,
-      }])
+    if (error || !att) {
+      setMakeupError(true)
+      setAddingMakeup(false)
+      return
     }
+    const home = homeClassName(selectedMakeupStud)
+    setMakeups(prev => [...prev, {
+      id: selectedMakeupStud.id,
+      name_ar: selectedMakeupStud.name_ar,
+      name_en: selectedMakeupStud.name_en,
+      attendanceId: att.id,
+      originalClass: home ? { name: home } : null,
+    }])
     setMakeupSearch('')
     setSelectedMakeupStud(null)
-    setMakeupOriginalClass('')
     setShowMakeupAdd(false)
     setAddingMakeup(false)
   }
@@ -178,44 +199,98 @@ export default function DailySessionCard({
     await supabase.from('sessions').update({ coach_id: coachId || null }).eq('id', session.id)
   }
 
-  async function save() {
-    setSaving(true)
-    const entries = Object.entries(attendance).filter(([, v]) => v !== null)
-    for (const [studentId, status] of entries) {
-      const existing = existingAttendance.find((a: any) => a.student_id === studentId)
-      if (existing) {
-        await supabase.from('attendance').update({ status }).eq('id', existing.id)
-      } else {
-        await supabase.from('attendance').insert({ session_id: session.id, student_id: studentId, status })
+  // Writes one student's attendance to the DB and keeps the subscription
+  // session count in sync (deduct on first mark, give back when cleared).
+  async function persistAttendance(studentId: string, status: AttStatus) {
+    const prev       = savedRef.current[studentId]
+    const prevStatus = prev?.status ?? null
+    if (prevStatus === status) return
+
+    if (status === null) {
+      if (prev) {
+        const { error } = await supabase.from('attendance').delete().eq('id', prev.id)
+        if (error) throw error
       }
-      const student = students.find((s: any) => s.id === studentId)
-      const sub = getActiveSub(student)
-      const prevStatus = initial[studentId]
+      delete savedRef.current[studentId]
+    } else if (prev) {
+      const { error } = await supabase.from('attendance').update({ status }).eq('id', prev.id)
+      if (error) throw error
+      savedRef.current[studentId] = { id: prev.id, status }
+    } else {
+      const { data, error } = await supabase.from('attendance')
+        .insert({ session_id: session.id, student_id: studentId, status })
+        .select('id').single()
+      if (error || !data) throw error ?? new Error('attendance insert failed')
+      savedRef.current[studentId] = { id: data.id, status }
+    }
+
+    const student = students.find((s: any) => s.id === studentId)
+    const sub = getActiveSubForClass(student?.subscriptions, session.class_id)
+    if (sub) {
+      const remaining = remainingRef.current[sub.id] ?? sub.remaining_sessions ?? 0
+      const total     = sub.total_sessions ?? 4
       const counts = sessionCountsForStudent({
         holiday: activeHoliday,
         studentId,
-        subStartDate: sub?.start_date,
+        subStartDate: sub.start_date,
         sessionDate: session.date,
       })
-      const { shouldDeduct, newRemaining, nextCycleStart } = computeDeduction({
-        status,
-        prevStatus,
-        remainingSessions: sub?.remaining_sessions ?? 0,
-        totalSessions: sub?.total_sessions ?? 4,
+      const deduction = computeDeduction({
+        status, prevStatus,
+        remainingSessions: remaining,
+        totalSessions: total,
         sessionCounts: counts,
         classDays: session.class?.days_of_week || [],
         sessionDate: session.date,
       })
-      if (shouldDeduct && sub) {
-        const updates: Record<string, any> = { remaining_sessions: newRemaining }
-        if (nextCycleStart) updates.next_cycle_start = nextCycleStart
-        await supabase.from('subscriptions').update(updates).eq('id', sub.id)
+      const refund = computeRefund({
+        status, prevStatus,
+        remainingSessions: remaining,
+        totalSessions: total,
+        sessionCounts: counts,
+      })
+      let updates: Record<string, any> | null = null
+      if (deduction.shouldDeduct) {
+        updates = { remaining_sessions: deduction.newRemaining }
+        if (deduction.nextCycleStart) updates.next_cycle_start = deduction.nextCycleStart
+      } else if (refund.shouldRefund) {
+        updates = { remaining_sessions: refund.newRemaining }
+        if (remaining === 0) updates.next_cycle_start = null
+      }
+      if (updates) {
+        const { error } = await supabase.from('subscriptions').update(updates).eq('id', sub.id)
+        if (error) throw error
+        const newRemaining: number = updates.remaining_sessions
+        remainingRef.current[sub.id] = newRemaining
+        setRemainingOverride(o => ({ ...o, [sub.id]: newRemaining }))
       }
     }
-    await supabase.from('sessions').update({ status: 'completed' }).eq('id', session.id)
-    setSaving(false)
-    setSaved(true)
-    router.refresh()
+
+    // Session is "completed" as soon as any attendance is recorded
+    const nextSessionStatus = Object.keys(savedRef.current).length > 0 ? 'completed' : 'scheduled'
+    if (sessionStatusRef.current !== nextSessionStatus) {
+      const { error } = await supabase.from('sessions').update({ status: nextSessionStatus }).eq('id', session.id)
+      if (error) throw error
+      sessionStatusRef.current = nextSessionStatus
+    }
+  }
+
+  // Click on the present / absent toggle saves immediately.
+  // Clicking the already-selected one clears the mark.
+  function markAttendance(studentId: string, val: AttStatus) {
+    const next: AttStatus = attendance[studentId] === val ? null : val
+    setAttendance(a => ({ ...a, [studentId]: next }))
+    setSaveError(false)
+    setPendingSaves(n => n + 1)
+    // Saves for the same student run one after another so quick clicks can't race
+    saveQueueRef.current[studentId] = (saveQueueRef.current[studentId] ?? Promise.resolve())
+      .then(() => persistAttendance(studentId, next))
+      .then(() => { setSavedOnce(true); router.refresh() })
+      .catch(() => {
+        setAttendance(a => ({ ...a, [studentId]: savedRef.current[studentId]?.status ?? null }))
+        setSaveError(true)
+      })
+      .finally(() => setPendingSaves(n => n - 1))
   }
 
   function getSubscriptionStartDate(student: any): string {
@@ -255,6 +330,12 @@ export default function DailySessionCard({
   const absentCount       = Object.values(attendance).filter(v => v === 'absent').length
   const markedCount       = Object.values(attendance).filter(v => v !== null).length
 
+  // Unmarked students are highlighted once the class has started or marking has begun
+  const highlightUnmarked = hasStarted || markedCount > 0
+  const notMarkedCount    = highlightUnmarked
+    ? visibleStudents.filter((s: any) => (attendance[s.id] ?? null) === null && !isStudentOnHoliday(activeHoliday, s.id)).length
+    : 0
+
   const payRequiredCount  = visibleStudents.filter((s: any) => {
     if (paidStudentIds.has(s.id)) return false
     const sub = getActiveSub(s)
@@ -290,9 +371,9 @@ export default function DailySessionCard({
   return (
     <div id={`session-${session.id}`} style={{
       background: 'var(--bg-card)',
-      border: `1px solid ${saveStatus.allowed ? '#d4667a40' : 'var(--border)'}`,
+      border: `1px solid ${isLive ? '#d4667a40' : 'var(--border)'}`,
       borderRadius: 14,
-      boxShadow: saveStatus.allowed ? '0 4px 20px rgba(212,102,122,0.10)' : '0 1px 3px rgba(0,0,0,0.06)',
+      boxShadow: isLive ? '0 4px 20px rgba(212,102,122,0.10)' : '0 1px 3px rgba(0,0,0,0.06)',
       overflow: 'hidden',
       marginBottom: 12,
     }}>
@@ -302,7 +383,7 @@ export default function DailySessionCard({
         onClick={() => setOpen(o => !o)}
         style={{
           width: '100%', border: 'none', cursor: 'pointer',
-          background: saveStatus.allowed ? '#fdf0f2' : 'transparent',
+          background: isLive ? '#d4667a14' : 'transparent',
           padding: '12px 18px',
           display: 'flex', alignItems: 'center', gap: 16,
           textAlign: isRtl ? 'right' : 'left',
@@ -366,13 +447,31 @@ export default function DailySessionCard({
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
             {markedCount > 0
-              ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--txt1)' }}>{markedCount}/{visibleStudents.length}</span>
+              ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--txt1)' }}>{presentCount}/{visibleStudents.length}</span>
               : <span style={{ fontSize: 11, color: 'var(--txt2)' }}>{locale === 'ar' ? 'لم يبدأ' : 'Not started'}</span>}
             <div style={{ width: 48, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
-              <div style={{ width: `${visibleStudents.length > 0 ? (markedCount / visibleStudents.length) * 100 : 0}%`, height: '100%', background: '#d4667a', transition: 'width 0.3s' }} />
+              <div style={{ width: `${visibleStudents.length > 0 ? (presentCount / visibleStudents.length) * 100 : 0}%`, height: '100%', background: '#d4667a', transition: 'width 0.3s' }} />
             </div>
           </div>
         </div>
+
+        {/* Add Student — opens the new-student form pre-filled with this class */}
+        {session.class_id && (
+          <span
+            role="link"
+            tabIndex={0}
+            onClick={e => { e.stopPropagation(); router.push(`/dashboard/students/new?class_id=${session.class_id}`) }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault(); e.stopPropagation()
+                router.push(`/dashboard/students/new?class_id=${session.class_id}`)
+              }
+            }}
+            style={{ flexShrink: 0, background: '#d4667a', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer' }}
+          >
+            + {locale === 'ar' ? 'إضافة طالبة' : 'Add Student'}
+          </span>
+        )}
 
         <ChevronDown
           size={15}
@@ -449,8 +548,10 @@ export default function DailySessionCard({
                   const statusClr = isLocallyPaid ? '#3dab7e' : isPending ? '#4a90d9' : isPay ? '#e04040' : noSub ? '#888' : '#3dab7e'
 
                   const studentOnHoliday = isStudentOnHoliday(activeHoliday, student.id)
-                  const rowAccent = studentOnHoliday ? '#3dab7e' : status === 'present' ? '#3dab7e' : status === 'absent' ? '#e04040' : 'transparent'
-                  const rowBg = studentOnHoliday ? '#3dab7e05' : isLocallyPaid ? '#3dab7e06' : isPay ? '#e8960a08' : status === 'absent' ? '#e0404005' : status === 'present' ? '#3dab7e05' : i % 2 === 1 ? 'var(--bg-page)' : 'transparent'
+                  // Attendance still missing for this student (class has started, or others are already marked)
+                  const notMarked = status === null && !studentOnHoliday && highlightUnmarked
+                  const rowAccent = studentOnHoliday ? '#3dab7e' : status === 'present' ? '#3dab7e' : status === 'absent' ? '#e04040' : notMarked ? '#e8960a' : 'transparent'
+                  const rowBg = studentOnHoliday ? '#3dab7e05' : notMarked ? '#e8960a22' : isLocallyPaid ? '#3dab7e06' : isPay ? '#e8960a08' : status === 'absent' ? '#e0404005' : status === 'present' ? '#3dab7e05' : i % 2 === 1 ? 'var(--bg-page)' : 'transparent'
                   const mf = student.monthly_fees || 0
                   const df = student.discounted_monthly_fees
                   const hasDiscount = df && df > 0 && df < mf
@@ -461,14 +562,19 @@ export default function DailySessionCard({
                       {/* Student */}
                       <td style={{ ...td(true), paddingInlineStart: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                          <span style={{ width: 20, flexShrink: 0, fontSize: 11, fontWeight: 700, color: 'var(--txt2)', textAlign: 'center', direction: 'ltr' }}>{i + 1}.</span>
                           <div style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: '#d4667a15', border: '1px solid #d4667a25', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#d4667a' }}>
                             {initial}
                           </div>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--txt1)' }}>
+                              <Link
+                                href={`/dashboard/students/${student.id}`}
+                                title={locale === 'ar' ? 'عرض ملف الطالبة' : 'View student'}
+                                style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--txt1)', textDecoration: 'none', cursor: 'pointer' }}
+                              >
                                 {locale === 'en' && student.name_en ? student.name_en : student.name_ar}
-                              </p>
+                              </Link>
                               {activeHoliday && activeHoliday.student_ids?.length && activeHoliday.student_ids.includes(student.id) && (
                                 <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, background: '#3dab7e18', color: '#3dab7e', border: '1px solid #3dab7e30', whiteSpace: 'nowrap', lineHeight: 1.6 }}>
                                   🎌 {locale === 'ar' ? 'إجازة' : 'Holiday'}
@@ -547,14 +653,14 @@ export default function DailySessionCard({
                               { val: 'present' as AttStatus, label: '✓', color: '#3dab7e' },
                               { val: 'absent'  as AttStatus, label: '✗', color: '#e04040' },
                             ]).map(btn => {
-                              const btnDisabled = isPay || !attendanceOpen
+                              // Payment-required students can't get a new mark, but an existing one stays editable
+                              const btnDisabled = isPay && status === null
                               const sel = status === btn.val
                               return (
                                 <button
                                   key={btn.val!}
-                                  onClick={() => setAttendance(a => ({ ...a, [student.id]: a[student.id] === btn.val ? null : btn.val }))}
+                                  onClick={() => markAttendance(student.id, btn.val)}
                                   disabled={btnDisabled}
-                                  title={!attendanceOpen && session.class?.start_time ? (locale === 'ar' ? `تبدأ الحصة ${fmt12(session.class.start_time)}` : `Class starts at ${fmt12(session.class.start_time)}`) : undefined}
                                   style={{
                                     background: sel ? btn.color : 'transparent',
                                     color: sel ? '#fff' : 'var(--txt2)',
@@ -605,12 +711,13 @@ export default function DailySessionCard({
                     <tr key={m.attendanceId} style={{ background: '#fff8e640', borderTop: '1px dashed #e8960a40' }}>
                       <td style={{ ...td(true), paddingInlineStart: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ width: 20, flexShrink: 0 }} />
                           <div style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: '#e8960a15', border: '1px solid #e8960a25', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#e8960a' }}>
                             {mkInitial}
                           </div>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--txt1)' }}>{mkName}</p>
+                              <Link href={`/dashboard/students/${m.id}`} style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--txt1)', textDecoration: 'none' }}>{mkName}</Link>
                               <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20, background: '#e8960a18', color: '#e8960a', border: '1px solid #e8960a30', whiteSpace: 'nowrap' }}>
                                 🔄 {locale === 'ar' ? 'تعويض' : 'Make-up'}
                               </span>
@@ -652,65 +759,162 @@ export default function DailySessionCard({
               {presentCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#3dab7e', background: '#3dab7e14', border: '1px solid #3dab7e28', borderRadius: 20, padding: '3px 10px' }}>✓ {presentCount}</span>}
               {absentCount > 0  && <span style={{ fontSize: 11, fontWeight: 700, color: '#e04040', background: '#e0404014', border: '1px solid #e0404028', borderRadius: 20, padding: '3px 10px' }}>✗ {absentCount}</span>}
               {payRequiredCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#e8960a', background: '#e8960a14', border: '1px solid #e8960a28', borderRadius: 20, padding: '3px 10px' }}>💳 {payRequiredCount}</span>}
+              {notMarkedCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#e8960a', background: '#e8960a14', border: '1px solid #e8960a28', borderRadius: 20, padding: '3px 10px' }}>⚠ {notMarkedCount} {locale === 'ar' ? 'بدون تسجيل' : 'not marked'}</span>}
               <span style={{ fontSize: 11, color: 'var(--txt2)' }}>{markedCount}/{visibleStudents.length} {isRtl ? 'مسجّل' : 'marked'}</span>
 
-              {!showMakeupAdd ? (
-                <button
-                  onClick={() => { setShowMakeupAdd(true); setMakeupSearch(''); setSelectedMakeupStud(null); setMakeupOriginalClass('') }}
-                  disabled={!attendanceOpen}
-                  title={!attendanceOpen && session.class?.start_time ? (locale === 'ar' ? `تبدأ الحصة ${fmt12(session.class.start_time)}` : `Class starts at ${fmt12(session.class.start_time)}`) : undefined}
-                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 12px', fontSize: 11, fontWeight: 600, cursor: attendanceOpen ? 'pointer' : 'not-allowed', color: 'var(--txt2)', opacity: attendanceOpen ? 1 : 0.5, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                >
-                  + {locale === 'ar' ? 'إضافة تعويض' : 'Add makeup'}
-                </button>
-              ) : (
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff8e6', border: '1px solid #e8960a40', borderRadius: 8, padding: '5px 8px' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#e8960a' }}>🔄</span>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="text" value={makeupSearch}
-                      onChange={e => { setMakeupSearch(e.target.value); setSelectedMakeupStud(null); setMakeupOriginalClass('') }}
-                      onFocus={() => setMakeupSearchOpen(true)}
-                      onBlur={() => setTimeout(() => setMakeupSearchOpen(false), 150)}
-                      placeholder={locale === 'ar' ? 'ابحثي...' : 'Search student...'}
-                      style={{ background: '#fff', border: '1px solid #e8960a50', borderRadius: 6, padding: '4px 8px', fontSize: 11, color: 'var(--txt1)', fontFamily: 'inherit', outline: 'none', minWidth: 150 }}
-                    />
-                    {makeupSearchOpen && filteredMakeupStudents.length > 0 && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200, background: 'var(--bg-popup)', border: '1px solid var(--border)', borderRadius: 8, marginTop: 2, maxHeight: 180, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
-                        {filteredMakeupStudents.map((s: any) => (
-                          <div key={s.id} onMouseDown={() => selectMakeupStudent(s)} style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 12, color: 'var(--txt1)', borderBottom: '1px solid var(--border)' }}>
-                            {locale === 'en' && s.name_en ? s.name_en : s.name_ar}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={addMakeup} disabled={!selectedMakeupStud || addingMakeup}
-                    style={{ background: '#e8960a', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: !selectedMakeupStud || addingMakeup ? 'not-allowed' : 'pointer', opacity: !selectedMakeupStud || addingMakeup ? 0.6 : 1, fontFamily: 'inherit' }}
-                  >
-                    {addingMakeup ? '…' : (locale === 'ar' ? 'إضافة' : 'Add')}
-                  </button>
-                  <button
-                    onClick={() => { setShowMakeupAdd(false); setMakeupSearch(''); setSelectedMakeupStud(null); setMakeupOriginalClass('') }}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--txt2)', cursor: 'pointer', fontSize: 16, padding: '2px 4px', fontFamily: 'inherit' }}
-                  >×</button>
-                </div>
-              )}
+              <button
+                onClick={openMakeupPicker}
+                style={{ background: '#e8960a14', border: '1px solid #e8960a40', borderRadius: 7, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: '#e8960a', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+              >
+                🔄 {locale === 'ar' ? 'إضافة تعويض' : 'Add makeup'}
+              </button>
             </div>
 
-            {/* Right: save button */}
-            <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: isRtl ? 'flex-start' : 'flex-end', gap: 4 }}>
+            {/* Right: auto-save status */}
+            <span style={{ fontSize: 11, fontWeight: 600, color: saveError ? '#e04040' : pendingSaves > 0 ? 'var(--txt2)' : '#3dab7e' }}>
+              {saveError
+                ? (locale === 'ar' ? '⚠ تعذّر الحفظ — حاولي مرة أخرى' : '⚠ Could not save — please try again')
+                : pendingSaves > 0 ? t('saving')
+                : savedOnce ? t('saved')
+                : ''}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Add makeup modal */}
+      {showMakeupAdd && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) closeMakeupPicker() }}
+          onKeyDown={e => { if (e.key === 'Escape') closeMakeupPicker() }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <div style={{
+            background: 'var(--bg-popup)', border: '1px solid var(--border)',
+            borderRadius: 16, width: '100%', maxWidth: 440, maxHeight: '85vh',
+            display: 'flex', flexDirection: 'column',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+            direction: isRtl ? 'rtl' : 'ltr', textAlign: isRtl ? 'right' : 'left',
+          }}>
+            {/* Title */}
+            <div style={{ padding: '18px 22px 14px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, background: '#e8960a18', border: '1px solid #e8960a30', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                🔄
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: '0 0 3px', fontSize: 16, fontWeight: 700, color: 'var(--txt1)' }}>
+                  {locale === 'ar' ? 'إضافة طالبة تعويض' : 'Add Makeup Student'}
+                </p>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--txt2)' }}>
+                  {locale === 'ar' ? 'إلى' : 'To'} {displayName}
+                  {session.class?.start_time ? ` · ${fmt12(session.class.start_time, locale === 'ar')}` : ''}
+                </p>
+              </div>
               <button
-                onClick={save}
-                disabled={saving || saved || markedCount === 0 || !saveStatus.allowed}
-                style={{ background: saved ? '#3dab7e' : '#d4667a', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 28px', fontSize: 13, fontWeight: 700, cursor: saving || saved || markedCount === 0 || !saveStatus.allowed ? 'default' : 'pointer', opacity: markedCount === 0 || !saveStatus.allowed ? 0.4 : 1, fontFamily: 'inherit', transition: 'opacity 0.15s', boxShadow: saved || markedCount === 0 || !saveStatus.allowed ? 'none' : '0 2px 8px #d4667a40' }}
+                onClick={closeMakeupPicker}
+                aria-label={locale === 'ar' ? 'إغلاق' : 'Close'}
+                style={{ background: 'transparent', border: 'none', color: 'var(--txt2)', cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: '2px 6px', fontFamily: 'inherit' }}
+              >×</button>
+            </div>
+
+            {/* Search */}
+            <div style={{ padding: '0 22px 10px' }}>
+              <input
+                type="text" autoFocus value={makeupSearch}
+                onChange={e => { setMakeupSearch(e.target.value); setSelectedMakeupStud(null) }}
+                onKeyDown={e => {
+                  if (e.key !== 'Enter') return
+                  if (selectedMakeupStud) addMakeup()
+                  else if (filteredMakeupStudents.length === 1) setSelectedMakeupStud(filteredMakeupStudents[0])
+                }}
+                placeholder={locale === 'ar' ? '🔍 ابحثي باسم الطالبة…' : '🔍 Search by student name…'}
+                style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'var(--txt1)', fontFamily: 'inherit', outline: 'none', direction: isRtl ? 'rtl' : 'ltr' }}
+              />
+              <p style={{ margin: '6px 2px 0', fontSize: 10, color: 'var(--txt2)' }}>
+                {filteredMakeupStudents.length} {locale === 'ar' ? 'طالبة' : (filteredMakeupStudents.length === 1 ? 'student' : 'students')}
+              </p>
+            </div>
+
+            {/* Student list */}
+            <div style={{ flex: 1, minHeight: 120, overflowY: 'auto', margin: '0 22px', border: '1px solid var(--border)', borderRadius: 10 }}>
+              {filteredMakeupStudents.length === 0 ? (
+                <p style={{ margin: 0, padding: '28px 12px', textAlign: 'center', fontSize: 12, color: 'var(--txt2)' }}>
+                  {locale === 'ar' ? 'لا توجد طالبات مطابقة' : 'No matching students'}
+                </p>
+              ) : filteredMakeupStudents.map((s: any) => {
+                const sName    = locale === 'en' && s.name_en ? s.name_en : s.name_ar
+                const home     = homeClassName(s)
+                const selected = selectedMakeupStud?.id === s.id
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelectedMakeupStud(selected ? null : s)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 12px', cursor: 'pointer', fontFamily: 'inherit',
+                      background: selected ? '#e8960a18' : 'transparent',
+                      border: 'none', borderBottom: '1px solid var(--border)',
+                      textAlign: isRtl ? 'right' : 'left',
+                    }}
+                  >
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, background: selected ? '#e8960a' : '#e8960a15', border: '1px solid #e8960a30', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: selected ? '#fff' : '#e8960a' }}>
+                      {selected ? '✓' : (sName || '').charAt(0)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--txt1)' }}>{sName}</p>
+                      <p style={{ margin: '1px 0 0', fontSize: 10, color: 'var(--txt2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {home || (locale === 'ar' ? 'بدون مجموعة' : 'No group')}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Error */}
+            {makeupError && (
+              <p style={{ margin: '10px 22px 0', fontSize: 12, fontWeight: 600, color: '#e04040' }}>
+                {locale === 'ar' ? '⚠ تعذّرت الإضافة — حاولي مرة أخرى' : '⚠ Could not add the student — please try again'}
+              </p>
+            )}
+
+            {/* Actions */}
+            <div style={{ padding: '14px 22px 18px', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={addMakeup}
+                disabled={!selectedMakeupStud || addingMakeup}
+                style={{
+                  background: '#e8960a', border: 'none', borderRadius: 10,
+                  padding: '9px 20px', color: '#fff', fontSize: 13, fontWeight: 700,
+                  cursor: !selectedMakeupStud || addingMakeup ? 'not-allowed' : 'pointer',
+                  opacity: !selectedMakeupStud || addingMakeup ? 0.5 : 1,
+                  fontFamily: 'inherit',
+                }}
               >
-                {saving ? t('saving') : saved ? t('saved') : t('saveAttendance')}
+                {addingMakeup
+                  ? '…'
+                  : selectedMakeupStud
+                  ? (locale === 'ar'
+                      ? `إضافة ${selectedMakeupStud.name_ar || selectedMakeupStud.name_en}`
+                      : `Add ${selectedMakeupStud.name_en || selectedMakeupStud.name_ar}`)
+                  : (locale === 'ar' ? 'اختاري طالبة' : 'Select a student')}
               </button>
-              {!saved && !saveStatus.allowed && saveStatus.reason && (
-                <p style={{ margin: 0, fontSize: 10, color: '#e8960a', fontWeight: 500 }}>⚠ {saveStatus.reason}</p>
-              )}
+              <button
+                onClick={closeMakeupPicker}
+                disabled={addingMakeup}
+                style={{
+                  background: 'var(--bg-page)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: '9px 18px', color: 'var(--txt2)',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                {locale === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
             </div>
           </div>
         </div>

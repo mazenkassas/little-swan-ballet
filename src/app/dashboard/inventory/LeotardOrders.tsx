@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Search, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LEOTARD_ORDER_COLUMNS } from './leotardColumns'
 
@@ -101,7 +102,14 @@ const LABELS = {
     emptySearch: 'No results match your search.',
     delRow: 'Delete row', delTitle: 'Delete this row?', delBody: 'This cannot be undone.',
     del: 'Delete', cancel: 'Cancel', unnamed: '(no name)',
-    saveFailed: 'The last change could not be saved. Check your connection and try again.',
+    exportCsv: 'Export', clear: 'Clear filters', filterHint: 'Click to show only these rows',
+    all: 'All', fPay: 'Payment', fSize: 'Size', fTailor: 'From tailor', fDelivery: 'To customer',
+    showing: (n: number, of: number) => `Showing ${n} of ${of}`,
+    addMonth: '+ Add month', addMonthTitle: 'Add a month sheet', month: 'Month', year: 'Year', add: 'Add',
+    saveFailed: 'Some changes could not be saved. Check your connection, then press Retry.',
+    actionFailed: 'That action failed. Check your connection and try again.',
+    saving: 'Saving…', saved: 'All changes saved', notSaved: 'Not saved', retry: 'Retry',
+    autoPay: 'Set automatically from the paid and total amounts',
     setupTitle: 'Leotard orders are not set up yet',
     setupBody: 'Run the file supabase/add_leotard_orders.sql in the Supabase SQL Editor, then refresh this page.',
   },
@@ -119,45 +127,105 @@ const LABELS = {
     emptySearch: 'مفيش نتايج مطابقة للبحث.',
     delRow: 'حذف الصف', delTitle: 'حذف هذا الصف؟', delBody: 'لا يمكن التراجع عن هذا الإجراء.',
     del: 'حذف', cancel: 'إلغاء', unnamed: '(بدون اسم)',
-    saveFailed: 'تعذر حفظ آخر تعديل. تأكد من الاتصال وحاول مرة أخرى.',
+    exportCsv: 'تصدير', clear: 'مسح الفلاتر', filterHint: 'اضغط لعرض هذه الصفوف فقط',
+    all: 'الكل', fPay: 'الدفع', fSize: 'المقاس', fTailor: 'من الخياط', fDelivery: 'للعميل',
+    showing: (n: number, of: number) => `عرض ${n} من ${of}`,
+    addMonth: '+ إضافة شهر', addMonthTitle: 'إضافة شيت شهر جديد', month: 'الشهر', year: 'السنة', add: 'إضافة',
+    saveFailed: 'تعذر حفظ بعض التعديلات. تأكد من الاتصال ثم اضغط إعادة المحاولة.',
+    actionFailed: 'تعذر تنفيذ العملية. تأكد من الاتصال وحاول مرة أخرى.',
+    saving: 'جارٍ الحفظ…', saved: 'تم حفظ كل التعديلات', notSaved: 'لم يُحفظ', retry: 'إعادة المحاولة',
+    autoPay: 'تتحدد تلقائياً من المدفوع والاجمالي',
     setupTitle: 'طلبات المايوهات غير مفعّلة بعد',
     setupBody: 'شغّل الملف supabase/add_leotard_orders.sql في Supabase SQL Editor ثم حدّث الصفحة.',
   },
 }
 
 const CSS = `
+.lsw-page{padding:24px 28px;background:var(--bg-page);min-height:100%}
+.lsw-sync{font-size:12.5px;font-weight:600;border-radius:999px;padding:5px 12px;white-space:nowrap;border:1px solid var(--border);color:var(--txt2);background:var(--bg-card)}
+.lsw-sync.ok{color:#3dab7e;background:#3dab7e14;border-color:#3dab7e30}
+.lsw-sync.bad{color:#e04040;background:#e0404014;border-color:#e0404040}
 .lsw-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
 .lsw-brand{display:flex;align-items:center;gap:10px;margin-inline-end:auto}
-.lsw-logo{width:34px;height:34px;border-radius:8px;background:#11734b;color:#fff;display:grid;place-items:center;font-weight:700}
-.lsw-brand h1{font-size:19px;margin:0;color:var(--txt1);font-weight:700}
+.lsw-logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#e58fa0,#c9506a);color:#fff;display:grid;place-items:center;font-weight:700;font-size:17px;box-shadow:0 4px 12px #d4667a40}
+.lsw-brand h1{font-size:20px;margin:0;color:var(--txt1);font-weight:800;line-height:1.2}
 .lsw-brand small{display:block;color:var(--txt2);font-size:12.5px}
 .lsw-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.lsw-tools input,.lsw-tools select{height:38px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font:inherit;font-size:13px;background:var(--bg-card);color:var(--txt1)}
-.lsw-tools input{width:210px}
+.lsw-tools input,.lsw-tools select{height:38px;border:1px solid var(--border);border-radius:10px;padding:0 12px;font:inherit;font-size:13px;background:var(--bg-card);color:var(--txt1);transition:border-color .15s,box-shadow .15s}
+.lsw-tools input:focus,.lsw-tools select:focus{outline:0;border-color:#d4667a;box-shadow:0 0 0 3px #d4667a26}
+.lsw-tools input{width:210px;background:var(--surface)}
+.lsw-page .lsw-tools select,.lsw-page .lsw-modal select,.lsw-page .lst-tools select{appearance:none;-webkit-appearance:none;cursor:pointer;background-color:var(--surface);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a8f95' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding:0 34px 0 12px;text-overflow:ellipsis}
+.lsw-page.rtl .lsw-tools select,.lsw-page.rtl .lsw-modal select,.lsw-page.rtl .lst-tools select{background-position:left 12px center;padding:0 12px 0 34px}
+.lsw-page .lsw-tools select:hover,.lsw-page .lst-tools select:hover{border-color:#d4667a99}
+.lsw-page .lsw-tools option,.lsw-page .lsw-modal option,.lsw-page .lst-tools option{background:var(--bg-popup);color:var(--txt1)}
 .lsw-btn{height:38px;padding:0 16px;border:0;border-radius:8px;background:#d4667a;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .lsw-btn:hover{filter:brightness(1.08)}
 .lsw-btn:disabled{opacity:.6;cursor:default}
 .lsw-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
-.lsw-stat{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
-.lsw-stat span{display:block;color:var(--txt2);font-size:13px}
-.lsw-stat b{font-size:22px;color:var(--txt1);font-variant-numeric:tabular-nums}
+.lsw-stat{--tone:var(--border);position:relative;overflow:hidden;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px 16px}
+.lsw-stat::before{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:4px;background:var(--tone)}
+.lsw-stat span{display:block;color:var(--txt2);font-size:12px;font-weight:600}
+.lsw-stat b{display:block;margin-top:2px;font-size:22px;line-height:1.25;color:var(--txt1);font-variant-numeric:tabular-nums}
+.lsw-stat.click{appearance:none;font:inherit;text-align:start;cursor:pointer;width:100%;transition:border-color .15s,box-shadow .15s}
+.lsw-stat.click:hover{border-color:var(--tone)}
+.lsw-stat.click[aria-pressed=true]{border-color:var(--tone);box-shadow:0 0 0 2px var(--tone)}
+.lsw-stat.click.calm b{color:var(--txt1)}
+.lsw-btn.ghost{background:var(--surface);color:var(--txt1);border:1px solid var(--border);font-weight:600}
+.lsw-btn.ghost:hover{filter:none;border-color:#d4667a;color:#d4667a}
+.lsw-toggle{border:0;border-radius:999px;height:28px;min-width:104px;padding:0 14px;font:inherit;font-weight:600;font-size:14px;cursor:pointer;background:transparent;color:color-mix(in srgb,var(--txt2) 60%,transparent);box-shadow:inset 0 0 0 1px var(--border)}
+.lsw-toggle:hover{color:var(--txt1)}
+.lsw-toggle[aria-pressed=true]{background:var(--bg);color:var(--fg);box-shadow:none}
+.lsw-toggle:focus-visible{outline:2px solid #d4667a;outline-offset:1px}
+.lsw-tabn{display:inline-block;margin-inline-start:8px;min-width:20px;padding:0 6px;border-radius:999px;background:color-mix(in srgb,var(--txt1) 12%,transparent);font-size:11.5px;font-weight:700;line-height:20px;text-align:center}
+.lsw-tab[aria-selected=true] .lsw-tabn{background:#ffffff38}
+.lsw-empty .lsw-btn{margin-top:14px}
+.lsw-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.lsw-search{display:flex;align-items:center;gap:8px;height:36px;min-width:230px;padding:0 14px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--txt2);transition:border-color .15s,box-shadow .15s}
+.lsw-search:focus-within{border-color:#d4667a;box-shadow:0 0 0 3px #d4667a26}
+.lsw-search input{border:0;outline:0;background:transparent;font:inherit;font-size:13px;color:var(--txt1);width:100%;height:100%}
+.lsw-filter{display:inline-flex;align-items:center;gap:6px;height:36px;padding-inline-start:14px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--txt2);font-size:12.5px;white-space:nowrap;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s}
+.lsw-filter:hover{border-color:#d4667a99}
+.lsw-filter:focus-within{border-color:#d4667a;box-shadow:0 0 0 3px #d4667a26}
+.lsw-filter select{appearance:none;-webkit-appearance:none;border:0;outline:0;height:34px;border-radius:999px;font:inherit;font-size:13px;font-weight:700;color:var(--txt1);cursor:pointer;padding:0 30px 0 2px;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a8f95' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center}
+.lsw-page.rtl .lsw-filter select{background-position:left 12px center;padding:0 2px 0 30px}
+.lsw-filter option{background:var(--bg-popup);color:var(--txt1);font-weight:400}
+.lsw-filter.on{border-color:#d4667a;background:color-mix(in srgb,#d4667a 14%,var(--surface));color:#d4667a}
+.lsw-filter.on select{color:#d4667a}
+.lsw-clear{border:0;background:none;color:#d4667a;font:inherit;font-size:13px;font-weight:700;cursor:pointer;height:36px;padding:0 10px;border-radius:999px}
+.lsw-clear:hover{background:#d4667a14}
+.lsw-fcount{margin-inline-start:auto;color:var(--txt2);font-size:12.5px;font-variant-numeric:tabular-nums}
+.lsw-stat.pink{--tone:#d4667a}
+.lsw-stat.info{--tone:#4a90d9}
+.lsw-stat.amber{--tone:#e8960a}
+.lsw-stat.amber b{color:#e8960a}
+.lsw-stat.warn{--tone:#e04040}
 .lsw-stat.warn b{color:#e04040}
+.lsw-stat.ok{--tone:#3dab7e}
 .lsw-stat.ok b{color:#3dab7e}
-.lsw-err{margin:0 0 10px;padding:8px 12px;border-radius:8px;background:#e0404014;border:1px solid #e0404040;color:#e04040;font-size:12.5px;font-weight:600}
-.lsw-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:10px 10px 0 0;overflow:auto;max-height:calc(100vh - 330px);min-height:220px}
-.lsw-wrap table{direction:ltr;border-collapse:separate;border-spacing:0;width:100%;min-width:1560px}
-.lsw-wrap th,.lsw-wrap td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:0 8px;height:46px;text-align:center;white-space:nowrap;background:var(--bg-card);color:var(--txt1);font-size:14.5px}
-.lsw-wrap thead th{position:sticky;top:0;z-index:2;background:#f1c232;color:#1f1f1f;font-weight:700;font-size:16px;border-right-color:#2b2b2b;border-bottom:1px solid #2b2b2b}
-.lsw-wrap thead th.sm{font-size:13px}
-.lsw-wrap tbody tr:hover td{background:var(--bg-page)}
+.lsw-err{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 10px;padding:8px 12px;border-radius:8px;background:#e0404014;border:1px solid #e0404040;color:#e04040;font-size:12.5px;font-weight:600}
+.lsw-err button{border:0;border-radius:6px;background:#e04040;color:#fff;font:inherit;font-weight:700;padding:5px 14px;cursor:pointer}
+.lsw-wrap{--cell:var(--surface);background:var(--cell);border:1px solid var(--border);border-radius:12px 12px 0 0;overflow:auto;max-height:calc(100vh - 330px);scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--txt1) 25%,transparent) transparent}
+.lsw-wrap table{direction:ltr;border-collapse:separate;border-spacing:0;width:100%;min-width:1380px}
+.lsw-wrap th,.lsw-wrap td{border-bottom:1px solid var(--border);padding:0 10px;height:48px;text-align:center;white-space:nowrap;background:var(--cell);color:var(--txt1);font-size:14px}
+.lsw-wrap thead th{position:sticky;top:0;z-index:2;height:44px;background:color-mix(in srgb,#f1c232 20%,var(--surface));color:var(--txt1);font-weight:700;font-size:13px;letter-spacing:.2px;border-bottom:2px solid #f1c232}
+.lsw-wrap thead th.sm{font-size:12px}
+.lsw-wrap tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--txt1) 3%,var(--surface))}
+.lsw-wrap tbody tr:hover td{background:color-mix(in srgb,#d4667a 11%,var(--surface))}
+.lsw-wrap tbody tr:last-child td{border-bottom:0}
 .lsw-wrap td.idx{width:52px;color:var(--txt2);font-variant-numeric:tabular-nums}
 .lsw-wrap td.num,.lsw-wrap tfoot td{font-variant-numeric:tabular-nums}
 .lsw-wrap td.due{color:#e04040;font-weight:700}
-.lsw-wrap tfoot td{position:sticky;bottom:0;background:var(--bg-page);font-weight:700;border-top:1px solid var(--border);border-bottom:0}
-.lsw-wrap td.act,.lsw-wrap th.act{border-right:0;width:40px;padding:0 4px}
-.lsw-del{border:0;background:none;color:#e04040;font-size:18px;line-height:1;cursor:pointer;opacity:0;width:28px;height:28px;border-radius:6px;font-family:inherit}
-.lsw-wrap tr:hover .lsw-del,.lsw-del:focus{opacity:1}
-.lsw-del:hover{background:#e0404020}
+.lsw-wrap td.zero{color:var(--txt2)}
+.lsw-wrap td input::placeholder{color:var(--txt2);opacity:.7}
+.lsw-wrap td input.blank{color:var(--txt2)}
+.lsw-wrap tfoot td{position:sticky;bottom:0;background:color-mix(in srgb,var(--txt1) 7%,var(--surface));font-weight:700;border-top:1px solid var(--border);border-bottom:0}
+.lsw-wrap tfoot td{z-index:2}
+.lsw-wrap th:nth-child(2),.lsw-wrap td:nth-child(2){position:sticky;left:0;z-index:1;border-right:1px solid var(--border)}
+.lsw-wrap thead th:nth-child(2),.lsw-wrap tfoot td:nth-child(2){z-index:3}
+.lsw-wrap td.act,.lsw-wrap th.act{width:52px;padding:0 6px;position:sticky;right:0;z-index:1;border-left:1px solid var(--border)}
+.lsw-wrap thead th.act,.lsw-wrap tfoot td.act{z-index:3}
+.lsw-del{display:inline-grid;place-items:center;border:1px solid #e0404040;background:#e0404012;color:#e04040;cursor:pointer;width:32px;height:32px;border-radius:8px;transition:background .15s,color .15s}
+.lsw-del:hover,.lsw-del:focus-visible{background:#e04040;color:#fff;outline:0}
 .lsw-wrap td input{width:100%;height:34px;border:1px solid transparent;border-radius:6px;background:transparent;font:inherit;text-align:center;color:inherit;padding:0 4px}
 .lsw-wrap td input:hover{border-color:var(--border)}
 .lsw-wrap td input:focus,.lsw-wrap td select:focus{outline:2px solid #d4667a;outline-offset:1px;border-color:transparent}
@@ -168,22 +236,55 @@ const CSS = `
 .lsw-chip select{appearance:none;-webkit-appearance:none;border:0;border-radius:999px;background:var(--bg);color:var(--fg);font:inherit;font-weight:600;font-size:14px;height:28px;min-width:104px;padding:0 14px 0 30px;text-align:center;text-align-last:center;cursor:pointer}
 .lsw-chip.wide select{min-width:140px}
 .lsw-chip::after{content:"";position:absolute;left:12px;top:50%;margin-top:-2px;border:5px solid transparent;border-top-color:var(--fg);border-bottom:0;pointer-events:none}
+.lsw-chip.empty select{background:transparent;color:var(--txt2);box-shadow:inset 0 0 0 1px var(--border)}
+.lsw-chip.empty::after{border-top-color:var(--txt2);opacity:.7}
 .lsw-chip option{background:#fff;color:#1f1f1f}
+.lsw-pill{display:inline-block;border-radius:999px;background:var(--bg);color:var(--fg);font-weight:600;font-size:14px;height:28px;line-height:28px;min-width:104px;padding:0 14px;cursor:default}
 .lsw-empty{padding:56px 20px;text-align:center;color:var(--txt2);font-size:14px}
 .lsw-stockpane{background:var(--bg-card);border:1px solid var(--border);border-radius:10px 10px 0 0;padding:20px}
-.lsw-tabs{display:flex;gap:2px;overflow-x:auto;padding:0 6px;background:var(--bg-page);border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px}
-.lsw-tab{border:0;background:none;font:inherit;font-size:13.5px;padding:11px 18px;cursor:pointer;color:var(--txt2);white-space:nowrap;border-top:3px solid transparent}
-.lsw-tab:hover{background:var(--bg-card)}
-.lsw-tab[aria-selected=true]{background:#d4667a1f;color:#d4667a;font-weight:700;border-top-color:#d4667a}
-.lsw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px}
-.lsw-modal{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:24px;width:100%;max-width:360px;text-align:center}
+.lsw-tabbar{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-top:0;border-radius:0 0 12px 12px}
+.lsw-tabs{display:flex;gap:4px;overflow-x:auto;padding:6px;flex:1;min-width:0;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--txt1) 25%,transparent) transparent}
+.lsw-addmonth{flex-shrink:0;height:36px;margin:0 6px;border:1px dashed #d4667a99;border-radius:8px;background:none;color:#d4667a;font:inherit;font-size:13px;font-weight:700;padding:0 14px;cursor:pointer;white-space:nowrap}
+.lsw-addmonth:hover{background:#d4667a14;border-style:solid}
+.lsw-modal .fields{display:flex;gap:10px;justify-content:center;margin-top:16px}
+.lsw-modal label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--txt2);text-align:start}
+.lsw-modal select{height:38px;min-width:120px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font:inherit;font-size:13px;background:var(--bg-page);color:var(--txt1)}
+.lsw-tab{border:0;background:none;font:inherit;font-size:13.5px;padding:8px 16px;border-radius:8px;cursor:pointer;color:var(--txt2);white-space:nowrap;transition:background .15s,color .15s}
+.lsw-tab:hover{background:var(--bg-card);color:var(--txt1)}
+.lsw-tab[aria-selected=true]{background:#d4667a;color:#fff;font-weight:700;box-shadow:0 2px 8px #d4667a40}
+.lsw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px}
+.lsw-modal{background:var(--bg-popup);border:1px solid var(--border);border-radius:16px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.45);width:100%;max-width:360px;text-align:center}
 .lsw-modal p{margin:0}
 .lsw-modal .btns{display:flex;gap:10px;justify-content:center;margin-top:18px}
 .lsw-modal button{border-radius:10px;padding:8px 20px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
-@media (max-width:640px){.lsw-tools input{width:100%}}
+@media (max-width:640px){
+.lsw-page{padding:14px 12px}
+.lsw-tools{width:100%}
+.lsw-tools .lsw-btn.ghost{flex:1}
+.lsw-search{width:100%}
+.lsw-filter{flex:1 1 calc(50% - 4px);justify-content:space-between}
+.lsw-fcount{width:100%;margin:0}
+.lsw-tools input{width:100%}
+.lsw-tools select{flex:1;min-width:0}
+.lsw-tools .lsw-btn{width:100%}
+.lsw-stats{grid-template-columns:repeat(2,1fr);gap:8px}
+.lsw-stat{padding:10px 12px}
+.lsw-stat span{font-size:12px}
+.lsw-stat b{font-size:18px}
+.lsw-stat:last-child{grid-column:1/-1}
+.lsw-wrap{max-height:70vh}
+.lsw-wrap th,.lsw-wrap td{height:44px;font-size:13.5px;padding:0 6px}
+.lsw-wrap thead th{font-size:12.5px;height:40px}
+.lsw-wrap td input[name=name]{min-width:120px}
+.lsw-stockpane{padding:14px}
+.lsw-tab{padding:8px 12px}
+.lsw-addmonth{padding:0 10px}
+}
 `
 
 const STOCK = 'stock'
+const EXTRA_MONTHS_KEY = 'lsw-extra-months'
+const ACTIVE_TAB_KEY = 'lsw-active-tab'
 
 /** A class time slot on one weekday, e.g. { day: 'fri', label: '12 - 2' } */
 export interface ClassSlot { day: string; label: string }
@@ -208,6 +309,15 @@ function groupOpt(label: string): Opt {
   return { v: label, ar: label, en: label, ...GROUP_PALETTE[h % GROUP_PALETTE.length] }
 }
 
+// Payment status follows the amounts; it is only chosen by hand while a row has no amounts yet
+function hasAmounts(r: LeotardOrder) {
+  return r.total_amount > 0 || r.paid_amount > 0
+}
+function payOf(r: LeotardOrder): string {
+  if (!hasAmounts(r)) return r.pay_status || ''
+  return r.paid_amount >= r.total_amount ? 'paid' : 'remaining'
+}
+
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n)
 }
@@ -225,13 +335,39 @@ function Chip({ value, options, label, wide, isRtl, onChange }: {
   const o = options.find(x => x.v === value)
   const style = (o ? { '--bg': o.bg, '--fg': o.fg } : {}) as React.CSSProperties
   return (
-    <span className={`lsw-chip${wide ? ' wide' : ''}`} style={style}>
+    <span className={`lsw-chip${wide ? ' wide' : ''}${value ? '' : ' empty'}`} style={style}>
       <select value={value} aria-label={label} dir={isRtl ? 'rtl' : 'ltr'} onChange={e => onChange(e.target.value)}>
         <option value=""></option>
         {options.map(x => <option key={x.v} value={x.v}>{isRtl ? x.ar : x.en}</option>)}
         {value && !o && <option value={value}>{value}</option>}
       </select>
     </span>
+  )
+}
+
+function Pill({ value, options, title, isRtl }: { value: string; options: Opt[]; title: string; isRtl: boolean }) {
+  const o = options.find(x => x.v === value)
+  if (!o) return null
+  return (
+    <span className="lsw-pill" title={title} style={{ '--bg': o.bg, '--fg': o.fg } as React.CSSProperties}>
+      {isRtl ? o.ar : o.en}
+    </span>
+  )
+}
+
+/** A pill-shaped filter: a caption and a dropdown; it turns pink while a value is chosen */
+function Filter({ label, all, value, options, isRtl, onChange }: {
+  label: string; all: string; value: string; options: Opt[]; isRtl: boolean
+  onChange: (v: string) => void
+}) {
+  return (
+    <label className={`lsw-filter${value ? ' on' : ''}`}>
+      <span>{label}</span>
+      <select value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">{all}</option>
+        {options.map(o => <option key={o.v} value={o.v}>{isRtl ? o.ar : o.en}</option>)}
+      </select>
+    </label>
   )
 }
 
@@ -243,12 +379,38 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     orders.map(o => ({ ...o, total_amount: Number(o.total_amount) || 0, paid_amount: Number(o.paid_amount) || 0 })))
   const [active, setActive] = useState(currentMonth)
   const [query, setQuery] = useState('')
-  const [fBranch, setFBranch] = useState('')
   const [fPay, setFPay] = useState('')
-  const [failed, setFailed] = useState(false)
+  const [fSize, setFSize] = useState('')
+  const [fTailor, setFTailor] = useState('')    // 'received' | 'pending'
+  const [fDelivery, setFDelivery] = useState('') // 'delivered' | 'pending'
+  const [failed, setFailed] = useState(false)   // an add or delete failed
+  const [pending, setPending] = useState(0)     // edits being saved right now
+  const [unsaved, setUnsaved] = useState(0)     // rows with an edit that failed to save
+  const [savedOnce, setSavedOnce] = useState(false)
+  const failedPatches = useRef(new Map<string, Partial<LeotardOrder>>())
   const [adding, setAdding] = useState(false)
   const [focusId, setFocusId] = useState<string | null>(null)
   const [toDelete, setToDelete] = useState<LeotardOrder | null>(null)
+  // Months added with "Add month". They are remembered in this browser until they hold a row.
+  const [extraMonths, setExtraMonths] = useState<string[]>([])
+  const [monthForm, setMonthForm] = useState<{ y: number; m: number } | null>(null)
+  const tabsRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(EXTRA_MONTHS_KEY) || '[]')
+      if (Array.isArray(saved)) setExtraMonths(saved.filter(x => /^\d{4}-\d{2}$/.test(String(x))))
+    } catch { /* storage unavailable */ }
+    // Reopen the tab that was open before a refresh
+    try {
+      const last = sessionStorage.getItem(ACTIVE_TAB_KEY)
+      if (last && (last === STOCK || /^\d{4}-\d{2}$/.test(last))) setActive(last)
+    } catch { /* storage unavailable */ }
+  }, [])
+
+  useEffect(() => {
+    try { sessionStorage.setItem(ACTIVE_TAB_KEY, active) } catch { /* storage unavailable */ }
+  }, [active])
   const dirty = useRef(new Set<string>())
   const bodyRef = useRef<HTMLTableSectionElement>(null)
 
@@ -257,8 +419,33 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     const set = new Set<string>()
     for (let d = -2; d <= 3; d++) set.add(addMonths(currentMonth, d))
     rows.forEach(r => { if (r.sheet_month) set.add(r.sheet_month) })
+    extraMonths.forEach(m => set.add(m))
+    if (active !== STOCK) set.add(active)
     return Array.from(set).sort()
-  }, [rows, currentMonth])
+  }, [rows, currentMonth, extraMonths, active])
+
+  // "Add month" suggests the month after the last tab
+  function openMonthForm() {
+    const [y, m] = addMonths(months[months.length - 1], 1).split('-').map(Number)
+    setMonthForm({ y, m })
+  }
+
+  function addMonth() {
+    if (!monthForm) return
+    const ym = `${monthForm.y}-${String(monthForm.m).padStart(2, '0')}`
+    if (!months.includes(ym)) {
+      const list = [...extraMonths, ym]
+      setExtraMonths(list)
+      try { localStorage.setItem(EXTRA_MONTHS_KEY, JSON.stringify(list)) } catch { /* storage unavailable */ }
+    }
+    setActive(ym)
+    setMonthForm(null)
+  }
+
+  // Keep the selected tab in view
+  useEffect(() => {
+    tabsRef.current?.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [active, months])
 
   const monthLabel = (ym: string) => {
     const [y, m] = ym.split('-').map(Number)
@@ -276,9 +463,14 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
       .map((r, i) => ({ r, i }))
       .filter(({ r }) =>
         (!q || r.customer_name.toLowerCase().includes(q)) &&
-        (!fBranch || r.branch === fBranch) &&
-        (!fPay || r.pay_status === fPay))
-  }, [sheetRows, query, fBranch, fPay])
+        (!fPay || payOf(r) === fPay) &&
+        (!fSize || r.size === fSize) &&
+        // "pending" also covers rows where the status was never chosen
+        (!fTailor || (r.tailor_status === 'received') === (fTailor === 'received')) &&
+        (!fDelivery || (r.delivery_status === 'delivered') === (fDelivery === 'delivered')))
+  }, [sheetRows, query, fPay, fSize, fTailor, fDelivery])
+  const filtering = !!query.trim() || !!fPay || !!fSize || !!fTailor || !!fDelivery
+  const clearFilters = () => { setQuery(''); setFPay(''); setFSize(''); setFTailor(''); setFDelivery('') }
 
   const paid = visible.reduce((s, { r }) => s + r.paid_amount, 0)
   const total = visible.reduce((s, { r }) => s + r.total_amount, 0)
@@ -297,10 +489,33 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     setRows(rs => rs.map(r => (r.id === id ? { ...r, ...patch } : r)))
   }
 
+  // A failed edit is kept per row and sent again with the row's next save or with Retry
   async function save(id: string, patch: Partial<LeotardOrder>) {
-    const { error } = await supabase.from('leotard_orders').update(patch).eq('id', id)
-    setFailed(!!error)
+    const full = { ...failedPatches.current.get(id), ...patch }
+    failedPatches.current.delete(id)
+    setPending(n => n + 1)
+    let ok = false
+    try {
+      const { error } = await supabase.from('leotard_orders').update(full).eq('id', id)
+      ok = !error
+    } catch { /* network failure */ }
+    if (ok) setSavedOnce(true)
+    else failedPatches.current.set(id, { ...full, ...failedPatches.current.get(id) })
+    setUnsaved(failedPatches.current.size)
+    setPending(n => n - 1)
   }
+
+  function retry() {
+    for (const id of Array.from(failedPatches.current.keys())) save(id, {})
+  }
+
+  // Warn before leaving while edits are still unsaved
+  useEffect(() => {
+    if (!pending && !unsaved) return
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [pending, unsaved])
 
   // Dropdowns and dates save immediately
   function change(id: string, patch: Partial<LeotardOrder>) {
@@ -316,21 +531,32 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     return field === 'paid_amount' ? { paid_amount: n } : { total_amount: n }
   }
 
+  // Changing an amount also sets the payment status
+  function withAmountStatus(r: LeotardOrder, patch: Partial<LeotardOrder>): Partial<LeotardOrder> {
+    const next = { ...r, ...patch }
+    return { ...patch, pay_status: hasAmounts(next) ? payOf(next) : null }
+  }
+
   function typing(id: string, field: TypedField, raw: string) {
     dirty.current.add(`${id}:${field}`)
-    patchLocal(id, typedPatch(field, raw))
+    const patch = typedPatch(field, raw)
+    setRows(rs => rs.map(r => r.id !== id ? r
+      : { ...r, ...(field === 'customer_name' ? patch : withAmountStatus(r, patch)) }))
   }
 
   function commit(id: string, field: TypedField, raw: string) {
     const key = `${id}:${field}`
     if (!dirty.current.has(key)) return
     dirty.current.delete(key)
-    save(id, typedPatch(field, field === 'customer_name' ? raw.trim() : raw))
+    if (field === 'customer_name') { save(id, typedPatch(field, raw.trim())); return }
+    const r = rows.find(x => x.id === id)
+    const patch = typedPatch(field, raw)
+    save(id, r ? withAmountStatus(r, patch) : patch)
   }
 
   async function addRow() {
     if (isStock || adding) return
-    setQuery(''); setFBranch(''); setFPay('')
+    clearFilters()
     setAdding(true)
     const { data, error } = await supabase
       .from('leotard_orders')
@@ -352,6 +578,8 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     const { error } = await supabase.from('leotard_orders').delete().eq('id', id)
     if (error) { setFailed(true); return }
     setFailed(false)
+    failedPatches.current.delete(id)
+    setUnsaved(failedPatches.current.size)
     setRows(rs => rs.filter(r => r.id !== id))
   }
 
@@ -385,9 +613,44 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     change(r.id, patch)
   }
 
+  // Enter saves the cell and moves down to the same column of the next row, like a spreadsheet
   const onEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') e.currentTarget.blur()
+    if (e.key !== 'Enter') return
+    const el = e.currentTarget
+    const next = el.closest('tr')?.nextElementSibling
+      ?.querySelector<HTMLInputElement>(`input[aria-label="${el.getAttribute('aria-label')}"]`)
+    if (next) { next.focus(); next.select() } else el.blur()
   }
+
+  // Download the rows on screen as a CSV file that Excel opens with Arabic intact
+  function exportCsv() {
+    const lang = isRtl ? 'ar' : 'en'
+    const label = (opts: Opt[], v: string | null) => opts.find(o => o.v === v)?.[lang] || v || ''
+    const head = [L.num, L.name, L.date, L.day, L.group, L.paid, L.remaining, L.total, L.payStatus,
+      L.cash, L.instapay, L.size, L.tailor, L.delivery]
+    const lines = visible.map(({ r, i }) => [
+      i + 1, r.customer_name, r.order_date || '', label(OPTIONS.day, r.day_of_week), r.group_name || '',
+      r.paid_amount, r.total_amount - r.paid_amount, r.total_amount, label(OPTIONS.payStatus, payOf(r)),
+      r.cash ? L.cash : '', r.instapay ? L.instapay : '', r.size || '',
+      label(OPTIONS.tailor, r.tailor_status), label(OPTIONS.delivery, r.delivery_status),
+    ])
+    const csv = [head, ...lines]
+      .map(cells => cells.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\r\n')
+    const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff) + csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `leotards-${active}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Number of orders on each month sheet, shown on its tab
+  const monthCounts = useMemo(() => {
+    const map: Record<string, number> = {}
+    rows.forEach(r => { if (r.sheet_month) map[r.sheet_month] = (map[r.sheet_month] || 0) + 1 })
+    return map
+  }, [rows])
 
   const tabs = [{ id: STOCK, label: L.stockTab }, ...months.map(m => ({ id: m, label: monthLabel(m) }))]
   const activeLabel = tabs.find(t => t.id === active)?.label || ''
@@ -402,18 +665,14 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
           <div className="lsw-logo">{isRtl ? 'م' : 'L'}</div>
           <div><h1>{L.title}</h1><small>{activeLabel}</small></div>
         </div>
+        {!setupNeeded && (pending > 0 || unsaved > 0 || savedOnce) && (
+          <span role="status" className={`lsw-sync${pending ? '' : unsaved ? ' bad' : ' ok'}`}>
+            {pending ? L.saving : unsaved ? `${L.notSaved} (${unsaved})` : `✓ ${L.saved}`}
+          </span>
+        )}
         {!isStock && !setupNeeded && (
           <div className="lsw-tools">
-            <input type="search" value={query} onChange={e => setQuery(e.target.value)}
-              placeholder={L.search} aria-label={L.search} />
-            <select value={fBranch} onChange={e => setFBranch(e.target.value)} aria-label={L.allBranches}>
-              <option value="">{L.allBranches}</option>
-              {OPTIONS.branch.map(o => <option key={o.v} value={o.v}>{isRtl ? o.ar : o.en}</option>)}
-            </select>
-            <select value={fPay} onChange={e => setFPay(e.target.value)} aria-label={L.allPay}>
-              <option value="">{L.allPay}</option>
-              {OPTIONS.payStatus.map(o => <option key={o.v} value={o.v}>{isRtl ? o.ar : o.en}</option>)}
-            </select>
+            <button className="lsw-btn ghost" onClick={exportCsv} disabled={!visible.length}>{L.exportCsv}</button>
             <button className="lsw-btn" onClick={addRow} disabled={adding}>{L.addRow}</button>
           </div>
         )}
@@ -428,16 +687,45 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
         </div>
       ) : (
         <>
-          {/* Summary */}
-          <div className="lsw-stats">
-            <div className="lsw-stat"><span>{L.statCount}</span><b>{visible.length}</b></div>
-            <div className="lsw-stat"><span>{L.statTotal}</span><b>{fmt(total)}</b></div>
-            <div className="lsw-stat ok"><span>{L.statPaid}</span><b>{fmt(paid)}</b></div>
-            <div className={`lsw-stat${rem > 0 ? ' warn' : ''}`}><span>{L.statRemaining}</span><b>{fmt(rem)}</b></div>
-            <div className="lsw-stat"><span>{L.statNotDelivered}</span><b>{notDelivered}</b></div>
+          {/* Search and filters */}
+          <div className="lsw-filters">
+            <label className="lsw-search">
+              <Search size={15} />
+              <input type="search" value={query} onChange={e => setQuery(e.target.value)}
+                placeholder={L.search} aria-label={L.search} />
+            </label>
+            <Filter label={L.fPay} all={L.all} value={fPay} options={OPTIONS.payStatus} isRtl={isRtl} onChange={setFPay} />
+            <Filter label={L.fSize} all={L.all} value={fSize} options={OPTIONS.size} isRtl={isRtl} onChange={setFSize} />
+            <Filter label={L.fTailor} all={L.all} value={fTailor} options={OPTIONS.tailor} isRtl={isRtl} onChange={setFTailor} />
+            <Filter label={L.fDelivery} all={L.all} value={fDelivery} options={OPTIONS.delivery} isRtl={isRtl} onChange={setFDelivery} />
+            {filtering && <button className="lsw-clear" onClick={clearFilters}>✕ {L.clear}</button>}
+            {filtering && <span className="lsw-fcount">{L.showing(visible.length, sheetRows.length)}</span>}
           </div>
 
-          {failed && <p className="lsw-err">{L.saveFailed}</p>}
+          {/* Summary */}
+          <div className="lsw-stats">
+            <div className="lsw-stat pink"><span>{L.statCount}</span><b>{visible.length}</b></div>
+            <div className="lsw-stat info"><span>{L.statTotal}</span><b>{fmt(total)}</b></div>
+            <div className="lsw-stat ok"><span>{L.statPaid}</span><b>{fmt(paid)}</b></div>
+            <button type="button" title={L.filterHint} aria-pressed={fPay === 'remaining'}
+              className={`lsw-stat click warn${rem > 0 ? '' : ' calm'}`}
+              onClick={() => setFPay(fPay === 'remaining' ? '' : 'remaining')}>
+              <span>{L.statRemaining}</span><b>{fmt(rem)}</b>
+            </button>
+            <button type="button" title={L.filterHint} aria-pressed={fDelivery === 'pending'}
+              className={`lsw-stat click amber${notDelivered > 0 ? '' : ' calm'}`}
+              onClick={() => setFDelivery(fDelivery === 'pending' ? '' : 'pending')}>
+              <span>{L.statNotDelivered}</span><b>{notDelivered}</b>
+            </button>
+          </div>
+
+          {unsaved > 0 && (
+            <p className="lsw-err">
+              <span>{L.saveFailed}</span>
+              <button onClick={retry} disabled={pending > 0}>{L.retry}</button>
+            </p>
+          )}
+          {failed && <p className="lsw-err">{L.actionFailed}</p>}
 
           {/* Sheet */}
           <div className="lsw-wrap">
@@ -446,7 +734,6 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
                 <tr>
                   <th>{L.num}</th>
                   <th>{L.name}</th>
-                  <th>{L.branch}</th>
                   <th>{L.date}</th>
                   <th>{L.day}</th>
                   <th>{L.group}</th>
@@ -475,11 +762,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
                           onBlur={e => commit(r.id, 'customer_name', e.target.value)} />
                       </td>
                       <td>
-                        <Chip value={r.branch || ''} options={OPTIONS.branch} label={L.branch} isRtl={isRtl}
-                          onChange={v => change(r.id, { branch: v || null })} />
-                      </td>
-                      <td>
-                        <input type="date" aria-label={L.date} defaultValue={r.order_date || ''}
+                        <input type="date" aria-label={L.date} className={r.order_date ? undefined : 'blank'} defaultValue={r.order_date || ''}
                           onChange={e => changeDate(r, e.target.value)} />
                       </td>
                       <td>
@@ -492,28 +775,32 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
                       </td>
                       <td className="num">
                         <input type="number" min="0" step="1" aria-label={L.paid}
-                          defaultValue={r.paid_amount} onKeyDown={onEnter}
+                          defaultValue={r.paid_amount || ''} placeholder="0" onKeyDown={onEnter}
                           onChange={e => typing(r.id, 'paid_amount', e.target.value)}
                           onBlur={e => commit(r.id, 'paid_amount', e.target.value)} />
                       </td>
-                      <td className={`num${x > 0 ? ' due' : ''}`}>{fmt(x)}</td>
+                      <td className={`num${x > 0 ? ' due' : x === 0 ? ' zero' : ''}`}>{fmt(x)}</td>
                       <td className="num">
                         <input type="number" min="0" step="1" aria-label={L.total}
-                          defaultValue={r.total_amount} onKeyDown={onEnter}
+                          defaultValue={r.total_amount || ''} placeholder="0" onKeyDown={onEnter}
                           onChange={e => typing(r.id, 'total_amount', e.target.value)}
                           onBlur={e => commit(r.id, 'total_amount', e.target.value)} />
                       </td>
                       <td>
-                        <Chip value={r.pay_status || ''} options={OPTIONS.payStatus} label={L.payStatus} isRtl={isRtl}
-                          onChange={v => change(r.id, { pay_status: v || null })} />
+                        {hasAmounts(r)
+                          ? <Pill value={payOf(r)} options={OPTIONS.payStatus} title={L.autoPay} isRtl={isRtl} />
+                          : <Chip value={r.pay_status || ''} options={OPTIONS.payStatus} label={L.payStatus} isRtl={isRtl}
+                              onChange={v => change(r.id, { pay_status: v || null })} />}
                       </td>
                       <td>
-                        <Chip value={r.cash ? 'yes' : ''} options={OPTIONS.cash} label={L.cash} isRtl={isRtl}
-                          onChange={v => change(r.id, { cash: v === 'yes' })} />
+                        <button type="button" className="lsw-toggle" aria-pressed={r.cash}
+                          style={{ '--bg': OPTIONS.cash[0].bg, '--fg': OPTIONS.cash[0].fg } as React.CSSProperties}
+                          onClick={() => change(r.id, { cash: !r.cash })}>{L.cash}</button>
                       </td>
                       <td>
-                        <Chip value={r.instapay ? 'yes' : ''} options={OPTIONS.instapay} label={L.instapay} isRtl={isRtl}
-                          onChange={v => change(r.id, { instapay: v === 'yes' })} />
+                        <button type="button" className="lsw-toggle" aria-pressed={r.instapay}
+                          style={{ '--bg': OPTIONS.instapay[0].bg, '--fg': OPTIONS.instapay[0].fg } as React.CSSProperties}
+                          onClick={() => change(r.id, { instapay: !r.instapay })}>{L.instapay}</button>
                       </td>
                       <td>
                         <Chip value={r.size || ''} options={OPTIONS.size} label={L.size} isRtl={false}
@@ -528,7 +815,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
                           onChange={v => change(r.id, { delivery_status: v || null })} />
                       </td>
                       <td className="act">
-                        <button className="lsw-del" title={L.delRow} aria-label={L.delRow} onClick={() => setToDelete(r)}>×</button>
+                        <button className="lsw-del" title={L.delRow} aria-label={L.delRow} onClick={() => setToDelete(r)}><Trash2 size={16} /></button>
                       </td>
                     </tr>
                   )
@@ -539,7 +826,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
                   <tr>
                     <td></td>
                     <td>{L.footTotal}</td>
-                    <td></td><td></td><td></td><td></td>
+                    <td></td><td></td><td></td>
                     <td>{fmt(paid)}</td>
                     <td>{fmt(rem)}</td>
                     <td>{fmt(total)}</td>
@@ -550,7 +837,12 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
               )}
             </table>
             {visible.length === 0 && (
-              <div className="lsw-empty">{sheetRows.length ? L.emptySearch : L.emptySheet}</div>
+              <div className="lsw-empty">
+                <div>{sheetRows.length ? L.emptySearch : L.emptySheet}</div>
+                {sheetRows.length
+                  ? <button className="lsw-btn ghost" onClick={clearFilters}>{L.clear}</button>
+                  : <button className="lsw-btn" onClick={addRow} disabled={adding}>{L.addRow}</button>}
+              </div>
             )}
           </div>
           <datalist id="lsw-students">
@@ -560,14 +852,52 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
       )}
 
       {/* Month tabs */}
-      <nav className="lsw-tabs" role="tablist">
-        {tabs.map(t => (
-          <button key={t.id} className="lsw-tab" role="tab" aria-selected={t.id === active}
-            onClick={() => setActive(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      <div className="lsw-tabbar">
+        <nav className="lsw-tabs" role="tablist" ref={tabsRef}>
+          {tabs.map(t => (
+            <button key={t.id} className="lsw-tab" role="tab" aria-selected={t.id === active}
+              onClick={() => setActive(t.id)}>
+              {t.label}
+              {monthCounts[t.id] > 0 && <span className="lsw-tabn">{monthCounts[t.id]}</span>}
+            </button>
+          ))}
+        </nav>
+        {!setupNeeded && <button className="lsw-addmonth" onClick={openMonthForm}>{L.addMonth}</button>}
+      </div>
+
+      {/* Add month */}
+      {monthForm && (() => {
+        const thisYear = Number(currentMonth.slice(0, 4))
+        const years = Array.from(new Set([thisYear - 1, thisYear, thisYear + 1, thisYear + 2, monthForm.y])).sort()
+        const monthName = (m: number) => isRtl ? String(m)
+          : new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(2000, m - 1, 1))
+        return (
+          <div className="lsw-overlay" onClick={() => setMonthForm(null)}>
+            <div className="lsw-modal" onClick={e => e.stopPropagation()}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--txt1)' }}>{L.addMonthTitle}</p>
+              <div className="fields">
+                <label>
+                  {L.month}
+                  <select value={monthForm.m} onChange={e => setMonthForm({ ...monthForm, m: Number(e.target.value) })}>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{monthName(m)}</option>)}
+                  </select>
+                </label>
+                <label>
+                  {L.year}
+                  <select value={monthForm.y} onChange={e => setMonthForm({ ...monthForm, y: Number(e.target.value) })}>
+                    {years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="btns">
+                <button onClick={addMonth} style={{ background: '#d4667a', color: '#fff', border: 'none' }}>{L.add}</button>
+                <button onClick={() => setMonthForm(null)}
+                  style={{ background: 'transparent', color: 'var(--txt1)', border: '1px solid var(--border)' }}>{L.cancel}</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Delete confirmation */}
       {toDelete && (

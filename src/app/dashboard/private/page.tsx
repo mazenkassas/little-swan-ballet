@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import NewPrivateSessionForm from './NewPrivateSessionForm'
+import PrivateSessionActions from './PrivateSessionActions'
 import { getTranslations, getLocale } from 'next-intl/server'
 
 function fmt12(time: string | null) {
@@ -90,6 +91,7 @@ export default async function PrivatePage() {
                     {' · '}{formatDate(s.date)}
                   </p>
                 </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#3dab7e' }}>
                     {formatCurrency(s.fee || 0)}
@@ -102,6 +104,14 @@ export default async function PrivatePage() {
                   }}>
                     {s.payment_method === 'instapay' ? (isRtl ? 'إنستاباي' : 'Instapay') : (isRtl ? 'كاش' : 'Cash')}
                   </span>
+                </div>
+                <PrivateSessionActions
+                  session={s}
+                  students={students || []}
+                  coaches={coaches || []}
+                  halls={halls || []}
+                  isRtl={isRtl}
+                />
                 </div>
               </div>
             )

@@ -16,6 +16,32 @@ const DAY_SORT: Record<string, number> = {
   Wednesday: 4, Thursday: 5, Friday: 6,
 }
 
+// Group names are auto-generated as "Grade · Term · Days · Time". Days and time are
+// already rendered as dedicated chips, so strip those segments from the title to
+// avoid showing them twice. Falls back to the full name for custom names.
+const DAY_WORDS = new Set([
+  'sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri',
+  'saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday',
+  'السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة',
+])
+const TIME_RE = /\d{1,2}(:\d{2})?\s*(AM|PM)|\d{1,2}:\d{2}|\d{1,2}\s*[–-]\s*\d{1,2}/i
+
+function displayName(name: string | null | undefined): string {
+  if (!name) return ''
+  const parts = name.split('·').map(p => p.trim()).filter(Boolean)
+  const kept = parts.filter(p => {
+    if (TIME_RE.test(p)) return false
+    const tokens = p.split(/[,،&و]+|\s+/).map(t => t.trim().toLowerCase()).filter(Boolean)
+    if (tokens.length && tokens.every(t => DAY_WORDS.has(t))) return false
+    return true
+  })
+  return kept.length ? kept.join(' · ') : name
+}
+
+function byStartTime(a: any, b: any) {
+  return (a.class?.start_time || '').localeCompare(b.class?.start_time || '')
+}
+
 export default async function ClassesPage({
   searchParams,
 }: {
@@ -142,7 +168,7 @@ export default async function ClassesPage({
       if (!key || seenDay.has(key)) return false
       seenDay.add(key)
       return true
-    })
+    }).sort(byStartTime)
   }
 
   const grouped: Record<string, any[]> = {}
@@ -150,6 +176,7 @@ export default async function ClassesPage({
     if (!grouped[s.date]) grouped[s.date] = []
     grouped[s.date].push(s)
   })
+  Object.values(grouped).forEach(list => list.sort(byStartTime))
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 
   const DAY_NAMES_WEEK = isRtl
@@ -296,7 +323,7 @@ export default async function ClassesPage({
                     {/* Name + hall */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, color: 'var(--txt1)', fontSize: 14, fontWeight: 700 }}>{cls.name}</p>
+                        <p title={cls.name} style={{ margin: 0, color: 'var(--txt1)', fontSize: 14, fontWeight: 700, lineHeight: 1.35 }}>{displayName(cls.name)}</p>
                         {cls.level?.name && (
                           <p style={{ margin: '3px 0 0', color: 'var(--txt2)', fontSize: 11 }}>{cls.level.name}</p>
                         )}
@@ -310,23 +337,23 @@ export default async function ClassesPage({
                       )}
                     </div>
 
-                    {/* Time — prominent */}
-                    <div style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      background: 'var(--bg-page)', border: '1px solid var(--border)',
-                      borderRadius: 8, padding: '5px 10px', marginBottom: 10,
-                    }}>
-                      <Clock size={12} style={{ color: '#d4667a', flexShrink: 0 }} />
-                      <span style={{ color: 'var(--txt1)', fontSize: 13, fontWeight: 600 }}>
-                        {fmt12h(cls.start_time)} – {fmt12h(cls.end_time)}
-                      </span>
-                    </div>
-
-                    {/* Days as pills */}
-                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
+                    {/* Schedule: time + days on one row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                      {cls.start_time && (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          background: 'var(--bg-page)', border: '1px solid var(--border)',
+                          borderRadius: 8, padding: '4px 10px', direction: 'ltr',
+                        }}>
+                          <Clock size={12} style={{ color: '#d4667a', flexShrink: 0 }} />
+                          <span style={{ color: 'var(--txt1)', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {fmt12h(cls.start_time)}{cls.end_time ? ` – ${fmt12h(cls.end_time)}` : ''}
+                          </span>
+                        </span>
+                      )}
                       {cls.days_of_week?.map((d: string) => (
                         <span key={d} style={{
-                          fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+                          fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 8,
                           background: filterDay === d ? '#7c5cdb30' : '#7c5cdb12',
                           color: '#7c5cdb',
                           border: `1px solid ${filterDay === d ? '#7c5cdb50' : '#7c5cdb20'}`,
@@ -483,18 +510,23 @@ export default async function ClassesPage({
                         const border = s.status === 'completed' ? '#3dab7e30' : s.status === 'cancelled' ? '#e0404030' : '#7c3aed30'
                         const color  = s.status === 'completed' ? '#3dab7e'   : s.status === 'cancelled' ? '#e04040'   : '#7c3aed'
                         return (
-                          <div key={s.id} style={{
+                          <Link key={s.id} href={`?tab=sessions&week=${weekStr}&day=${dateStr}`} title={s.class?.name} style={{
+                            display: 'block', textDecoration: 'none',
                             borderRadius: 7, padding: '5px 8px',
                             background: bg, border: `1px solid ${border}`, color, fontSize: 11,
                           }}>
-                            <p style={{ margin: 0, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {s.class?.name}
-                            </p>
-                            <p style={{ margin: '2px 0 0', opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <p style={{ margin: 0, fontWeight: 700, direction: 'ltr', textAlign: isRtl ? 'right' : 'left', whiteSpace: 'nowrap' }}>
                               {fmt12h(s.class?.start_time)}
-                              {s.hall?.name ? ` · ${s.hall.name}` : ''}
                             </p>
-                          </div>
+                            <p style={{ margin: '2px 0 0', opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {displayName(s.class?.name)}
+                            </p>
+                            {s.hall?.name && (
+                              <p style={{ margin: '1px 0 0', opacity: 0.65, fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {s.hall.name}
+                              </p>
+                            )}
+                          </Link>
                         )
                       })}
                     </div>
@@ -554,7 +586,7 @@ export default async function ClassesPage({
                         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
                           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--txt1)' }}>{cls?.name}</p>
+                              <p title={cls?.name} style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--txt1)' }}>{displayName(cls?.name)}</p>
                               {cls?.level?.name && (
                                 <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--txt2)' }}>{cls.level.name}</p>
                               )}
@@ -571,10 +603,10 @@ export default async function ClassesPage({
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                             {/* Time */}
                             {cls?.start_time && (
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--txt2)' }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--txt2)', direction: 'ltr' }}>
                                 <Clock size={12} style={{ color: '#d4667a' }} />
                                 <span style={{ fontWeight: 600, color: 'var(--txt1)' }}>
-                                  {fmt12h(cls.start_time)} – {fmt12h(cls.end_time)}
+                                  {fmt12h(cls.start_time)}{cls.end_time ? ` – ${fmt12h(cls.end_time)}` : ''}
                                 </span>
                               </span>
                             )}

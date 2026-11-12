@@ -12,13 +12,22 @@ for (let h = 7; h <= 22; h++) {
   const suffix   = h < 12 ? 'AM' : 'PM'
   const suffixAr = h < 12 ? 'ص' : 'م'
   HOURS.push({ value, en: `${h12} ${suffix}`, ar: `${h12} ${suffixAr}` })
+  // Half-hour slot (the list ends at 10 PM)
+  if (h < 22) HOURS.push({ value: `${String(h).padStart(2, '0')}:30`, en: `${h12}:30 ${suffix}`, ar: `${h12}:30 ${suffixAr}` })
+}
+
+// Today's date in the browser's timezone (toISOString() is UTC and gives
+// yesterday's date shortly after midnight in Egypt)
+function localToday(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function computeDuration(start: string, end: string): number {
   if (!start || !end) return 0
-  const [sh] = start.split(':').map(Number)
-  const [eh] = end.split(':').map(Number)
-  return Math.max(0, eh - sh)
+  const [sh, sm = 0] = start.split(':').map(Number)
+  const [eh, em = 0] = end.split(':').map(Number)
+  return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60)
 }
 
 export default function NewPrivateSessionForm({
@@ -34,12 +43,13 @@ export default function NewPrivateSessionForm({
 
   const [form, setForm] = useState({
     student_id: '', coach_id: '', hall_id: '',
-    date: new Date().toISOString().split('T')[0],
+    date: localToday(),
     start_time: '', end_time: '',
-    fee: '', notes: '',
+    fee: '', payment_method: 'cash', notes: '',
   })
   const [saving,  setSaving]  = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
 
   function setField(key: keyof typeof form, value: string) {
     setForm(f => ({ ...f, [key]: value }))
@@ -48,23 +58,32 @@ export default function NewPrivateSessionForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitted(true)
+    setError('')
     if (!form.student_id || !form.coach_id || !form.start_time || !form.end_time) return
     setSaving(true)
 
     const duration = computeDuration(form.start_time, form.end_time)
     const fee      = parseFloat(form.fee) || 0
 
-    const { data: payment } = await supabase.from('payments').insert({
+    // The payment row is what puts the session into the day's revenue,
+    // the payments page, reports and dashboard totals.
+    const { data: payment, error: payErr } = await supabase.from('payments').insert({
       student_id:     form.student_id,
       type:           'private',
       amount_due:     fee,
       amount_paid:    fee,
-      payment_method: 'cash',
+      payment_method: form.payment_method,
       date:           form.date,
       notes:          form.notes || null,
     }).select('id').single()
 
-    await supabase.from('private_sessions').insert({
+    if (payErr || !payment) {
+      setError(payErr?.message || (isRtl ? 'تعذر تسجيل الدفع' : 'Could not record the payment'))
+      setSaving(false)
+      return
+    }
+
+    const { error: sessErr } = await supabase.from('private_sessions').insert({
       student_id:     form.student_id,
       coach_id:       form.coach_id,
       hall_id:        form.hall_id || null,
@@ -73,10 +92,18 @@ export default function NewPrivateSessionForm({
       end_time:       form.end_time,
       duration_hours: duration,
       fee,
-      payment_method: 'cash',
-      payment_id:     payment?.id || null,
+      payment_method: form.payment_method,
+      payment_id:     payment.id,
       notes:          form.notes || null,
     })
+
+    if (sessErr) {
+      // Don't leave an orphan payment in the revenue totals
+      await supabase.from('payments').delete().eq('id', payment.id)
+      setError(sessErr.message)
+      setSaving(false)
+      return
+    }
 
     await supabase.from('coach_attendance').insert({
       coach_id:        form.coach_id,
@@ -85,7 +112,7 @@ export default function NewPrivateSessionForm({
       notes:           `Private — ${form.date}`,
     })
 
-    setForm(f => ({ ...f, student_id: '', coach_id: '', hall_id: '', start_time: '', end_time: '', fee: '', notes: '' }))
+    setForm(f => ({ ...f, student_id: '', coach_id: '', hall_id: '', start_time: '', end_time: '', fee: '', payment_method: 'cash', notes: '' }))
     setSubmitted(false)
     setSaving(false)
     router.refresh()
@@ -183,15 +210,24 @@ export default function NewPrivateSessionForm({
           </p>
         )}
 
-        {/* Fee */}
-        <div>
-          <label style={lbl}>{isRtl ? 'السعر (جنيه)' : 'Fee (EGP)'}</label>
-          <input
-            type="number" min="0"
-            value={form.fee} placeholder="0"
-            onChange={e => setField('fee', e.target.value)}
-            style={{ ...field('fee'), direction: 'ltr' }}
-          />
+        {/* Fee + Payment type */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={lbl}>{isRtl ? 'السعر (جنيه)' : 'Fee (EGP)'}</label>
+            <input
+              type="number" min="0"
+              value={form.fee} placeholder="0"
+              onChange={e => setField('fee', e.target.value)}
+              style={{ ...field('fee'), direction: 'ltr' }}
+            />
+          </div>
+          <div>
+            <label style={lbl}>{isRtl ? 'طريقة الدفع' : 'Payment Type'}</label>
+            <select value={form.payment_method} onChange={e => setField('payment_method', e.target.value)} style={field('payment_method')}>
+              <option value="cash">{isRtl ? 'كاش' : 'Cash'}</option>
+              <option value="instapay">{isRtl ? 'إنستاباي' : 'InstaPay'}</option>
+            </select>
+          </div>
         </div>
 
         {/* Notes */}
@@ -204,6 +240,8 @@ export default function NewPrivateSessionForm({
             style={field('notes')}
           />
         </div>
+
+        {error && <p style={{ ...errTxt, margin: 0 }}>⚠ {error}</p>}
 
         <button type="submit" disabled={saving} style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,

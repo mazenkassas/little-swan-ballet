@@ -4,6 +4,7 @@ import {
   getNextOrCurrentClassDate,
   computeSubscriptionStartDate,
   computeDeduction,
+  computeRefund,
   isStudentOnHoliday,
   sessionCountsForStudent,
   getActiveSubForClass,
@@ -637,5 +638,24 @@ describe('Full scenario: 4-Sunday cycle with late payment', () => {
     })
     expect(r.shouldDeduct).toBe(false)
     expect(r.newRemaining).toBe(3)  // unchanged
+  })
+})
+
+describe('computeRefund (clearing a mark gives the session back)', () => {
+  const base = { remainingSessions: 2, totalSessions: 4, sessionCounts: true }
+
+  it('refunds when a present/absent mark is cleared', () => {
+    expect(computeRefund({ ...base, status: null, prevStatus: 'present' })).toEqual({ shouldRefund: true, newRemaining: 3 })
+    expect(computeRefund({ ...base, status: null, prevStatus: 'absent' })).toEqual({ shouldRefund: true, newRemaining: 3 })
+  })
+
+  it('does not refund when switching present <-> absent', () => {
+    expect(computeRefund({ ...base, status: 'absent', prevStatus: 'present' }).shouldRefund).toBe(false)
+  })
+
+  it('does not refund when nothing was marked, on holidays, or above the total', () => {
+    expect(computeRefund({ ...base, status: null, prevStatus: null }).shouldRefund).toBe(false)
+    expect(computeRefund({ ...base, status: null, prevStatus: 'present', sessionCounts: false }).shouldRefund).toBe(false)
+    expect(computeRefund({ ...base, remainingSessions: 4, status: null, prevStatus: 'present' }).shouldRefund).toBe(false)
   })
 })

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { format, addDays, subDays, addWeeks, subWeeks, isToday, parseISO } from 'date-fns'
 import { formatCurrency } from '@/lib/utils'
 import DailySessionCard from './DailySessionCard'
+import JumpToDate from './JumpToDate'
 import DailyPrivateSection from './DailyPrivateSection'
 import DailyRevenueSection from './DailyRevenueSection'
 import DailyExpensesSection from './DailyExpensesSection'
@@ -185,7 +186,7 @@ export default async function DailyPage({
     .eq('date', selectedDay).order('start_time')
 
   const { data: coaches }     = await supabase.from('coaches').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
-  const { data: allStudents } = await supabase.from('students').select('id, name_ar, name_en').eq('status', 'active').order('name_ar')
+  const { data: allStudents } = await supabase.from('students').select('id, name_ar, name_en, class_students(class:classes(id, name, is_active))').eq('status', 'active').order('name_ar')
 
   // ── Formatted date ────────────────────────────────────────────────────────
   const formattedDate = selectedDate.toLocaleDateString(
@@ -251,6 +252,7 @@ export default async function DailyPage({
               {selectedDayLabel}
             </h1>
             <span style={{ fontSize: 13, color: 'var(--txt2)' }}>{formattedDate}</span>
+            <JumpToDate selectedDay={selectedDay} todayStr={todayStr} isRtl={isRtl} />
             {isSelectedToday && (
               <span style={{ fontSize: 10, fontWeight: 700, background: '#d4667a', color: '#fff', borderRadius: 20, padding: '2px 9px' }}>
                 {isRtl ? 'اليوم' : '+ Today'}

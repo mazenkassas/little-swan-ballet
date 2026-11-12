@@ -140,6 +140,28 @@ export function computeDeduction(opts: {
 }
 
 /**
+ * Reverse of computeDeduction: when a present/absent mark is cleared, the
+ * session it consumed is given back (never above the subscription total).
+ */
+export function computeRefund(opts: {
+  status: AttendanceStatus
+  prevStatus: AttendanceStatus
+  remainingSessions: number
+  totalSessions: number
+  sessionCounts: boolean
+}): { shouldRefund: boolean; newRemaining: number } {
+  const { status, prevStatus, remainingSessions, totalSessions, sessionCounts } = opts
+
+  const statusCounts = status     === 'present' || status     === 'absent'
+  const wasCounted   = prevStatus === 'present' || prevStatus === 'absent'
+
+  if (statusCounts || !wasCounted || !sessionCounts || remainingSessions >= totalSessions) {
+    return { shouldRefund: false, newRemaining: remainingSessions }
+  }
+  return { shouldRefund: true, newRemaining: remainingSessions + 1 }
+}
+
+/**
  * Rule 4: Is a student on holiday for a given session date?
  * Academy-wide if student_ids is null/empty; student-specific otherwise.
  */

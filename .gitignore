@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Local utility scripts
 seed.mjs
+
+# local agent config (contains secrets)
+.codex/

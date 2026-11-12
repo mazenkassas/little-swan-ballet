@@ -28,6 +28,8 @@ for (let h = 7; h <= 22; h++) {
   const suffix   = h < 12 ? 'AM' : 'PM'
   const suffixAr = h < 12 ? 'ص' : 'م'
   HOURS.push({ value, en: `${h12} ${suffix}`, ar: `${h12} ${suffixAr}` })
+  // Half-hour slot (the list ends at 10 PM)
+  if (h < 22) HOURS.push({ value: `${String(h).padStart(2, '0')}:30`, en: `${h12}:30 ${suffix}`, ar: `${h12}:30 ${suffixAr}` })
 }
 
 function fmt12(time: string | null) {
@@ -40,9 +42,9 @@ function fmt12(time: string | null) {
 
 function computeDuration(start: string, end: string): number {
   if (!start || !end) return 0
-  const [sh] = start.split(':').map(Number)
-  const [eh] = end.split(':').map(Number)
-  return Math.max(0, eh - sh)
+  const [sh, sm = 0] = start.split(':').map(Number)
+  const [eh, em = 0] = end.split(':').map(Number)
+  return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60)
 }
 
 const EMPTY_FORM = { coach_id: '', student_id: '', start_time: '', end_time: '', fee: '', payment_method: 'cash' }
@@ -87,11 +89,29 @@ export default function DailyPrivateSection({
     setSaving(true)
     const duration = computeDuration(form.start_time, form.end_time)
     const fee      = parseFloat(form.fee) || 0
-    await supabase.from('private_sessions').insert({
+    // Record the fee as a payment so it shows in the day's revenue and all totals
+    const { data: payment, error: payErr } = await supabase.from('payments').insert({
+      student_id: form.student_id, type: 'private',
+      amount_due: fee, amount_paid: fee,
+      payment_method: form.payment_method, date,
+    }).select('id').single()
+    if (payErr || !payment) {
+      alert(payErr?.message || (isRtl ? 'تعذر تسجيل الدفع' : 'Could not record the payment'))
+      setSaving(false)
+      return
+    }
+    const { error: sessErr } = await supabase.from('private_sessions').insert({
       student_id: form.student_id, coach_id: form.coach_id,
       date, start_time: form.start_time, end_time: form.end_time,
       duration_hours: duration, fee, payment_method: form.payment_method,
+      payment_id: payment.id,
     })
+    if (sessErr) {
+      await supabase.from('payments').delete().eq('id', payment.id)
+      alert(sessErr.message)
+      setSaving(false)
+      return
+    }
     await supabase.from('coach_attendance').insert({
       coach_id: form.coach_id, hours_worked: duration,
       location_status: 'valid', notes: `Private — ${date}`,
@@ -108,6 +128,7 @@ export default function DailyPrivateSection({
     await supabase.from('private_sessions').update({ payment_method: method }).eq('id', sessionId)
     if (paymentId) {
       await supabase.from('payments').update({ payment_method: method }).eq('id', paymentId)
+      router.refresh() // cash / InstaPay totals in the revenue section
     }
   }
 
