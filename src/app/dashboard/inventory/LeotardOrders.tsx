@@ -606,10 +606,10 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
         {!isStock && !setupNeeded && (
           <div className="lsw-tools">
             <button className="lsw-btn ghost" onClick={exportCsv} disabled={!visible.length}>
-              <Download size={15} aria-hidden />{L.exportCsv}
+              <Download size={14} aria-hidden />{L.exportCsv}
             </button>
             <button className="lsw-btn" onClick={addRow} disabled={adding}>
-              <Plus size={15} aria-hidden />{L.addRow}
+              <Plus size={14} aria-hidden />{L.addRow}
             </button>
           </div>
         )}
@@ -790,7 +790,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
                 <div>{sheetRows.length ? L.emptySearch : L.emptySheet}</div>
                 {sheetRows.length
                   ? <button className="lsw-btn ghost" onClick={clearFilters}>{L.clear}</button>
-                  : <button className="lsw-btn" onClick={addRow} disabled={adding}><Plus size={15} aria-hidden />{L.addRow}</button>}
+                  : <button className="lsw-btn" onClick={addRow} disabled={adding}><Plus size={14} aria-hidden />{L.addRow}</button>}
               </div>
             )}
           </div>
@@ -822,7 +822,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
           {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </button>
         {!setupNeeded && (
-          <button className="lsw-addmonth" onClick={openMonthForm}><Plus size={15} aria-hidden />{L.addMonth}</button>
+          <button className="lsw-addmonth" onClick={openMonthForm}><Plus size={14} aria-hidden />{L.addMonth}</button>
         )}
       </div>
 

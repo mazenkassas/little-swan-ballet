@@ -144,11 +144,11 @@ return (
           <div key={group.label} style={{ marginBottom: 4 }}>
             {!collapsed && (
               <div style={{
-                fontSize: 10.5,
+                fontSize: 10,
                 color: '#C8788A',
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
-                padding: '14px 10px 6px',
+                padding: '12px 8px 4px',
                 fontWeight: 700,
               }}>
                 {group.label}
