@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Save, ArrowLeftRight, Search, X } from 'lucide-react'
+import { Save, ArrowLeftRight, Search, X, SlidersHorizontal } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { transferStudent } from '../../students/actions'
 import { compareClassNames } from '@/lib/classOrder'
@@ -32,6 +32,20 @@ function classLabel(c: ClassRow, _isRtl: boolean) {
   const parts = [grade, term, days, time].filter(Boolean)
   return parts.length >= 2 ? parts.join(' · ') : c.name
 }
+
+/** Lower-case, strip Arabic diacritics and unify letter variants, so search ignores spelling forms. */
+function norm(s: string | null | undefined): string {
+  return (s || '')
+    .toLowerCase()
+    .replace(/[ً-ٰٟـ]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .trim()
+}
+
+type ResultFilter = 'all' | 'pending' | Result
+const NO_CLASS = '__none'
 
 function sortGroupKey(name: string) {
   const lower = name.toLowerCase()
@@ -64,6 +78,10 @@ export default function ExamResultsForm({
     tTitle: 'نقل الطالبة', tSub: (n: string) => `اختر المجموعة الجديدة لـ ${n}`, tFrom: 'من مجموعة', tSearch: 'ابحث عن مجموعة…',
     tConfirm: 'نقل', tCancel: 'إلغاء', tPick: 'اختر مجموعة', tSame: 'هذه مجموعتها الحالية', tCurrent: 'الحالية',
     tNote: (e: string) => `منقولة من امتحان: ${e}`, tNoMatch: 'لا توجد مجموعات مطابقة',
+    fSearch: 'ابحث باسم الطالبة…', fButton: 'فلاتر', fResult: 'النتيجة', fLevel: 'المستوى', fClass: 'المجموعة',
+    fAll: 'الكل', fAllLevels: 'كل المستويات', fAllClasses: 'كل المجموعات', fClear: 'مسح الفلاتر',
+    fShowing: (n: number, t: number) => `عرض ${n} من ${t}`, fNone: 'لا توجد طالبات مطابقة للفلاتر',
+    fSavedHint: 'فلتر النتيجة يعتمد على النتائج المحفوظة',
   } : {
     pass: 'Pass', fail: 'Fail', evaluation: 'Evaluation', committee: 'Special Committee', transferred: 'Transferred',
     notes: 'Notes…', noClass: 'Not enrolled in a class', save: 'Save Results', saving: 'Saving…', saved: 'Saved ✓',
@@ -73,6 +91,10 @@ export default function ExamResultsForm({
     tTitle: 'Transfer student', tSub: (n: string) => `Choose the new class for ${n}`, tFrom: 'From class', tSearch: 'Search classes…',
     tConfirm: 'Transfer', tCancel: 'Cancel', tPick: 'Choose a class', tSame: 'This is her current class', tCurrent: 'current',
     tNote: (e: string) => `Transferred from exam: ${e}`, tNoMatch: 'No classes match',
+    fSearch: 'Search student by name…', fButton: 'Filters', fResult: 'Result', fLevel: 'Level', fClass: 'Class',
+    fAll: 'All', fAllLevels: 'All levels', fAllClasses: 'All classes', fClear: 'Clear filters',
+    fShowing: (n: number, t: number) => `Showing ${n} of ${t}`, fNone: 'No students match these filters',
+    fSavedHint: 'Result filter uses saved results',
   }
 
   const RESULTS: { key: Result; label: string; color: string }[] = [
@@ -91,6 +113,57 @@ export default function ExamResultsForm({
   const [saved,  setSaved]  = useState(false)
   const [error,  setError]  = useState('')
   const [transferFor, setTransferFor] = useState<any | null>(null)
+
+  // ── Filters ──
+  const [query,       setQuery]       = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+  const [fResult,     setFResult]     = useState<ResultFilter>('all')
+  const [fLevel,      setFLevel]      = useState('')
+  const [fClass,      setFClass]      = useState('')
+
+  const levelKey = (s: { grade?: { id?: string } | null; term?: { id?: string } | null }) =>
+    `${s.grade?.id ?? 'none'}__${s.term?.id ?? 'none'}`
+  const levelOptions = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const s of students) {
+      const label = [s.grade?.name, s.term?.name].filter(Boolean).join(' ') || (isRtl ? 'غير محدد' : 'Unknown')
+      m.set(levelKey(s), label)
+    }
+    return [...m.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => sortGroupKey(a.label).localeCompare(sortGroupKey(b.label)))
+  }, [students, isRtl])
+  const classOptions = useMemo(() => {
+    const m = new Map<string, ClassRow>()
+    let anyWithout = false
+    for (const s of students) {
+      const cs = classesByStudent[s.id] || []
+      if (!cs.length) anyWithout = true
+      for (const c of cs) m.set(c.id, c)
+    }
+    const opts = [...m.values()].sort((a, b) => compareClassNames(a.name, b.name)).map(c => ({ value: c.id, label: classLabel(c, isRtl) }))
+    return anyWithout ? [...opts, { value: NO_CLASS, label: L.noClass }] : opts
+  }, [students, classesByStudent, isRtl, L.noClass])
+
+  const savedResult = (id: string): Result | '' => {
+    const r = existingBy.get(id)?.result
+    return r && r !== 'pending' ? r : ''
+  }
+  const q = norm(query)
+  const visible = students.filter(s => {
+    if (q && !norm(s.name_ar).includes(q) && !norm(s.name_en).includes(q)) return false
+    if (fResult !== 'all') {
+      const r = savedResult(s.id)
+      if (fResult === 'pending' ? r !== '' : r !== fResult) return false
+    }
+    if (fLevel && levelKey(s) !== fLevel) return false
+    if (fClass) {
+      const cs = classesByStudent[s.id] || []
+      if (fClass === NO_CLASS ? cs.length > 0 : !cs.some(c => c.id === fClass)) return false
+    }
+    return true
+  })
+  const activeFilters = (fResult !== 'all' ? 1 : 0) + (fLevel ? 1 : 0) + (fClass ? 1 : 0)
+  const filtering = !!q || activeFilters > 0
+  function clearFilters() { setQuery(''); setFResult('all'); setFLevel(''); setFClass('') }
 
   function dbError(e: { code?: string; message: string }) {
     return e.code === '23514' ? L.needsDb : `${L.saveErr} ${e.message}`
@@ -166,6 +239,109 @@ export default function ExamResultsForm({
     />
   )
 
+  const resultChips: { key: ResultFilter; label: string; color: string }[] = [
+    { key: 'all',         label: L.fAll,         color: '#d4667a' },
+    { key: 'pending',     label: L.pending,      color: '#8a8a9a' },
+    ...RESULTS,
+    { key: 'transferred', label: L.transferred,  color: '#e8960a' },
+  ]
+  const selectStyle: React.CSSProperties = {
+    width: '100%', height: 34, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-page)',
+    color: 'var(--txt1)', fontSize: 12.5, padding: '0 8px', fontFamily: 'inherit', outline: 'none',
+  }
+  const fieldLabel: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--txt2)', marginBottom: 6 }
+
+  const toolbar = (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 12 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Search */}
+        <label style={{
+          flex: '1 1 220px', display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px',
+          borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-page)', color: 'var(--txt2)',
+        }}>
+          <Search size={14} />
+          <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder={L.fSearch} aria-label={L.fSearch}
+            style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', color: 'var(--txt1)', fontSize: 13, fontFamily: 'inherit' }} />
+        </label>
+
+        {/* Filters button */}
+        <button type="button" onClick={() => setShowFilters(v => !v)} aria-expanded={showFilters} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, height: 36, padding: '0 14px', borderRadius: 10,
+          fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          border: `1px solid ${showFilters || activeFilters ? '#d4667a66' : 'var(--border)'}`,
+          background: showFilters || activeFilters ? '#d4667a18' : 'var(--bg-page)',
+          color: showFilters || activeFilters ? '#d4667a' : 'var(--txt1)',
+        }}>
+          <SlidersHorizontal size={14} />
+          {L.fButton}
+          {activeFilters > 0 && (
+            <span style={{
+              minWidth: 18, height: 18, borderRadius: 9, padding: '0 5px', background: '#d4667a', color: '#fff',
+              fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}>{activeFilters}</span>
+          )}
+        </button>
+
+        {filtering && (
+          <>
+            <span style={{ fontSize: 12, color: 'var(--txt2)' }}>{L.fShowing(visible.length, students.length)}</span>
+            <button type="button" onClick={clearFilters} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 0,
+              color: '#d4667a', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: 4,
+            }}><X size={13} />{L.fClear}</button>
+          </>
+        )}
+      </div>
+
+      {showFilters && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <span style={fieldLabel}>{L.fResult}</span>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {resultChips.map(c => {
+                const on = fResult === c.key
+                return (
+                  <button key={c.key} type="button" aria-pressed={on} onClick={() => setFResult(c.key)} style={{
+                    padding: '5px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    background: on ? c.color + '22' : 'var(--bg-page)',
+                    border: `1px solid ${on ? c.color + '66' : 'var(--border)'}`,
+                    color: on ? c.color : 'var(--txt2)',
+                  }}>{c.label}</button>
+                )
+              })}
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 10.5, color: 'var(--txt2)' }}>{L.fSavedHint}</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+            {levelOptions.length > 1 && (
+              <label>
+                <span style={fieldLabel}>{L.fLevel}</span>
+                <select value={fLevel} onChange={e => setFLevel(e.target.value)} style={selectStyle}>
+                  <option value="">{L.fAllLevels}</option>
+                  {levelOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </label>
+            )}
+            <label>
+              <span style={fieldLabel}>{L.fClass}</span>
+              <select value={fClass} onChange={e => setFClass(e.target.value)} style={selectStyle} dir="ltr">
+                <option value="">{L.fAllClasses}</option>
+                {classOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+  const noMatch = (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: '36px 24px', textAlign: 'center', color: 'var(--txt2)', fontSize: 13 }}>
+      {L.fNone}
+    </div>
+  )
+  const visibleIds = new Set(visible.map(s => s.id))
+
   // ── Group students by grade + term when multiple levels ──
   if (isGrouped) {
     const groupMap = new Map<string, { label: string; sortKey: string; students: any[] }>()
@@ -177,10 +353,16 @@ export default function ExamResultsForm({
       if (!groupMap.has(key)) groupMap.set(key, { label, sortKey: sortGroupKey(label), students: [] })
       groupMap.get(key)!.students.push(s)
     }
-    const groups = [...groupMap.values()].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    // Counts use the whole group; only the rows shown follow the filters
+    const groups = [...groupMap.values()]
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+      .map(g => ({ ...g, shown: g.students.filter(s => visibleIds.has(s.id)) }))
+      .filter(g => g.shown.length > 0)
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {toolbar}
+        {groups.length === 0 && noMatch}
         {groups.map(group => {
           const count = (k: Result) => group.students.filter(s => results[s.id] === k).length
           const pass = count('pass'), fail = count('fail')
@@ -197,7 +379,7 @@ export default function ExamResultsForm({
                   <Count n={pending} label={L.pending} color="var(--txt2)" muted />
                 </div>
               </div>
-              <StudentList students={group.students} {...listProps} />
+              <StudentList students={group.shown} {...listProps} />
             </div>
           )
         })}
@@ -210,14 +392,19 @@ export default function ExamResultsForm({
 
   // ── Flat list for a specific level ──
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--txt2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{L.student}</span>
-        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--txt2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{L.result}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {toolbar}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--txt2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{L.student}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--txt2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{L.result}</span>
+        </div>
+        {visible.length === 0
+          ? <p style={{ margin: 0, padding: '36px 20px', textAlign: 'center', color: 'var(--txt2)', fontSize: 13 }}>{L.fNone}</p>
+          : <StudentList students={visible} {...listProps} />}
+        {error && <div style={{ padding: '12px 20px 0' }}>{errorBox}</div>}
+        <SaveBar saving={saving} saved={saved} L={L} isRtl={isRtl} onSave={saveResults} />
       </div>
-      <StudentList students={students} {...listProps} />
-      {error && <div style={{ padding: '12px 20px 0' }}>{errorBox}</div>}
-      <SaveBar saving={saving} saved={saved} L={L} isRtl={isRtl} onSave={saveResults} />
       {modal}
     </div>
   )
