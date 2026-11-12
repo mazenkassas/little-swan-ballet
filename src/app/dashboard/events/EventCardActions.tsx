@@ -1,5 +1,6 @@
 'use client'
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { Eye, Pencil, Trash2, AlertTriangle } from 'lucide-react'
 import { deleteEvent } from './actions'
@@ -65,8 +66,9 @@ export default function EventCardActions({ id, name, isRtl }: Props) {
 
   return (
     <div>
-      {showConfirm && (
-        <DeleteModal name={name} isRtl={isRtl} onConfirm={handleConfirmDelete} onCancel={() => setShowConfirm(false)} pending={pending} />
+      {showConfirm && createPortal(
+        <DeleteModal name={name} isRtl={isRtl} onConfirm={handleConfirmDelete} onCancel={() => setShowConfirm(false)} pending={pending} />,
+        document.body,
       )}
       <div style={{ display: 'flex', gap: 6 }}>
         <Link href={`/dashboard/events/${id}`} style={{ ...btnBase, color: '#4a90d9', borderColor: '#4a90d928' }}>

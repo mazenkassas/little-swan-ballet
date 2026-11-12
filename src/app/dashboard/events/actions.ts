@@ -22,3 +22,12 @@ export async function updateEvent(
   revalidatePath(`/dashboard/events/${id}`)
   return {}
 }
+
+export async function unenrollStudent(enrollmentId: string, eventId: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('event_enrollments').delete().eq('id', enrollmentId)
+  if (error) return { error: error.message }
+  revalidatePath(`/dashboard/events/${eventId}`)
+  revalidatePath('/dashboard/events')
+  return {}
+}
