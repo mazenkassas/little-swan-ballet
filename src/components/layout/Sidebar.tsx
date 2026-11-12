@@ -75,25 +75,11 @@ export default function Sidebar({ user, mobileOpen = false }: { user: UserInfo; 
         key={href}
         href={href}
         title={collapsed ? label : undefined}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 9,
-          padding: '8px 10px',
-          borderRadius: 8,
-          marginBottom: 1,
-          fontSize: 13,
-          textDecoration: 'none',
-          color: active ? '#C8788A' : 'var(--txt2)',
-          background: active ? 'var(--bg2)' : 'transparent',
-          justifyContent: collapsed ? 'center' : 'flex-start',
-          fontWeight: active ? 500 : 400,
-          transition: 'background .12s, color .12s',
-          minHeight: 34,
-          flexShrink: 0,
-        }}
+        aria-current={active ? 'page' : undefined}
+        className={`sb-link${active ? ' on' : ''}`}
+        style={{ justifyContent: collapsed ? 'center' : 'flex-start' }}
       >
-        <span style={{ flexShrink: 0, display: 'flex', color: active ? '#C8788A' : 'var(--txt2)' }}>
+        <span style={{ flexShrink: 0, display: 'flex' }}>
           {icon}
         </span>
         {!collapsed && label}
@@ -109,8 +95,8 @@ return (
         width: collapsed ? 56 : 210,
         minHeight: '100vh',
         flexShrink: 0,
-        background: 'var(--surface)',
-        borderLeft: '1px solid var(--border)',
+        background: 'var(--sb-bg, var(--surface))',
+        borderInlineEnd: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
         transition: 'width 0.2s ease',
@@ -129,23 +115,10 @@ return (
         flexShrink: 0,
       }}>
         {!collapsed && (
-          <div>
-            <div style={{
-              fontFamily: 'Georgia, serif',
-              fontStyle: 'italic',
-              fontSize: 18,
-              color: '#C8788A',
-              fontWeight: 400,
-              lineHeight: 1,
-            }}>Little Swan</div>
-            <div style={{
-              fontSize: 9,
-              color: 'var(--txt2)',
-              letterSpacing: '0.15em',
-              textTransform: 'uppercase',
-              marginTop: 3,
-              opacity: 0.7,
-            }}>Ballet Academy</div>
+          <div className="sb-brand">
+            <div className="sb-brand-name">Little Swan</div>
+            <div className="sb-brand-rule" aria-hidden><span /></div>
+            <div className="sb-brand-sub">Ballet Academy</div>
           </div>
         )}
         <button
@@ -170,13 +143,12 @@ return (
           <div key={group.label} style={{ marginBottom: 4 }}>
             {!collapsed && (
               <div style={{
-                fontSize: 10,
-                color: 'var(--txt2)',
-                letterSpacing: '0.08em',
+                fontSize: 10.5,
+                color: '#C8788A',
+                letterSpacing: '0.12em',
                 textTransform: 'uppercase',
-                padding: '12px 8px 4px',
-                opacity: 0.6,
-                fontWeight: 600,
+                padding: '14px 10px 6px',
+                fontWeight: 700,
               }}>
                 {group.label}
               </div>
@@ -184,7 +156,7 @@ return (
             {collapsed && <div style={{ height: 8 }} />}
             {group.items.map(item => navLink(
               item.href,
-              <item.icon size={14} />,
+              <item.icon size={16} strokeWidth={1.8} />,
               item.label,
               item.exact
             ))}
@@ -194,7 +166,7 @@ return (
 
       {/* Settings */}
       <div style={{ padding: '0 8px 4px', flexShrink: 0 }}>
-        {navLink('/dashboard/settings', <Settings size={14} />, t('settings'))}
+        {navLink('/dashboard/settings', <Settings size={16} strokeWidth={1.8} />, t('settings'))}
       </div>
 
       {/* User profile footer */}

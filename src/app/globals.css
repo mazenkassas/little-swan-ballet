@@ -113,3 +113,23 @@ html.dark input[type="date"]::-webkit-calendar-picker-indicator {
   100% { box-shadow: 0 0 0 0 rgba(212,102,122,0); }
 }
 .pulse { animation: pulseRing 2s infinite; }
+
+/* ── Sidebar ── */
+:root { --sb-bg: linear-gradient(180deg, #ffffff 0%, #fff6f8 100%); }
+html.dark { --sb-bg: linear-gradient(180deg, #16121b 0%, #1a141d 100%); }
+.sb-brand { flex: 1; text-align: center; }
+.sb-brand-name { font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-style: italic; font-size: 21px; line-height: 1.1; color: #C8788A; }
+.sb-brand-rule { display: flex; align-items: center; gap: 6px; margin: 6px auto 4px; width: 92px; }
+.sb-brand-rule::before, .sb-brand-rule::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #e5a9b8); }
+.sb-brand-rule::after { background: linear-gradient(90deg, #e5a9b8, transparent); }
+.sb-brand-rule span { width: 5px; height: 5px; background: #d4667a; transform: rotate(45deg); }
+.sb-brand-sub { font-size: 9.5px; color: var(--txt2); letter-spacing: .2em; text-transform: uppercase; }
+.sb-link {
+  display: flex; align-items: center; gap: 11px; min-height: 40px; padding: 9px 12px; margin-bottom: 2px;
+  border-radius: 12px; font-size: 13.5px; font-weight: 500; text-decoration: none; flex-shrink: 0;
+  color: var(--txt2); transition: background .15s, color .15s, box-shadow .15s;
+}
+.sb-link:hover { background: color-mix(in srgb, #d4667a 9%, transparent); color: var(--txt1); }
+.sb-link:focus-visible { outline: 2px solid #d4667a; outline-offset: -2px; }
+.sb-link.on { background: linear-gradient(135deg, #ec9aae 0%, #d4667a 100%); color: #fff; font-weight: 600; box-shadow: 0 6px 16px rgba(212, 102, 122, .32); }
+.sb-link.on:hover { color: #fff; }
