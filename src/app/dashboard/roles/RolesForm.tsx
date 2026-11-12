@@ -13,6 +13,7 @@ const ACTIONS = ['view', 'create', 'edit', 'delete'] as const
 type Action = typeof ACTIONS[number]
 
 const ROLES = [
+  { key: 'admin', en: 'Admin',  ar: 'مدير' },
   { key: 'staff', en: 'Staff',  ar: 'موظف' },
   { key: 'coach', en: 'Coach',  ar: 'مدربة' },
 ]
@@ -120,7 +121,7 @@ export default function RolesForm({
   const t          = L[isRtl ? 'ar' : 'en']
 
   const [perms,      setPerms]      = useState<AllPerms>(normalizePerms(initialPerms))
-  const [activeRole, setActiveRole] = useState('staff')
+  const [activeRole, setActiveRole] = useState('admin')
   const [saving,     setSaving]     = useState(false)
   const [saved,      setSaved]      = useState(false)
 

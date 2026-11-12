@@ -23,7 +23,7 @@ export type CoachInput = {
 export async function createCoach(
   input: CoachInput & { password: string },
 ): Promise<{ error?: string }> {
-  const denied = await requireManager('coaches')
+  const denied = await requireManager('coaches', 'create')
   if (denied) return { error: denied }
   if (!input.password || input.password.length < 6) return { error: 'Password must be at least 6 characters' }
 
@@ -95,7 +95,7 @@ export async function updateCoach(
 }
 
 export async function deleteCoach(id: string): Promise<{ error?: string }> {
-  const denied = await requireManager('coaches')
+  const denied = await requireManager('coaches', 'delete')
   if (denied) return { error: denied }
 
   const supabase = await createClient()

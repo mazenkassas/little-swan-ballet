@@ -19,9 +19,13 @@ export function normalizeEmail(email: string) {
 
 /**
  * Ensures the current user is an active staff member allowed to manage `page`
- * ('coaches' or 'staff'). Mirrors the access rules in src/proxy.ts.
+ * ('coaches' or 'staff') with the given action, per the Roles page
+ * (system_settings.role_permissions). Mirrors the access rules in src/proxy.ts.
  */
-export async function requireManager(page: 'coaches' | 'staff'): Promise<string | null> {
+export async function requireManager(
+  page: 'coaches' | 'staff',
+  action: 'create' | 'edit' | 'delete' = 'edit',
+): Promise<string | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return 'Not signed in'
@@ -35,13 +39,14 @@ export async function requireManager(page: 'coaches' | 'staff'): Promise<string 
   if (!me || me.is_active === false) return 'Not allowed'
   if (me.role === 'super_admin') return null
   if (me.role === 'admin' || me.role === 'staff') {
-    const { data: perm } = await supabase
-      .from('role_permissions')
-      .select('id')
-      .eq('role', me.role)
-      .eq('page', page)
+    const { data: setting } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'role_permissions')
       .maybeSingle()
-    if (perm) return null
+    try {
+      if (JSON.parse(setting?.value || '{}')?.[me.role]?.[page]?.[action]) return null
+    } catch {}
   }
   return 'Not allowed'
 }

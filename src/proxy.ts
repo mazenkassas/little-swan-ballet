@@ -76,16 +76,20 @@ export async function proxy(request: NextRequest) {
       const pathParts = request.nextUrl.pathname.split('/')
       const page = pathParts[2]
 
-      // The Subscriptions page checks the Roles-page permissions itself
+      // Access follows the "View" toggle on the Roles page
+      // (stored as JSON in system_settings.role_permissions).
+      // The Subscriptions page checks the Roles-page permissions itself.
       if (page && page !== '' && page !== 'subscriptions') {
-        const { data: permission } = await supabase
-          .from('role_permissions')
-          .select('id')
-          .eq('role', role)
-          .eq('page', page)
+        const { data: setting } = await supabase
+          .from('system_settings')
+          .select('value')
+          .eq('key', 'role_permissions')
           .maybeSingle()
 
-        if (!permission) {
+        let canView = false
+        try { canView = !!JSON.parse(setting?.value || '{}')?.[role]?.[page]?.view } catch {}
+
+        if (!canView) {
           return NextResponse.redirect(new URL('/dashboard', request.url))
         }
       }

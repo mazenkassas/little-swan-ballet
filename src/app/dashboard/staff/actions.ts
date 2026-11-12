@@ -24,7 +24,7 @@ export type StaffInput = {
 export async function createStaff(
   input: StaffInput & { password: string },
 ): Promise<{ error?: string }> {
-  const denied = await requireManager('staff')
+  const denied = await requireManager('staff', 'create')
   if (denied) return { error: denied }
   if (!input.password || input.password.length < 6) return { error: 'Password must be at least 6 characters' }
 
@@ -100,7 +100,7 @@ export async function updateStaff(
 }
 
 export async function deleteStaff(id: string): Promise<{ error?: string }> {
-  const denied = await requireManager('staff')
+  const denied = await requireManager('staff', 'delete')
   if (denied) return { error: denied }
 
   const supabase = await createClient()
