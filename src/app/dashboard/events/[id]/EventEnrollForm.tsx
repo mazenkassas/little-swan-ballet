@@ -2,10 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { UserPlus, X } from 'lucide-react'
+import { Check, Search, UserPlus, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 type Student = { id: string; name_ar: string; name_en?: string | null }
+
+/** Lower-case, strip Arabic diacritics and unify common letter variants, so search ignores spelling forms. */
+function norm(s: string | null | undefined): string {
+  return (s || '')
+    .toLowerCase()
+    .replace(/[ً-ٰٟـ]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .trim()
+}
 
 // "Enroll Student" button that opens a small popup to enroll a student in the event.
 export default function EventEnrollForm({ eventId, eventPrice, students, isRtl }: {
@@ -15,19 +26,20 @@ export default function EventEnrollForm({ eventId, eventPrice, students, isRtl }
   const router   = useRouter()
   const [open,          setOpen]          = useState(false)
   const [studentId,     setStudentId]     = useState('')
+  const [query,         setQuery]         = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'instapay'>('cash')
   const [amountPaid,    setAmountPaid]    = useState(eventPrice.toString())
   const [loading,       setLoading]       = useState(false)
   const [error,         setError]         = useState('')
 
   const L = isRtl ? {
-    title: 'تسجيل طالبة', student: 'الطالبة', selectPlaceholder: 'اختر الطالبة...',
+    title: 'تسجيل طالبة', student: 'الطالبة', search: 'ابحث باسم الطالبة...', noMatch: 'لا توجد نتائج',
     noneLeft: 'كل الطالبات النشطات مسجلات بالفعل',
     amountLabel: 'المبلغ المدفوع (جنيه)', method: 'طريقة الدفع', cash: '💵 كاش', instapay: '📱 إنستاباي',
     enroll: 'تسجيل', enrolling: 'جارٍ التسجيل...', cancel: 'إلغاء', close: 'إغلاق',
     failed: 'تعذّر التسجيل',
   } : {
-    title: 'Enroll Student', student: 'Student', selectPlaceholder: 'Select student...',
+    title: 'Enroll Student', student: 'Student', search: 'Search student by name...', noMatch: 'No students found',
     noneLeft: 'All active students are already enrolled',
     amountLabel: 'Amount paid (EGP)', method: 'Payment method', cash: '💵 Cash', instapay: '📱 Instapay',
     enroll: 'Enroll', enrolling: 'Enrolling...', cancel: 'Cancel', close: 'Close',
@@ -35,7 +47,7 @@ export default function EventEnrollForm({ eventId, eventPrice, students, isRtl }
   }
 
   function openPopup() {
-    setStudentId(''); setAmountPaid(eventPrice.toString()); setPaymentMethod('cash'); setError('')
+    setStudentId(''); setQuery(''); setAmountPaid(eventPrice.toString()); setPaymentMethod('cash'); setError('')
     setOpen(true)
   }
 
@@ -91,6 +103,9 @@ export default function EventEnrollForm({ eventId, eventPrice, students, isRtl }
     display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--txt2)', marginBottom: 6,
   }
   const canSubmit = !!studentId && !loading
+  const label = (s: Student) => (isRtl || !s.name_en ? s.name_ar : s.name_en)
+  const q = norm(query)
+  const matches = q ? students.filter(s => norm(s.name_ar).includes(q) || norm(s.name_en).includes(q)) : students
 
   return (
     <>
@@ -142,14 +157,47 @@ export default function EventEnrollForm({ eventId, eventPrice, students, isRtl }
                 {students.length === 0 ? (
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--txt2)' }}>{L.noneLeft}</p>
                 ) : (
-                  <select autoFocus value={studentId} onChange={e => setStudentId(e.target.value)} style={inp}>
-                    <option value="">{L.selectPlaceholder}</option>
-                    {students.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {isRtl || !s.name_en ? s.name_ar : s.name_en}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    {/* Search box */}
+                    <div style={{ position: 'relative' }}>
+                      <Search size={14} color="var(--txt2)" style={{
+                        position: 'absolute', top: '50%', transform: 'translateY(-50%)', insetInlineStart: 11, pointerEvents: 'none',
+                      }} />
+                      <input
+                        autoFocus type="search" value={query} placeholder={L.search}
+                        onChange={e => setQuery(e.target.value)}
+                        // Enter picks the only/first match instead of submitting
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (matches[0]) setStudentId(matches[0].id) } }}
+                        style={{ ...inp, paddingInlineStart: 32 }}
+                      />
+                    </div>
+
+                    {/* Results */}
+                    <div style={{
+                      marginTop: 6, maxHeight: 200, overflowY: 'auto',
+                      border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-page)',
+                    }}>
+                      {matches.length === 0 ? (
+                        <p style={{ margin: 0, padding: '14px 12px', fontSize: 12, color: 'var(--txt2)', textAlign: 'center' }}>{L.noMatch}</p>
+                      ) : matches.map(s => {
+                        const selected = s.id === studentId
+                        const other = isRtl ? s.name_en : (s.name_en ? s.name_ar : null)
+                        return (
+                          <button key={s.id} type="button" onClick={() => setStudentId(s.id)} style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'start',
+                            padding: '8px 12px', border: 'none', borderBottom: '1px solid var(--border)',
+                            background: selected ? '#d4667a18' : 'transparent', cursor: 'pointer', fontFamily: 'inherit',
+                          }}>
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: selected ? '#d4667a' : 'var(--txt1)' }}>{label(s)}</span>
+                              {other && <span style={{ display: 'block', fontSize: 11, color: 'var(--txt2)' }} dir="auto">{other}</span>}
+                            </span>
+                            {selected && <Check size={15} color="#d4667a" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
                 )}
               </div>
 
