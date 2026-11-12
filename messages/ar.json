@@ -62,7 +62,8 @@
     "paymentMethod": { "cash": "كاش", "instapay": "إنستاباي" },
     "paymentType": {
       "subscription": "اشتراك", "product": "منتج", "event": "فعالية",
-      "private": "برايفيت", "exam": "امتحان", "enrollment": "تسجيل جديد", "level_test": "تحديد مستوى"
+      "private": "برايفيت", "exam": "امتحان", "enrollment": "تسجيل جديد", "level_test": "تحديد مستوى",
+      "leotard": "مايو", "bolero": "بولورو", "special_committee": "لجنة خاصة"
     }
   },
   "dashboard": {

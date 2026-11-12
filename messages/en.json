@@ -62,7 +62,8 @@
     "paymentMethod": { "cash": "Cash", "instapay": "Instapay" },
     "paymentType": {
       "subscription": "Subscription", "product": "Product", "event": "Event",
-      "private": "Private", "exam": "Exam", "enrollment": "Enrollment", "level_test": "Placement Test"
+      "private": "Private", "exam": "Exam", "enrollment": "Enrollment", "level_test": "Placement Test",
+      "leotard": "Leotard", "bolero": "Bolero", "special_committee": "Special Committee"
     }
   },
   "dashboard": {

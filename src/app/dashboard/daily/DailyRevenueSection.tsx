@@ -16,7 +16,8 @@ type Payment = {
 }
 type NewRow = { student_id: string; amount: string; type: string; payment_method: string }
 
-const TYPES = ['subscription', 'level_test', 'product', 'event', 'private', 'exam', 'enrollment']
+// 'product' is no longer offered; old rows still show their label
+const TYPES = ['subscription', 'level_test', 'leotard', 'bolero', 'special_committee', 'event', 'private', 'exam', 'enrollment']
 
 export default function DailyRevenueSection({
   payments, students, date, locale,
@@ -34,6 +35,9 @@ export default function DailyRevenueSection({
     subscription: isRtl ? 'اشتراك'  : 'Subscription',
     level_test:   isRtl ? 'تحديد مستوى' : 'Placement Test',
     product:      isRtl ? 'منتج'     : 'Product',
+    leotard:      isRtl ? 'مايو'     : 'Leotard',
+    bolero:       isRtl ? 'بولورو'   : 'Bolero',
+    special_committee: isRtl ? 'لجنة خاصة' : 'Special Committee',
     event:        isRtl ? 'فعالية'   : 'Event',
     private:      isRtl ? 'برايفيت' : 'Private',
     exam:         isRtl ? 'امتحان'   : 'Exam',
@@ -69,7 +73,17 @@ export default function DailyRevenueSection({
     })
     setSaving(null)
     // Keep the row on failure so nothing typed is lost
-    if (err) { setError(isRtl ? `تعذّر حفظ الدفعة: ${err.message}` : `Could not save payment: ${err.message}`); return }
+    if (err) {
+      // 23514 = the database does not accept this type yet (supabase/add_payment_types.sql not run)
+      if (err.code === '23514') {
+        setError(isRtl
+          ? 'هذا النوع (مايو / بولورو / لجنة خاصة) يحتاج تحديث قاعدة البيانات أولاً (supabase/add_payment_types.sql).'
+          : 'This type (Leotard / Bolero / Special Committee) needs a database update first (supabase/add_payment_types.sql).')
+      } else {
+        setError(isRtl ? `تعذّر حفظ الدفعة: ${err.message}` : `Could not save payment: ${err.message}`)
+      }
+      return
+    }
     removeRow(i)
     router.refresh()
   }

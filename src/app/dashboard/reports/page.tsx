@@ -77,6 +77,8 @@ export default async function ReportsPage() {
     event: tc('paymentType.event'), private: tc('paymentType.private'),
     exam: tc('paymentType.exam'), enrollment: tc('paymentType.enrollment'),
     level_test: tc('paymentType.level_test'),
+    leotard: tc('paymentType.leotard'), bolero: tc('paymentType.bolero'),
+    special_committee: tc('paymentType.special_committee'),
   }
 
   const totalMonthRevenue = monthPayments?.reduce((s, p) => s + (Number(p.amount_paid) || 0), 0) || 0

@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
 CREATE TABLE IF NOT EXISTS payments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   student_id UUID NOT NULL REFERENCES students(id),
-  type TEXT NOT NULL CHECK (type IN ('subscription', 'product', 'event', 'private', 'exam', 'enrollment')),
+  type TEXT NOT NULL CHECK (type IN ('subscription', 'product', 'event', 'private', 'exam', 'enrollment', 'level_test', 'leotard', 'bolero', 'special_committee')),
   amount_due DECIMAL(10,2) NOT NULL,
   amount_paid DECIMAL(10,2) NOT NULL DEFAULT 0,
   remaining_balance DECIMAL(10,2) GENERATED ALWAYS AS (amount_due - amount_paid) STORED,

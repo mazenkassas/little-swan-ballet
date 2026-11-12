@@ -8,6 +8,9 @@ import ExamFeesList from './ExamFeesList'
 const TYPE_COLORS: Record<string, string> = {
   subscription: '#d4667a',
   product:      '#3dab7e',
+  leotard:      '#e8960a',
+  bolero:       '#d4667a',
+  special_committee: '#8B6EC8',
   event:        '#8e5fd9',
   private:      '#4a90d9',
   exam:         '#e8960a',
@@ -65,7 +68,7 @@ export default async function PaymentsPage({
     all: 'الكل',
     noPayments: 'لا توجد مدفوعات في هذا اليوم',
     col: { num: '#', student: 'الطالبة', type: 'النوع', due: 'المبلغ', paid: 'المدفوع', method: 'طريقة الدفع', date: 'التاريخ', staff: 'الموظفة' },
-    types: { subscription: 'اشتراك', product: 'منتج', event: 'فعالية', private: 'خاص', exam: 'اختبار', enrollment: 'تسجيل', level_test: 'تحديد مستوى' },
+    types: { subscription: 'اشتراك', product: 'منتج', leotard: 'مايو', bolero: 'بولورو', special_committee: 'لجنة خاصة', event: 'فعالية', private: 'خاص', exam: 'اختبار', enrollment: 'تسجيل', level_test: 'تحديد مستوى' },
     methods: { cash: 'كاش', instapay: 'إنستاباي' },
   } : {
     title: 'Payments & Revenue',
@@ -79,14 +82,16 @@ export default async function PaymentsPage({
     all: 'All',
     noPayments: 'No payments for this day',
     col: { num: '#', student: 'Student', type: 'Type', due: 'Amount Due', paid: 'Paid', method: 'Method', date: 'Date', staff: 'Staff' },
-    types: { subscription: 'Subscription', product: 'Product', event: 'Event', private: 'Private', exam: 'Exam', enrollment: 'Enrollment', level_test: 'Placement Test' },
+    types: { subscription: 'Subscription', product: 'Product', leotard: 'Leotard', bolero: 'Bolero', special_committee: 'Special Committee', event: 'Event', private: 'Private', exam: 'Exam', enrollment: 'Enrollment', level_test: 'Placement Test' },
     methods: { cash: 'Cash', instapay: 'Instapay' },
   }
 
   const typeFilters = [
     { value: '',             label: L.all },
     { value: 'subscription', label: L.types.subscription },
-    { value: 'product',      label: L.types.product },
+    { value: 'leotard',      label: L.types.leotard },
+    { value: 'bolero',       label: L.types.bolero },
+    { value: 'special_committee', label: L.types.special_committee },
     { value: 'event',        label: L.types.event },
     { value: 'private',      label: L.types.private },
     { value: 'exam',         label: L.types.exam },
