@@ -234,6 +234,7 @@ export default function DailySessionCard({
         studentId,
         subStartDate: sub.start_date,
         sessionDate: session.date,
+        subEndDate: sub.end_date,
       })
       const deduction = computeDeduction({
         status, prevStatus,

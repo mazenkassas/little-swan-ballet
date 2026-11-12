@@ -4,16 +4,18 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
   computeDeduction,
+  computePackageFromDates,
   computeRefund,
   computeSubscriptionStartDate,
   getActiveSubForClass,
+  getNthClassDate,
   isStudentOnHoliday,
   sessionCountsForStudent,
   type AttendanceStatus,
 } from '@/lib/subscriptionLogic'
 import { cairoToday, checkSubscriptionsAccess } from './access'
 
-const SUB_FIELDS = 'id, class_id, plan_id, total_sessions, remaining_sessions, start_date, status, next_cycle_start, created_at, plan:subscription_plans(id, name, sessions_count, price)'
+const SUB_FIELDS = 'id, class_id, plan_id, total_sessions, remaining_sessions, start_date, end_date, status, next_cycle_start, created_at, plan:subscription_plans(id, name, sessions_count, price)'
 
 type Holiday = { start_date: string; end_date: string; student_ids: string[] | null; name: string }
 
@@ -31,6 +33,7 @@ export type StudentDetail = {
   klass: { id: string; name: string; days_of_week: string[] } | null
   sub: {
     id: string; total_sessions: number; remaining_sessions: number; start_date: string
+    end_date: string | null; expected_end: string | null
     next_cycle_start: string | null; plan_id: string | null; planName: string | null
   } | null
   sessions: DetailSession[]
@@ -105,7 +108,7 @@ export async function getStudentDetail(studentId: string, classId: string | null
   const detailSessions: DetailSession[] = (sessions || []).map(s => {
     const att = bySession.get(s.id)
     const h = holidayFor((holidays || []) as Holiday[], s.date, studentId)
-    const counts = !!sub && sessionCountsForStudent({ holiday: h, studentId, subStartDate: sub.start_date, sessionDate: s.date })
+    const counts = !!sub && sessionCountsForStudent({ holiday: h, studentId, subStartDate: sub.start_date, subEndDate: sub.end_date, sessionDate: s.date })
     return { id: s.id, date: s.date, status: att?.status ?? null, attendanceId: att?.id ?? null, holiday: h?.name ?? null, counts }
   })
 
@@ -119,6 +122,8 @@ export async function getStudentDetail(studentId: string, classId: string | null
       sub: sub ? {
         id: sub.id, total_sessions: sub.total_sessions, remaining_sessions: sub.remaining_sessions,
         start_date: sub.start_date, next_cycle_start: sub.next_cycle_start ?? null,
+        end_date: sub.end_date ?? null,
+        expected_end: sub.end_date ?? getNthClassDate(classDays, sub.start_date, sub.total_sessions),
         plan_id: sub.plan_id ?? null, planName: plan?.name ?? null,
       } : null,
       sessions: detailSessions,
@@ -238,7 +243,7 @@ export async function setAttendanceMark(input: {
 
   // Keep the package's remaining sessions in sync
   const { data: subs } = await supabase
-    .from('subscriptions').select('id, status, class_id, total_sessions, remaining_sessions, start_date')
+    .from('subscriptions').select('id, status, class_id, total_sessions, remaining_sessions, start_date, end_date')
     .eq('student_id', input.studentId).eq('status', 'active')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sub: any = getActiveSubForClass(subs, session.class_id)
@@ -247,7 +252,7 @@ export async function setAttendanceMark(input: {
   if (sub) {
     const { data: hol } = await supabase
       .from('holidays').select('student_ids').lte('start_date', session.date).gte('end_date', session.date).limit(1).maybeSingle()
-    const counts = sessionCountsForStudent({ holiday: hol, studentId: input.studentId, subStartDate: sub.start_date, sessionDate: session.date })
+    const counts = sessionCountsForStudent({ holiday: hol, studentId: input.studentId, subStartDate: sub.start_date, subEndDate: sub.end_date, sessionDate: session.date })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cls: any = Array.isArray(session.class) ? session.class[0] : session.class
     const total = sub.total_sessions ?? 4
@@ -282,4 +287,67 @@ export async function setAttendanceMark(input: {
   revalidatePath('/dashboard/subscriptions')
   revalidatePath('/dashboard/daily')
   return { remaining }
+}
+
+/**
+ * Sets a package's start and end date. The group's class days in that range
+ * (holidays excluded) become the package's sessions; sessions already used
+ * (Present/Absent marks in the range) are subtracted. Saved on the package,
+ * so the Daily, Students and Attendance pages all show the new numbers.
+ */
+export async function updatePackageDates(input: {
+  subscriptionId: string
+  startDate: string
+  endDate: string
+}): Promise<{ error?: string; total?: number; remaining?: number }> {
+  const supabase = await createClient()
+  if (!(await checkSubscriptionsAccess(supabase, 'edit'))) return { error: 'Not allowed' }
+  const iso = /^\d{4}-\d{2}-\d{2}$/
+  if (!iso.test(input.startDate) || !iso.test(input.endDate)) return { error: 'Invalid date' }
+  if (input.endDate < input.startDate) return { error: 'End date must be on or after the start date' }
+
+  const { data: sub } = await supabase
+    .from('subscriptions')
+    .select('id, student_id, class_id, status, class:classes(days_of_week)')
+    .eq('id', input.subscriptionId)
+    .single()
+  if (!sub) return { error: 'Package not found' }
+  if (!sub.class_id) return { error: 'This package is not linked to a group' }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cls: any = Array.isArray(sub.class) ? sub.class[0] : sub.class
+  const classDays: string[] = cls?.days_of_week || []
+
+  const [{ data: holidays }, { data: marks }, { data: otherSubs }] = await Promise.all([
+    supabase.from('holidays').select('start_date, end_date, student_ids').lte('start_date', input.endDate).gte('end_date', input.startDate),
+    supabase.from('attendance').select('status, session:sessions!session_id(date, class_id)').eq('student_id', sub.student_id).in('status', ['present', 'absent']),
+    supabase.from('subscriptions').select('class_id').eq('student_id', sub.student_id).eq('status', 'active').neq('id', sub.id),
+  ])
+
+  const onHoliday = (date: string) => {
+    const h = (holidays || []).find(x => x.start_date <= date && x.end_date >= date)
+    return !!h && isStudentOnHoliday(h, sub.student_id)
+  }
+  // Marks in this package's group, or in another group the student has no other package for
+  const coveredElsewhere = new Set((otherSubs || []).map(s => s.class_id).filter(Boolean))
+  const used = (marks || []).filter(m => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const s: any = Array.isArray(m.session) ? m.session[0] : m.session
+    if (!s || s.date < input.startDate || s.date > input.endDate || onHoliday(s.date)) return false
+    return s.class_id === sub.class_id || !coveredElsewhere.has(s.class_id)
+  }).length
+
+  const pkg = computePackageFromDates({ classDays, start: input.startDate, end: input.endDate, usedSessions: used, isHoliday: onHoliday })
+  if (pkg.total === 0) return { error: 'There are no classes for this group between these dates' }
+
+  const { error } = await supabase.from('subscriptions').update({
+    start_date: input.startDate,
+    end_date: input.endDate,
+    total_sessions: pkg.total,
+    remaining_sessions: pkg.remaining,
+    next_cycle_start: pkg.nextCycleStart,
+  }).eq('id', sub.id)
+  if (error) return { error: error.message }
+
+  for (const p of ['/dashboard/subscriptions', '/dashboard/daily', '/dashboard/students', '/dashboard/attendance', '/dashboard']) revalidatePath(p)
+  return { total: pkg.total, remaining: pkg.remaining }
 }

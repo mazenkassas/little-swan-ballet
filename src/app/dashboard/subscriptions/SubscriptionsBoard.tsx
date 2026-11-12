@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, X, RefreshCw } from 'lucide-react'
-import { getStudentDetail, renewSubscription, setAttendanceMark, type StudentDetail } from './actions'
+import { Search, X, RefreshCw, Filter as FilterIcon, Check, CalendarDays } from 'lucide-react'
+import { getStudentDetail, renewSubscription, setAttendanceMark, updatePackageDates, type StudentDetail } from './actions'
 import type { AttendanceStatus } from '@/lib/subscriptionLogic'
 import { compareClassNames } from '@/lib/classOrder'
 
@@ -12,11 +12,15 @@ export type SubRow = {
   studentId: string
   nameAr: string
   nameEn: string | null
+  subscriptionId: string | null
   classId: string | null
   className: string | null
+  otherGroups: string[]
   remaining: number | null
   total: number | null
   startDate: string | null
+  endDate: string | null
+  expectedEnd: string | null
   state: 'ok' | 'low' | 'due' | 'none' | 'upcoming'
 }
 
@@ -30,20 +34,32 @@ const STATE_COLOR: Record<SubRow['state'], string> = {
 const T = {
   en: {
     title: 'Subscriptions',
-    subtitle: 'Renew packages and fix attendance for every student',
+    subtitle: 'Renew packages, set package dates and fix attendance for every student',
     search: 'Search student…',
+    groups: 'Groups',
     allGroups: 'All groups',
+    searchGroups: 'Search groups…',
+    noGroupsFound: 'No groups found',
     filters: { all: 'All', due: 'Renewal due', low: '1 session left', none: 'No package' } as Record<Filter, string>,
     state: { ok: 'Active', upcoming: 'Starts soon', low: '1 left', due: 'Renewal due', none: 'No package' } as Record<SubRow['state'], string>,
     left: (r: number, t: number) => `${r} of ${t} left`,
     noGroup: 'No group',
-    manage: 'Manage',
+    alsoIn: 'Also in',
     empty: 'No students match',
+    start: 'Start',
+    end: 'End',
+    expected: 'expected',
+    setEnd: 'Set end',
+    saveDates: 'Save',
+    datesHint: 'Classes between these dates become the package sessions.',
+    datesSaved: (t: number, r: number) => `Saved: ${t} classes, ${r} left`,
+    needPackage: 'Renew first to set dates',
     loading: 'Loading…',
     package: 'Current package',
     noPackage: 'This student has no active package for this group.',
     started: 'Started',
     starts: 'Starts',
+    ends: 'Ends',
     sessionsLeft: 'sessions left',
     renew: 'Renew package',
     plan: 'Plan',
@@ -61,27 +77,39 @@ const T = {
     attHint: 'Present and Absent use a session. Make-up and holidays don’t.',
     noSessions: 'No sessions recorded for this group yet.',
     present: 'Present', absent: 'Absent', makeup: 'Make-up', clear: 'Clear',
-    counted: 'Counts', notCounted: 'Not counted', beforePkg: 'Before package', holiday: 'Holiday',
+    counted: 'Counts', notCounted: 'Not counted', beforePkg: 'Before package', afterPkg: 'After package', holiday: 'Holiday',
     makeupsElsewhere: 'Make-up sessions in other groups',
     readOnly: 'You can view this page but not make changes.',
     error: 'Something went wrong',
   },
   ar: {
     title: 'الاشتراكات',
-    subtitle: 'تجديد الباقات وتعديل الحضور لكل طالبة',
+    subtitle: 'تجديد الباقات وتحديد تواريخها وتعديل الحضور لكل طالبة',
     search: 'ابحث عن طالبة…',
+    groups: 'المجموعات',
     allGroups: 'كل المجموعات',
+    searchGroups: 'ابحث عن مجموعة…',
+    noGroupsFound: 'لا توجد مجموعات',
     filters: { all: 'الكل', due: 'مطلوب تجديد', low: 'متبقي حصة', none: 'بدون باقة' } as Record<Filter, string>,
     state: { ok: 'نشط', upcoming: 'يبدأ قريباً', low: 'متبقي ١', due: 'مطلوب تجديد', none: 'بدون باقة' } as Record<SubRow['state'], string>,
     left: (r: number, t: number) => `متبقي ${r} من ${t}`,
     noGroup: 'بدون مجموعة',
-    manage: 'إدارة',
+    alsoIn: 'أيضاً في',
     empty: 'لا توجد نتائج',
+    start: 'البداية',
+    end: 'النهاية',
+    expected: 'متوقع',
+    setEnd: 'حدد النهاية',
+    saveDates: 'حفظ',
+    datesHint: 'الحصص بين هذين التاريخين هي حصص الباقة.',
+    datesSaved: (t: number, r: number) => `تم الحفظ: ${t} حصص، متبقي ${r}`,
+    needPackage: 'جدّد الباقة أولاً لتحديد التواريخ',
     loading: 'جارٍ التحميل…',
     package: 'الباقة الحالية',
     noPackage: 'لا توجد باقة نشطة لهذه الطالبة في هذه المجموعة.',
     started: 'بدأت',
     starts: 'تبدأ',
+    ends: 'تنتهي',
     sessionsLeft: 'حصص متبقية',
     renew: 'تجديد الباقة',
     plan: 'الباقة',
@@ -99,51 +127,70 @@ const T = {
     attHint: 'الحضور والغياب يخصمان حصة. التعويض والإجازات لا تُخصم.',
     noSessions: 'لا توجد حصص مسجلة لهذه المجموعة بعد.',
     present: 'حاضرة', absent: 'غائبة', makeup: 'تعويض', clear: 'مسح',
-    counted: 'تُحسب', notCounted: 'لا تُحسب', beforePkg: 'قبل الباقة', holiday: 'إجازة',
+    counted: 'تُحسب', notCounted: 'لا تُحسب', beforePkg: 'قبل الباقة', afterPkg: 'بعد الباقة', holiday: 'إجازة',
     makeupsElsewhere: 'حصص تعويض في مجموعات أخرى',
     readOnly: 'يمكنك عرض الصفحة فقط دون تعديل.',
     error: 'حدث خطأ',
   },
 }
 
-export default function SubscriptionsBoard({ rows, isRtl }: { rows: SubRow[]; isRtl: boolean }) {
+function fmtDate(d: string, isRtl: boolean) {
+  return new Date(d + 'T00:00:00').toLocaleDateString(isRtl ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
+}
+
+export default function SubscriptionsBoard({ rows, isRtl, canEdit }: { rows: SubRow[]; isRtl: boolean; canEdit: boolean }) {
   const L = isRtl ? T.ar : T.en
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [groupId, setGroupId] = useState('')
   const [open, setOpen] = useState<SubRow | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
 
   const groups = useMemo(() => {
-    const m = new Map<string, string>()
-    rows.forEach(r => { if (r.classId && r.className) m.set(r.classId, r.className) })
-    return [...m].sort((a, b) => compareClassNames(a[1], b[1]))
+    const m = new Map<string, { name: string; count: number }>()
+    rows.forEach(r => {
+      if (!r.classId || !r.className) return
+      const g = m.get(r.classId) ?? { name: r.className, count: 0 }
+      g.count++
+      m.set(r.classId, g)
+    })
+    return [...m].map(([id, g]) => ({ id, ...g })).sort((a, b) => compareClassNames(a.name, b.name))
   }, [rows])
 
+  const inGroup = useMemo(() => rows.filter(r => !groupId || r.classId === groupId), [rows, groupId])
   const counts = useMemo(() => ({
-    all: rows.length,
-    due: rows.filter(r => r.state === 'due').length,
-    low: rows.filter(r => r.state === 'low').length,
-    none: rows.filter(r => r.state === 'none').length,
-  }), [rows])
+    all: inGroup.length,
+    due: inGroup.filter(r => r.state === 'due').length,
+    low: inGroup.filter(r => r.state === 'low').length,
+    none: inGroup.filter(r => r.state === 'none').length,
+  }), [inGroup])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     const order: Record<SubRow['state'], number> = { due: 0, low: 1, none: 2, upcoming: 3, ok: 4 }
-    return rows
+    return inGroup
       .filter(r => filter === 'all' || r.state === filter)
-      .filter(r => !groupId || r.classId === groupId)
       .filter(r => !q || r.nameAr.toLowerCase().includes(q) || (r.nameEn || '').toLowerCase().includes(q))
       .sort((a, b) => order[a.state] - order[b.state] || name(a, isRtl).localeCompare(name(b, isRtl)))
-  }, [rows, query, filter, groupId, isRtl])
+  }, [inGroup, query, filter, isRtl])
 
   return (
-    <div className={isRtl ? 'lss-rtl' : undefined} style={{ padding: '20px 16px', maxWidth: 980, margin: '0 auto', direction: isRtl ? 'rtl' : 'ltr' }}>
+    <div className={isRtl ? 'lss-rtl' : undefined} style={{ padding: '20px 16px', maxWidth: 1080, margin: '0 auto', direction: isRtl ? 'rtl' : 'ltr' }}>
       <style>{SELECT_CSS}</style>
       <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--txt1)', margin: 0 }}>{L.title}</h1>
       <p style={{ fontSize: 13, color: 'var(--txt2)', margin: '4px 0 16px' }}>{L.subtitle}</p>
 
-      {/* Filters */}
+      {/* Search + group filter */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <div style={{ position: 'relative', flex: '1 1 220px' }}>
+          <Search size={15} style={{ position: 'absolute', insetInlineStart: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--txt2)' }} />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={L.search} style={{ ...input, height: 40, paddingInlineStart: 34 }} />
+        </div>
+        <GroupFilter groups={groups} value={groupId} onChange={setGroupId} isRtl={isRtl} />
+      </div>
+
+      {/* Status filters */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {(['all', 'due', 'low', 'none'] as Filter[]).map(f => {
           const on = filter === f
           return (
@@ -156,49 +203,176 @@ export default function SubscriptionsBoard({ rows, isRtl }: { rows: SubRow[]; is
           )
         })}
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        <div style={{ position: 'relative', flex: '1 1 220px' }}>
-          <Search size={15} style={{ position: 'absolute', insetInlineStart: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--txt2)' }} />
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={L.search} style={{ ...input, height: 40, paddingInlineStart: 34 }} />
-        </div>
-        <select className="lss-select" value={groupId} onChange={e => setGroupId(e.target.value)} style={{ flex: '1 1 240px' }} title={groups.find(g => g[0] === groupId)?.[1] ?? L.allGroups}>
-          <option value="">{L.allGroups}</option>
-          {groups.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
-        </select>
-      </div>
 
       {/* List */}
       <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
         {visible.length === 0 && <p style={{ textAlign: 'center', color: 'var(--txt2)', fontSize: 13, padding: 28, margin: 0 }}>{L.empty}</p>}
         {visible.map((r, i) => {
           const color = STATE_COLOR[r.state]
-          const pct = r.total ? Math.max(0, Math.min(1, (r.remaining ?? 0) / r.total)) : 0
           return (
-            <button key={r.key} onClick={() => setOpen(r)} style={{
-              display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 16px', textAlign: 'start',
-              background: 'transparent', border: 'none', borderTop: i ? '1px solid var(--border)' : 'none', cursor: 'pointer', color: 'inherit',
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--txt1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name(r, isRtl)}</div>
-                <div style={{ fontSize: 12, color: 'var(--txt2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.className || L.noGroup}</div>
-              </div>
-              {r.total != null && (
-                <div style={{ width: 110, flexShrink: 0 }} className="hidden sm:block">
-                  <div style={{ fontSize: 11, color: 'var(--txt2)', marginBottom: 4 }}>{L.left(r.remaining ?? 0, r.total)}</div>
-                  <div style={{ height: 6, borderRadius: 3, background: 'var(--border)' }}>
-                    <div style={{ height: 6, borderRadius: 3, width: `${pct * 100}%`, background: color }} />
-                  </div>
+            <div key={r.key} style={{ borderTop: i ? '1px solid var(--border)' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', flexWrap: 'wrap' }}>
+                {/* Name → opens panel */}
+                <button onClick={() => setOpen(r)} style={{ flex: '1 1 200px', minWidth: 0, textAlign: 'start', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--txt1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name(r, isRtl)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--txt2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.className || L.noGroup}</div>
+                  {r.otherGroups.length > 0 && (
+                    <div style={{ fontSize: 11, color: 'var(--txt2)', opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{L.alsoIn}: {r.otherGroups.join(' · ')}</div>
+                  )}
+                </button>
+
+                {/* Start / End date buttons */}
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <DateChip label={L.start} value={r.startDate ? fmtDate(r.startDate, isRtl) : '—'} disabled={!r.subscriptionId || !canEdit}
+                    title={!r.subscriptionId ? L.needPackage : undefined} onClick={() => setEditing(editing === r.key ? null : r.key)} active={editing === r.key} />
+                  <DateChip label={L.end}
+                    value={r.endDate ? fmtDate(r.endDate, isRtl) : r.expectedEnd ? `~${fmtDate(r.expectedEnd, isRtl)}` : r.subscriptionId ? L.setEnd : '—'}
+                    muted={!r.endDate} disabled={!r.subscriptionId || !canEdit}
+                    title={!r.subscriptionId ? L.needPackage : !r.endDate && r.expectedEnd ? L.expected : undefined}
+                    onClick={() => setEditing(editing === r.key ? null : r.key)} active={editing === r.key} />
                 </div>
+
+                {/* Status */}
+                <span style={{ flexShrink: 0, minWidth: 64, textAlign: 'center', fontSize: 11, fontWeight: 700, color, background: color + '18', border: `1px solid ${color}40`, borderRadius: 20, padding: '3px 10px' }}>
+                  {r.state === 'ok' && r.total != null ? `${r.remaining}/${r.total}` : L.state[r.state]}
+                </span>
+              </div>
+              {editing === r.key && r.subscriptionId && (
+                <DatesEditor row={r} isRtl={isRtl} onClose={() => setEditing(null)} />
               )}
-              <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color, background: color + '18', border: `1px solid ${color}40`, borderRadius: 20, padding: '3px 10px' }}>
-                {r.state === 'ok' && r.total != null ? `${r.remaining}/${r.total}` : L.state[r.state]}
-              </span>
-            </button>
+            </div>
           )
         })}
       </div>
 
       {open && <StudentPanel row={open} isRtl={isRtl} onClose={() => setOpen(null)} />}
+    </div>
+  )
+}
+
+function DateChip({ label, value, onClick, disabled, muted, active, title }: {
+  label: string; value: string; onClick: () => void; disabled?: boolean; muted?: boolean; active?: boolean; title?: string
+}) {
+  return (
+    <button onClick={onClick} disabled={disabled} title={title} style={{
+      display: 'grid', gap: 1, textAlign: 'start', minWidth: 92, padding: '5px 10px', borderRadius: 10,
+      border: `1px solid ${active ? ACCENT : 'var(--border)'}`, background: active ? ACCENT + '14' : 'var(--bg-page)',
+      cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1,
+    }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, color: 'var(--txt2)' }}>
+        <CalendarDays size={11} /> {label}
+      </span>
+      <span style={{ fontSize: 12, fontWeight: 600, color: muted ? 'var(--txt2)' : 'var(--txt1)', whiteSpace: 'nowrap' }}>{value}</span>
+    </button>
+  )
+}
+
+function DatesEditor({ row, isRtl, onClose }: { row: SubRow; isRtl: boolean; onClose: () => void }) {
+  const L = isRtl ? T.ar : T.en
+  const router = useRouter()
+  const [start, setStart] = useState(row.startDate ?? '')
+  const [end, setEnd] = useState(row.endDate ?? row.expectedEnd ?? '')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function save() {
+    if (!row.subscriptionId) return
+    setSaving(true); setMsg(null)
+    const r = await updatePackageDates({ subscriptionId: row.subscriptionId, startDate: start, endDate: end })
+    setSaving(false)
+    if (r.error) setMsg({ ok: false, text: r.error })
+    else { setMsg({ ok: true, text: L.datesSaved(r.total ?? 0, r.remaining ?? 0) }); router.refresh() }
+  }
+
+  return (
+    <div style={{ padding: '0 16px 14px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <label style={{ ...field, flex: '1 1 150px' }}>
+        <span style={label}>{L.start}</span>
+        <input type="date" value={start} onChange={e => setStart(e.target.value)} style={{ ...input, height: 40, direction: 'ltr' }} />
+      </label>
+      <label style={{ ...field, flex: '1 1 150px' }}>
+        <span style={label}>{L.end}</span>
+        <input type="date" value={end} min={start || undefined} onChange={e => setEnd(e.target.value)} style={{ ...input, height: 40, direction: 'ltr' }} />
+      </label>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={save} disabled={saving || !start || !end} style={{ ...primaryBtn, height: 40, opacity: saving || !start || !end ? 0.6 : 1 }}>
+          {saving ? '…' : L.saveDates}
+        </button>
+        <button onClick={onClose} disabled={saving} style={{ ...primaryBtn, height: 40, background: 'var(--bg-card)', color: 'var(--txt2)', border: '1px solid var(--border)' }}>
+          {L.cancel}
+        </button>
+      </div>
+      <p style={{ width: '100%', margin: 0, fontSize: 11, color: msg ? (msg.ok ? '#3dab7e' : '#e04040') : 'var(--txt2)', fontWeight: msg ? 600 : 400 }}>
+        {msg ? (msg.ok ? '✓ ' : '⚠ ') + msg.text : L.datesHint}
+      </p>
+    </div>
+  )
+}
+
+function GroupFilter({ groups, value, onChange, isRtl }: {
+  groups: { id: string; name: string; count: number }[]; value: string; onChange: (id: string) => void; isRtl: boolean
+}) {
+  const L = isRtl ? T.ar : T.en
+  const [openList, setOpenList] = useState(false)
+  const [q, setQ] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  const selected = groups.find(g => g.id === value)
+
+  useEffect(() => {
+    if (!openList) return
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpenList(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenList(false) }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc) }
+  }, [openList])
+
+  const list = groups.filter(g => !q.trim() || g.name.toLowerCase().includes(q.trim().toLowerCase()))
+  const pick = (id: string) => { onChange(id); setOpenList(false); setQ('') }
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flex: '0 1 300px', minWidth: 0 }}>
+      <button onClick={() => setOpenList(o => !o)} title={selected?.name} style={{
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 40, padding: '0 12px', borderRadius: 10, cursor: 'pointer',
+        border: `1px solid ${value || openList ? ACCENT : 'var(--border)'}`, background: value ? ACCENT + '14' : 'var(--bg-card)',
+        color: value ? ACCENT : 'var(--txt1)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+      }}>
+        <FilterIcon size={15} style={{ flexShrink: 0 }} />
+        <span style={{ flex: 1, minWidth: 0, textAlign: 'start', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selected ? selected.name : `${L.groups}: ${L.allGroups}`}
+        </span>
+        {value && (
+          <span role="button" aria-label={L.allGroups} onClick={e => { e.stopPropagation(); pick('') }} style={{ display: 'flex', flexShrink: 0 }}>
+            <X size={15} />
+          </span>
+        )}
+      </button>
+      {openList && (
+        <div style={{
+          position: 'absolute', top: 46, insetInlineEnd: 0, zIndex: 40, width: 'min(360px, calc(100vw - 32px))',
+          background: 'var(--bg-popup)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 12px 30px rgba(0,0,0,0.25)', overflow: 'hidden',
+        }}>
+          <div style={{ padding: 8, borderBottom: '1px solid var(--border)' }}>
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={L.searchGroups} style={{ ...input, height: 36, background: 'var(--bg-page)' }} />
+          </div>
+          <div style={{ maxHeight: 320, overflowY: 'auto', padding: 4 }}>
+            {[{ id: '', name: L.allGroups, count: groups.reduce((n, g) => n + g.count, 0) }, ...list].map(g => {
+              const on = g.id === value
+              return (
+                <button key={g.id || 'all'} onClick={() => pick(g.id)} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  background: on ? ACCENT + '18' : 'transparent', color: on ? ACCENT : 'var(--txt1)', fontSize: 13, textAlign: 'start', fontFamily: 'inherit',
+                }}>
+                  <span style={{ width: 16, flexShrink: 0 }}>{on && <Check size={15} />}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>{g.name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--txt2)', flexShrink: 0 }}>{g.count}</span>
+                </button>
+              )
+            })}
+            {list.length === 0 && <p style={{ fontSize: 12, color: 'var(--txt2)', textAlign: 'center', margin: 10 }}>{L.noGroupsFound}</p>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -284,7 +458,9 @@ function StudentPanel({ row, isRtl, onClose }: { row: SubRow; isRtl: boolean; on
                   </span>
                   <span style={{ fontSize: 13, color: 'var(--txt2)' }}>{L.sessionsLeft}</span>
                   <div style={{ width: '100%', fontSize: 12, color: 'var(--txt2)' }}>
-                    {sub.start_date > detail.today ? L.starts : L.started}: {fmt(sub.start_date)}{sub.planName ? ` · ${sub.planName}` : ''}
+                    {sub.start_date > detail.today ? L.starts : L.started}: {fmt(sub.start_date)}
+                    {sub.expected_end ? ` · ${L.ends}: ${sub.end_date ? '' : '~'}${fmt(sub.expected_end)}` : ''}
+                    {sub.planName ? ` · ${sub.planName}` : ''}
                   </div>
                 </div>
               ) : (
@@ -310,6 +486,7 @@ function StudentPanel({ row, isRtl, onClose }: { row: SubRow; isRtl: boolean; on
               {detail.sessions.map(s => {
                 const tag = s.holiday ? L.holiday
                   : !sub || s.date < sub.start_date ? L.beforePkg
+                  : sub.end_date && s.date > sub.end_date ? L.afterPkg
                   : s.counts && (s.status === 'present' || s.status === 'absent') ? L.counted
                   : null
                 return (
