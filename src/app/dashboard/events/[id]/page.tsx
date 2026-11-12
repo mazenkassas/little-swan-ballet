@@ -9,6 +9,7 @@ import EventDetailActions from './EventDetailActions'
 
 const TYPE_COLORS: Record<string, string> = {
   recital: '#d4667a', tv_show: '#4a90d9', workshop: '#8e5fd9', competition: '#e8960a',
+  annual_performance: '#d4667a', event: '#3dab7e',
 }
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -45,6 +46,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
     tv_show:     { en: 'TV Show',     ar: 'تلفزيون' },
     workshop:    { en: 'Workshop',    ar: 'ورشة عمل' },
     competition: { en: 'Competition', ar: 'مسابقة' },
+    annual_performance: { en: 'Annual Performance', ar: 'عرض سنوي' },
+    event:       { en: 'Event',       ar: 'فعالية' },
   }
 
   const payLabels: Record<string, Record<string, string>> = {
