@@ -5,14 +5,10 @@ import { useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
 
-const TYPE_COLORS: Record<string, string> = {
-  annual_performance: '#d4667a',
-  tv_show:            '#4a90d9',
-}
-
 const EVENT_TYPES = [
   { value: 'annual_performance', en: 'Annual Performance', ar: 'عرض سنوي' },
   { value: 'tv_show',            en: 'TV Show',            ar: 'عرض تلفزيوني' },
+  { value: 'event',              en: 'Event',              ar: 'فعالية' },
 ]
 
 const LABELS = {
@@ -153,28 +149,18 @@ export default function NewEventPage() {
             {/* Event Type */}
             <div>
               <label style={lbl}>{L.type}<span style={req}>*</span></label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {EVENT_TYPES.map(t => {
-                  const active = form.type === t.value
-                  const color  = TYPE_COLORS[t.value]
-                  return (
-                    <button
-                      key={t.value}
-                      type="button"
-                      onClick={() => setField('type', t.value)}
-                      style={{
-                        flex: 1, padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                        background: active ? color + '18' : 'transparent',
-                        border: `1px solid ${active ? color : 'var(--border)'}`,
-                        color: active ? color : 'var(--txt2)',
-                      }}
-                    >
-                      {isRtl ? t.ar : t.en}
-                    </button>
-                  )
-                })}
-              </div>
+              <select
+                value={form.type}
+                onChange={e => setField('type', e.target.value)}
+                aria-label={L.type}
+                style={{ ...fieldBase('type'), cursor: 'pointer' }}
+              >
+                {EVENT_TYPES.map(t => (
+                  <option key={t.value} value={t.value} style={{ background: 'var(--bg-popup)', color: 'var(--txt1)' }}>
+                    {isRtl ? t.ar : t.en}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Event Date + Payment Deadline */}

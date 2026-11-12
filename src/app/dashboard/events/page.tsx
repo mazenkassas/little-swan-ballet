@@ -11,6 +11,8 @@ const TYPE_COLORS: Record<string, string> = {
   tv_show:     '#4a90d9',
   workshop:    '#8e5fd9',
   competition: '#e8960a',
+  annual_performance: '#d4667a',
+  event:       '#3dab7e',
 }
 
 export default async function EventsPage() {
@@ -29,6 +31,8 @@ export default async function EventsPage() {
     tv_show:     t('types.tv_show'),
     workshop:    t('types.workshop'),
     competition: t('types.competition'),
+    annual_performance: isRtl ? 'عرض سنوي' : 'Annual Performance',
+    event:       isRtl ? 'فعالية' : 'Event',
   }
 
   return (

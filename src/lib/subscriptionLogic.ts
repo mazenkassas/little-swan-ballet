@@ -183,9 +183,79 @@ export function sessionCountsForStudent(opts: {
   studentId: string
   subStartDate: string | null | undefined
   sessionDate: string
+  /** Optional last day of the package; classes after it never use a session. */
+  subEndDate?: string | null
 }): boolean {
-  const { holiday, studentId, subStartDate, sessionDate } = opts
+  const { holiday, studentId, subStartDate, sessionDate, subEndDate } = opts
   if (isStudentOnHoliday(holiday, studentId)) return false
   if (subStartDate && sessionDate < subStartDate)  return false
+  if (subEndDate && sessionDate > subEndDate)      return false
   return true
+}
+
+/* ─── Package dates (start / end) ───────────────────────────────── */
+
+/** Add days to a 'YYYY-MM-DD' date (UTC-safe, no time-zone drift). */
+function addDays(date: string, days: number): string {
+  const d = new Date(date + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+function weekday(date: string): number {
+  return new Date(date + 'T00:00:00Z').getUTCDay()
+}
+
+/**
+ * Every class date between start and end (inclusive) for the given class days.
+ * `isHoliday(date)` removes holiday dates. Capped at 2 years to stay safe.
+ */
+export function listClassDates(
+  classDays: string[],
+  start: string,
+  end: string,
+  isHoliday: (date: string) => boolean = () => false,
+): string[] {
+  const days = new Set(classDays.map(d => DAY_MAP[d]).filter(d => d !== undefined))
+  const out: string[] = []
+  if (!days.size || end < start) return out
+  for (let d = start, i = 0; d <= end && i < 731; d = addDays(d, 1), i++) {
+    if (days.has(weekday(d)) && !isHoliday(d)) out.push(d)
+  }
+  return out
+}
+
+/**
+ * The date of the Nth class on or after start (n = package size).
+ * Used to show the expected end date of a package that has no end date set.
+ */
+export function getNthClassDate(classDays: string[], start: string, n: number): string | null {
+  const days = new Set(classDays.map(d => DAY_MAP[d]).filter(d => d !== undefined))
+  if (!days.size || n <= 0) return null
+  let count = 0
+  for (let d = start, i = 0; i < 731; d = addDays(d, 1), i++) {
+    if (days.has(weekday(d)) && ++count === n) return d
+  }
+  return null
+}
+
+/**
+ * Recalculates a package from its start and end dates:
+ * total = class dates in range (holidays excluded),
+ * remaining = total − sessions already used (present/absent marks in range).
+ * When nothing remains, the next cycle starts at the first class after the end date.
+ */
+export function computePackageFromDates(opts: {
+  classDays: string[]
+  start: string
+  end: string
+  usedSessions: number
+  isHoliday?: (date: string) => boolean
+}): { total: number; remaining: number; nextCycleStart: string | null } {
+  const total = listClassDates(opts.classDays, opts.start, opts.end, opts.isHoliday).length
+  const remaining = Math.max(0, total - opts.usedSessions)
+  const nextCycleStart = total > 0 && remaining === 0
+    ? getNextClassDate(opts.classDays, new Date(opts.end + 'T00:00:00'))
+    : null
+  return { total, remaining, nextCycleStart }
 }

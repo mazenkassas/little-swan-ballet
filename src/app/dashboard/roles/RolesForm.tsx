@@ -30,6 +30,7 @@ const PAGES = [
   { key: 'students',   group: 'main',       en: 'Students',        ar: 'الطالبات'         },
   { key: 'classes',    group: 'main',       en: 'Groups',          ar: 'المجموعات'        },
   { key: 'attendance', group: 'main',       en: 'Attendance',      ar: 'الحضور'           },
+  { key: 'subscriptions', group: 'main',    en: 'Subscriptions',   ar: 'الاشتراكات'       },
   { key: 'payments',   group: 'financial',  en: 'Payments',        ar: 'المدفوعات'        },
   { key: 'expenses',   group: 'financial',  en: 'Expenses',        ar: 'المصروفات'        },
   { key: 'reports',    group: 'financial',  en: 'Reports',         ar: 'التقارير'         },

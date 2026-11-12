@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, GraduationCap, ClipboardCheck,
   CreditCard, UserCog, BookOpen, ShoppingBag, Star, Dumbbell,
   Settings, LogOut, Wallet, FileBarChart,
-  ChevronLeft, ClipboardList, ShieldCheck, Umbrella,
+  ChevronLeft, ClipboardList, ShieldCheck, Umbrella, RefreshCw,
 } from 'lucide-react'
 
 type UserInfo = { displayName: string; role: string; email: string; initials: string }
@@ -30,6 +30,7 @@ export default function Sidebar({ user, mobileOpen = false }: { user: UserInfo; 
         { href: '/dashboard/students', icon: Users, label: t('students') },
         { href: '/dashboard/classes', icon: GraduationCap, label: t('classes') },
         { href: '/dashboard/attendance', icon: ClipboardCheck, label: t('attendance') },
+        { href: '/dashboard/subscriptions', icon: RefreshCw, label: t('subscriptions') },
       ]
     },
     {

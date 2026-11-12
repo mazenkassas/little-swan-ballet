@@ -76,7 +76,8 @@ export async function proxy(request: NextRequest) {
       const pathParts = request.nextUrl.pathname.split('/')
       const page = pathParts[2]
 
-      if (page && page !== '') {
+      // The Subscriptions page checks the Roles-page permissions itself
+      if (page && page !== '' && page !== 'subscriptions') {
         const { data: permission } = await supabase
           .from('role_permissions')
           .select('id')
