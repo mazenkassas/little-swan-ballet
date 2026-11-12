@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, GraduationCap, ClipboardCheck,
   CreditCard, UserCog, BookOpen, ShoppingBag, Star, Dumbbell,
   Settings, LogOut, Wallet, FileBarChart,
-  ChevronLeft, ClipboardList, ShieldCheck, Umbrella, RefreshCw,
+  ChevronLeft, ClipboardList, ShieldCheck, Umbrella, RefreshCw, ScrollText,
 } from 'lucide-react'
 
 type UserInfo = { displayName: string; role: string; email: string; initials: string }
@@ -53,6 +53,7 @@ export default function Sidebar({ user, mobileOpen = false }: { user: UserInfo; 
         { href: '/dashboard/holidays',      icon: Umbrella,   label: t('holidays') },
         // { href: '/dashboard/payment-types', icon: Banknote,   label: t('paymentTypes') },
         { href: '/dashboard/roles',         icon: ShieldCheck, label: t('roles') },
+        { href: '/dashboard/logs',          icon: ScrollText,  label: t('logs') },
       ]
     }
   ]

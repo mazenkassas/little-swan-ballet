@@ -22,6 +22,7 @@
     "paymentTypes": "Payment Methods",
     "settings": "Settings",
     "roles": "Roles",
+    "logs": "Logs",
     "logout": "Sign Out",
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar"
@@ -296,6 +297,29 @@
     "noLogs": "No logs for this day",
     "role": { "super_admin": "Super Admin", "admin": "Admin", "staff": "Staff" },
     "hoursUnit": "hr(s)"
+  },
+  "logs": {
+    "title": "Audit Logs",
+    "subtitle": "Every change made in the system — who, what and when",
+    "from": "From",
+    "to": "To",
+    "section": "Section",
+    "action": "Action",
+    "user": "User",
+    "all": "All",
+    "apply": "Apply",
+    "reset": "Reset",
+    "system": "System",
+    "actions": { "INSERT": "Created", "UPDATE": "Updated", "DELETE": "Deleted" },
+    "field": "Field",
+    "before": "Before",
+    "after": "After",
+    "count": "{count, plural, =0 {No entries} one {# entry} other {# entries}}",
+    "empty": "No log entries match these filters",
+    "notSetUp": "Audit logs are not set up yet. Run supabase/add_audit_logs.sql in the Supabase SQL editor.",
+    "prev": "Previous",
+    "next": "Next",
+    "pageOf": "Page {page} of {pages}"
   },
   "theme": {
     "light": "Light mode",

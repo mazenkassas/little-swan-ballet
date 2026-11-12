@@ -22,6 +22,7 @@
     "paymentTypes": "طرق الدفع",
     "settings": "الإعدادات",
     "roles": "الأدوار",
+    "logs": "السجلات",
     "logout": "تسجيل الخروج",
     "expandSidebar": "توسيع الشريط الجانبي",
     "collapseSidebar": "طي الشريط الجانبي"
@@ -296,6 +297,29 @@
     "noLogs": "لا يوجد سجل لهذا اليوم",
     "role": { "super_admin": "مشرف عام", "admin": "مدير", "staff": "موظف" },
     "hoursUnit": "ساعة"
+  },
+  "logs": {
+    "title": "سجل العمليات",
+    "subtitle": "كل تغيير تم في النظام — من قام به، وماذا، ومتى",
+    "from": "من",
+    "to": "إلى",
+    "section": "القسم",
+    "action": "العملية",
+    "user": "المستخدم",
+    "all": "الكل",
+    "apply": "تطبيق",
+    "reset": "إعادة تعيين",
+    "system": "النظام",
+    "actions": { "INSERT": "إضافة", "UPDATE": "تعديل", "DELETE": "حذف" },
+    "field": "الحقل",
+    "before": "قبل",
+    "after": "بعد",
+    "count": "{count, plural, =0 {لا توجد سجلات} one {سجل واحد} two {سجلان} few {# سجلات} many {# سجلًا} other {# سجل}}",
+    "empty": "لا توجد سجلات مطابقة لهذه الفلاتر",
+    "notSetUp": "سجل العمليات غير مُفعّل بعد. شغّل الملف supabase/add_audit_logs.sql في محرر SQL في Supabase.",
+    "prev": "السابق",
+    "next": "التالي",
+    "pageOf": "صفحة {page} من {pages}"
   },
   "theme": {
     "light": "وضع النهار",
