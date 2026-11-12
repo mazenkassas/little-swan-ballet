@@ -23,7 +23,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
 
   const { data: enrollments } = await supabase
     .from('event_enrollments')
-    .select('*, student:students(name_ar, name_en), payment:payments(amount_paid, payment_method)')
+    .select('*, student:students(name_ar, name_en, class_students(class:classes(id, name, is_active))), payment:payments(amount_paid, payment_method)')
     .eq('event_id', id)
     .order('id')
 
@@ -163,6 +163,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
             const initial = (e.student?.name_ar || '?')[0]
             const pClr    = payColors[e.payment_status] || '#888'
             const pLbl    = payLabels[e.payment_status]?.[isRtl ? 'ar' : 'en'] || e.payment_status
+            // Her current (active) classes, e.g. "Grade 3 · Term 2 · Thu · 6 PM – 8 PM"
+            const classes = (e.student?.class_students || [])
+              .map((cs: any) => (Array.isArray(cs.class) ? cs.class[0] : cs.class))
+              .filter((c: any) => c && c.is_active !== false)
 
             return (
               <div key={e.id} style={{
@@ -178,7 +182,21 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                   {initial}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--txt1)' }}>{name}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--txt1)' }}>{name}</p>
+                    {classes.length > 0 ? classes.map((c: any) => (
+                      <span key={c.id} dir="ltr" style={{
+                        fontSize: 11, fontWeight: 600, color: '#c9506a', background: '#d4667a12',
+                        border: '1px solid #d4667a26', borderRadius: 6, padding: '2px 8px', whiteSpace: 'nowrap',
+                      }}>
+                        {c.name}
+                      </span>
+                    )) : (
+                      <span style={{ fontSize: 11, color: 'var(--txt2)', fontStyle: 'italic' }}>
+                        {isRtl ? 'غير مسجلة في مجموعة' : 'Not enrolled in a class'}
+                      </span>
+                    )}
+                  </div>
                   {e.payment?.amount_paid != null && (
                     <p style={{ margin: 0, fontSize: 11, color: 'var(--txt2)' }}>
                       {formatCurrency(e.payment.amount_paid)}
