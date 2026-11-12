@@ -56,14 +56,29 @@ export default async function ExamDetailPage({
     students = allStudents ?? []
   }
 
-  const { data: existing } = await supabase
-    .from('student_exams')
-    .select('*')
-    .eq('exam_id', id)
+  const CLASS_FIELDS = 'id, name, days_of_week, start_time, end_time, grade:grades(name, order_num), term:terms(name, order_num)'
+  const studentIds = students.map(s => s.id)
+  const [{ data: existing }, { data: enrolments }, { data: allClasses }] = await Promise.all([
+    supabase.from('student_exams').select('*').eq('exam_id', id),
+    studentIds.length
+      ? supabase.from('class_students').select(`student_id, class:classes(${CLASS_FIELDS}, is_active)`).in('student_id', studentIds)
+      : Promise.resolve({ data: [] as any[] }),
+    supabase.from('classes').select(CLASS_FIELDS).eq('is_active', true).order('name'),
+  ])
 
-  const passed  = existing?.filter(r => r.result === 'pass').length ?? 0
-  const failed  = existing?.filter(r => r.result === 'fail').length ?? 0
-  const pending = students.length - passed - failed
+  // Each student's current (active) classes, for the class line and the transfer popup
+  const classesByStudent: Record<string, any[]> = {}
+  for (const e of enrolments || []) {
+    const c = Array.isArray(e.class) ? e.class[0] : e.class
+    if (!c || c.is_active === false) continue
+    ;(classesByStudent[e.student_id] ||= []).push(c)
+  }
+
+  const recorded = (existing ?? []).filter(r => r.result && r.result !== 'pending')
+  const passed  = recorded.filter(r => r.result === 'pass').length
+  const failed  = recorded.filter(r => r.result === 'fail').length
+  const other   = recorded.length - passed - failed
+  const pending = Math.max(students.length - recorded.length, 0)
 
   // Show grouped view when multiple targets (or all levels)
   const isGrouped = !targets || targets.length !== 1
@@ -147,6 +162,15 @@ export default async function ExamDetailPage({
             <p style={{ fontSize: 20, fontWeight: 700, color: '#e04040', margin: 0 }}>{failed}</p>
             <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0 }}>{t('failed')}</p>
           </div>
+          {other > 0 && (
+            <div style={{
+              textAlign: 'center', background: '#8B6EC818', border: '1px solid #8B6EC828',
+              borderRadius: 10, padding: '8px 16px',
+            }}>
+              <p style={{ fontSize: 20, fontWeight: 700, color: '#8B6EC8', margin: 0 }}>{other}</p>
+              <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0 }}>{isRtl ? 'تقييم / لجنة / منقول' : 'Eval / committee / moved'}</p>
+            </div>
+          )}
           <div style={{
             textAlign: 'center', background: 'var(--bg-card)', border: '1px solid var(--border)',
             borderRadius: 10, padding: '8px 16px',
@@ -161,6 +185,8 @@ export default async function ExamDetailPage({
         exam={exam}
         students={students}
         existingResults={existing || []}
+        classesByStudent={classesByStudent}
+        allClasses={allClasses || []}
         isGrouped={isGrouped}
         isRtl={isRtl}
       />

@@ -193,7 +193,7 @@ CREATE TABLE IF NOT EXISTS student_exams (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   student_id UUID NOT NULL REFERENCES students(id),
   exam_id UUID NOT NULL REFERENCES exams(id),
-  result TEXT DEFAULT 'pending' CHECK (result IN ('pass', 'fail', 'pending')),
+  result TEXT DEFAULT 'pending' CHECK (result IN ('pass', 'fail', 'pending', 'evaluation', 'special_committee', 'transferred')),
   notes TEXT,
   recorded_by UUID REFERENCES staff(id),
   promoted_to_level_id UUID REFERENCES levels(id),
