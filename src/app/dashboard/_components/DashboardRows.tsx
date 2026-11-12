@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { format } from 'date-fns'
 import { formatCurrency } from '@/lib/utils'
 import { getTranslations, getLocale } from 'next-intl/server'
 
@@ -9,7 +8,7 @@ export default async function DashboardRows() {
   const tp     = await getTranslations('payments')
   const locale = await getLocale()
   const supabase = await createClient()
-  const today  = format(new Date(), 'yyyy-MM-dd')
+  const today  = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 
   // Coach check-ins: use the academy's time zone (server runs in UTC on Vercel)
   const TZ = 'Africa/Cairo'

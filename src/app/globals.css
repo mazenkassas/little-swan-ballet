@@ -133,3 +133,14 @@ html.dark { --sb-bg: linear-gradient(180deg, #16121b 0%, #1a141d 100%); }
 .sb-link:focus-visible { outline: 2px solid #d4667a; outline-offset: -2px; }
 .sb-link.on { background: linear-gradient(135deg, #ec9aae 0%, #d4667a 100%); color: #fff; font-weight: 500; box-shadow: 0 3px 10px rgba(212, 102, 122, .28); }
 .sb-link.on:hover { color: #fff; }
+
+/* Dashboard: today's summary cards */
+.today-card { transition: border-color .15s, transform .15s, box-shadow .15s; }
+.today-card:hover { border-color: #C8788A80 !important; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(200, 120, 138, .12); }
+.today-card:focus-visible { outline: 2px solid #C8788A; outline-offset: 2px; }
+.today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+@media (max-width: 640px) {
+  .today-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .today-card { padding: 12px !important; }
+  .today-card p:first-of-type { font-size: 16px !important; }
+}

@@ -1,8 +1,8 @@
 import { Suspense } from 'react'
-import { format } from 'date-fns'
 import { getTranslations } from 'next-intl/server'
 import DashboardKPIs from './_components/DashboardKPIs'
 import DashboardRows from './_components/DashboardRows'
+import DashboardToday from './_components/DashboardToday'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,9 +43,14 @@ export default async function DashboardPage() {
           {t('title')}
         </h1>
         <p style={{ fontSize: 12, color: 'var(--txt2)', marginTop: 4 }}>
-          {format(new Date(), 'EEEE, dd/MM/yyyy')}
+          {new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date()).replace(/,? /, ', ')}
         </p>
       </div>
+
+      {/* Today summary — super admins only (renders nothing for other roles) */}
+      <Suspense fallback={null}>
+        <DashboardToday />
+      </Suspense>
 
       {/* KPI Cards — streams in as first DB batch completes */}
       <Suspense fallback={<KPISkeleton />}>
