@@ -1,33 +1,15 @@
-export default function Loading() {
-  const sk = (w: string | number, h: number, r = 8) => (
-    <div className="sk" style={{ width: w, height: h, borderRadius: r, flexShrink: 0 }} />
-  )
-  return (
-    <div className="page-body" style={{ background: 'var(--bg-page)', minHeight: '100%' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        {sk(100, 11)}
-        <div style={{ marginTop: 6 }}>{sk(160, 24, 6)}</div>
-      </div>
-
-      {/* KPI row */}
-      <div className="kpi-grid-4" style={{ marginBottom: 16 }}>
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="sk" style={{ height: 110, borderRadius: 16 }} />
-        ))}
-      </div>
-
-      {/* Row 2 */}
-      <div className="kpi-grid-2" style={{ marginBottom: 16 }}>
-        <div className="sk" style={{ height: 220, borderRadius: 16 }} />
-        <div className="sk" style={{ height: 220, borderRadius: 16 }} />
-      </div>
-
-      {/* Row 3 */}
-      <div className="kpi-grid-2">
-        <div className="sk" style={{ height: 220, borderRadius: 16 }} />
-        <div className="sk" style={{ height: 220, borderRadius: 16 }} />
+// Skeleton matching the dashboard layout. `bare` skips the page padding when used inside the page.
+export default function Loading({ bare = false }: { bare?: boolean }) {
+  const sk = (h: number, extra: React.CSSProperties = {}) => <div className="sk" style={{ height: h, borderRadius: 14, ...extra }} />
+  const body = (
+    <div className="dh">
+      <div className="dh-head">{sk(24, { width: 160, borderRadius: 6 })}<div style={{ marginTop: 8 }}>{sk(12, { width: 200, borderRadius: 6 })}</div></div>
+      <div className="dh-stats">{[1, 2, 3, 4].map(i => <div key={i}>{sk(104)}</div>)}</div>
+      <div className="dh-main">
+        {sk(320)}
+        <div className="dh-side">{sk(180)}{sk(140)}</div>
       </div>
     </div>
   )
+  return bare ? body : <div className="page-body" style={{ background: 'var(--bg-page)', minHeight: '100%' }}>{body}</div>
 }
