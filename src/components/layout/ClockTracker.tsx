@@ -39,16 +39,32 @@ export default function ClockTracker() {
       )
     }
 
+    async function permission(): Promise<PermissionState | 'unknown'> {
+      try { return (await navigator.permissions.query({ name: 'geolocation' })).state } catch { return 'unknown' }
+    }
+
     const ping = () => {
-      clockPing().then(r => { if (r?.locate) locate(r.locate) }).catch(() => {})
+      clockPing().then(async r => {
+        if (!r?.locate) return
+        // A blocked session is re-checked only once access is allowed (never re-prompts).
+        if (r.wasDenied && (await permission()) !== 'granted') return
+        locate(r.locate)
+      }).catch(() => {})
     }
     ping()
     const timer = setInterval(ping, PING_MS)
     const onVisible = () => { if (document.visibilityState === 'visible') ping() }
     document.addEventListener('visibilitychange', onVisible)
+
+    // Re-check right away when the person changes the site's location permission.
+    let status: PermissionStatus | null = null
+    navigator.permissions?.query({ name: 'geolocation' })
+      .then(s => { status = s; s.onchange = ping }).catch(() => {})
+
     return () => {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisible)
+      if (status) status.onchange = null
     }
   }, [])
   return null

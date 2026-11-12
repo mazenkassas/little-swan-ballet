@@ -37,7 +37,7 @@ async function closeSession(admin: Admin, s: { id: string; login_time: string },
  * Returns `locate` = the session id when its clock-in location is still unknown,
  * so the browser can send its position via clockLocation().
  */
-export async function clockPing(): Promise<{ locate?: string }> {
+export async function clockPing(): Promise<{ locate?: string; wasDenied?: boolean }> {
   const staffId = await trackedStaffId()
   if (!staffId) return {}
   const admin = createAdminClient()
@@ -54,7 +54,10 @@ export async function clockPing(): Promise<{ locate?: string }> {
     const patch: Record<string, unknown> = { last_seen: new Date(now).toISOString() }
     if (!open.login_device) patch.login_device = await requestDevice()
     await admin.from('staff_attendance').update(patch).eq('id', open.id)
-    return open.location_status === 'pending' ? { locate: open.id } : {}
+    if (open.location_status === 'pending') return { locate: open.id }
+    // Blocked earlier: the browser retries only once location access has been allowed.
+    if (open.location_status === 'denied') return { locate: open.id, wasDenied: true }
+    return {}
   }
 
   // Went quiet (closed the browser without logging out): clock out at last activity.
@@ -90,7 +93,7 @@ export async function clockLocation(
     : { login_lat: lat, login_lng: lng, location_status: status, login_distance_m: distance, notes: null }
   if (status === 'pending' && !failure) return
   await admin.from('staff_attendance').update(update)
-    .eq('id', sessionId).eq('staff_id', staffId).eq('location_status', 'pending')
+    .eq('id', sessionId).eq('staff_id', staffId).in('location_status', ['pending', 'denied'])
 }
 
 /** Clock out now (called on logout). */
