@@ -141,21 +141,21 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       </div>
 
       {/* Body */}
-      <div style={{
-        padding: '24px 28px',
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0,1fr) 300px',
-        gap: 20,
-        alignItems: 'start',
-      }}>
+      <div style={{ padding: '24px 28px' }}>
 
         {/* Enrolled list */}
         <div style={{ ...card, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Users size={14} color="#d4667a" />
-            <p style={{ margin: 0, color: 'var(--txt1)', fontSize: 13, fontWeight: 600 }}>
+            <p style={{ margin: 0, flex: 1, color: 'var(--txt1)', fontSize: 13, fontWeight: 600 }}>
               {isRtl ? `المسجلات (${enrollments?.length || 0})` : `${L.enrolled} (${enrollments?.length || 0})`}
             </p>
+            <EventEnrollForm
+              eventId={id}
+              eventPrice={event.price}
+              students={available}
+              isRtl={isRtl}
+            />
           </div>
 
           {enrollments && enrollments.length > 0 ? enrollments.map((e: any) => {
@@ -202,14 +202,6 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
             </div>
           )}
         </div>
-
-        {/* Enroll form */}
-        <EventEnrollForm
-          eventId={id}
-          eventPrice={event.price}
-          students={available}
-          isRtl={isRtl}
-        />
       </div>
     </div>
   )
