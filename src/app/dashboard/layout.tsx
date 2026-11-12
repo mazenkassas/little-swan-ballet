@@ -2,6 +2,7 @@ import DashboardShell from '@/components/layout/DashboardShell'
 import { emailPattern } from '@/lib/emailMatch'
 import ClockTracker from '@/components/layout/ClockTracker'
 import LocationAlerts from '@/components/layout/LocationAlerts'
+import RealtimeRefresh from '@/components/layout/RealtimeRefresh'
 import ThemeToggle from '@/components/layout/ThemeToggle'
 import LanguageToggle from '@/components/layout/LanguageToggle'
 import { createClient } from '@/lib/supabase/server'
@@ -59,6 +60,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       topbarActions={<>{staffRole === 'super_admin' && <LocationAlerts />}<LanguageToggle /><ThemeToggle /></>}
     >
       <ClockTracker />
+      <RealtimeRefresh />
       {children}
     </DashboardShell>
   )

@@ -2,6 +2,7 @@ import CoachShell from '@/components/layout/CoachShell'
 import { emailPattern } from '@/lib/emailMatch'
 import ThemeToggle from '@/components/layout/ThemeToggle'
 import LanguageToggle from '@/components/layout/LanguageToggle'
+import RealtimeRefresh from '@/components/layout/RealtimeRefresh'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { getLocale } from 'next-intl/server'
@@ -39,6 +40,7 @@ export default async function CoachLayout({ children }: { children: React.ReactN
       coach={{ displayName, initials, email: user.email || '' }}
       topbarActions={<><LanguageToggle /><ThemeToggle /></>}
     >
+      <RealtimeRefresh />
       {children}
     </CoachShell>
   )

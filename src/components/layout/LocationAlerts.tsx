@@ -6,6 +6,7 @@ import { useLocale } from 'next-intl'
 import { Bell, MapPin, X } from 'lucide-react'
 import { getLocationAlerts, type LocationAlert } from '@/lib/actions/locationAlerts'
 import { fmtCairoTime } from '@/lib/staffClock'
+import { DATA_CHANGED_EVENT } from './RealtimeRefresh'
 
 const POLL_MS = 30_000
 const SEEN_KEY = 'ls-location-alerts-seen'
@@ -53,7 +54,17 @@ export default function LocationAlerts() {
     const t = setInterval(refresh, POLL_MS)
     const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
     document.addEventListener('visibilitychange', onVisible)
-    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible) }
+    // Live: re-check as soon as a clock-in / check-in row changes
+    const onData = (e: Event) => {
+      const table = (e as CustomEvent<{ table: string }>).detail?.table
+      if (table === 'staff_attendance' || table === 'coach_attendance') refresh()
+    }
+    window.addEventListener(DATA_CHANGED_EVENT, onData)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener(DATA_CHANGED_EVENT, onData)
+    }
   }, [refresh])
 
   useEffect(() => {
