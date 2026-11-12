@@ -99,8 +99,8 @@ export default function LocationAlerts() {
       {open && (
         <div style={{
           position: 'absolute', top: 40, insetInlineEnd: 0, width: 'min(340px, calc(100vw - 32px))', zIndex: 200,
-          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
-          boxShadow: '0 8px 24px rgba(0,0,0,.15)', overflow: 'hidden', direction: isRtl ? 'rtl' : 'ltr',
+          background: 'var(--bg-popup)', border: '1px solid var(--border)', borderRadius: 12,
+          boxShadow: '0 12px 32px rgba(0,0,0,.35)', overflow: 'hidden', direction: isRtl ? 'rtl' : 'ltr',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt1)' }}>{L.title}</span>
@@ -133,8 +133,8 @@ export default function LocationAlerts() {
       {toast && (
         <div role="alert" style={{
           position: 'fixed', bottom: 16, insetInlineEnd: 16, zIndex: 300, width: 'min(340px, calc(100vw - 32px))',
-          background: 'var(--bg-card)', border: '1px solid #e0404055', borderInlineStart: '4px solid #e04040',
-          borderRadius: 12, boxShadow: '0 10px 30px rgba(0,0,0,.2)', padding: '12px 14px',
+          background: 'var(--bg-popup)', border: '1px solid #e0404055', borderInlineStart: '4px solid #e04040',
+          borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,.35)', padding: '12px 14px',
           display: 'flex', gap: 10, direction: isRtl ? 'rtl' : 'ltr',
         }}>
           <MapPin size={18} style={{ color: '#e04040', flexShrink: 0, marginTop: 1 }} />
