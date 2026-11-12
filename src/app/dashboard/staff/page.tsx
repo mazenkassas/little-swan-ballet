@@ -5,6 +5,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { getLocale } from 'next-intl/server'
 import StaffCardActions from './StaffCardActions'
 import TodayPresence from './TodayPresence'
+import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
 import { cairoToday, hoursBetween, isLive, sessionEnd } from '@/lib/staffClock'
 
 export default async function StaffPage({
@@ -47,7 +48,7 @@ export default async function StaffPage({
   allAttendance?.forEach(a => {
     if (!staffStats[a.staff_id]) staffStats[a.staff_id] = { hours: 0, flagged: 0 }
     staffStats[a.staff_id].hours += a.hours_on_shift || 0
-    if (a.location_status === 'invalid') staffStats[a.staff_id].flagged++
+    if (a.location_status === 'invalid' || a.location_status === 'denied') staffStats[a.staff_id].flagged++
   })
 
   const { data: monthLog } = await supabase
@@ -72,7 +73,7 @@ export default async function StaffPage({
     tabToday: 'الحضور اليوم',
     hoursMonth: 'ساعات الشهر',
     noStaff: 'لا يوجد موظفون',
-    col: { staff: 'الموظف', checkIn: 'تسجيل دخول', checkOut: 'تسجيل خروج', hours: 'الساعات', location: 'الموقع' },
+    col: { staff: 'الموظف', checkIn: 'تسجيل دخول', checkOut: 'تسجيل خروج', hours: 'الساعات', location: 'الموقع', device: 'الجهاز' },
     active: 'جارٍ',
     inProgress: 'في الدوام',
     locationValid: 'داخل النطاق', locationInvalid: 'خارج النطاق',
@@ -86,7 +87,7 @@ export default async function StaffPage({
     tabToday: 'Today',
     hoursMonth: 'Hours This Month',
     noStaff: 'No staff members',
-    col: { staff: 'Staff', checkIn: 'Check In', checkOut: 'Check Out', hours: 'Hours', location: 'Location' },
+    col: { staff: 'Staff', checkIn: 'Check In', checkOut: 'Check Out', hours: 'Hours', location: 'Location', device: 'Device' },
     active: 'Active',
     inProgress: 'In Progress',
     locationValid: 'Valid ✓', locationInvalid: 'Invalid ⚠',
@@ -227,7 +228,7 @@ export default async function StaffPage({
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
-                  {[L.col.staff, L.col.checkIn, L.col.checkOut, L.col.hours, L.col.location].map(col => (
+                  {[L.col.staff, L.col.checkIn, L.col.checkOut, L.col.hours, L.col.location, L.col.device].map(col => (
                     <th key={col} style={{
                       textAlign: isRtl ? 'right' : 'left', color: 'var(--txt2)',
                       fontSize: 11, fontWeight: 600, padding: '10px 14px', whiteSpace: 'nowrap',
@@ -245,8 +246,6 @@ export default async function StaffPage({
                   const hours           = log.hours_on_shift != null
                     ? Number(log.hours_on_shift)
                     : live ? null : hoursBetween(new Date(log.login_time).getTime(), sessionEnd(log))
-                  const hasLocation     = log.location_status === 'valid' || log.location_status === 'invalid'
-                  const isLocationValid = log.location_status === 'valid'
                   const role            = ROLE_LABEL[log.staff?.role] || { en: log.staff?.role, ar: log.staff?.role }
                   const displayName     = isRtl ? (log.staff?.name || log.staff?.name_en) : (log.staff?.name_en || log.staff?.name)
                   return (
@@ -291,14 +290,10 @@ export default async function StaffPage({
                         )}
                       </td>
                       <td style={{ padding: '11px 14px' }}>
-                        {!hasLocation ? <span style={{ color: 'var(--txt2)', fontSize: 12 }}>—</span> : <span style={{
-                          background: isLocationValid ? '#3dab7e18' : '#e0404018',
-                          color: isLocationValid ? '#3dab7e' : '#e04040',
-                          border: `1px solid ${isLocationValid ? '#3dab7e28' : '#e0404028'}`,
-                          borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600,
-                        }}>
-                          {isLocationValid ? L.locationValid : L.locationInvalid}
-                        </span>}
+                        <LocationBadge status={log.location_status} distance={log.login_distance_m} isRtl={isRtl} />
+                      </td>
+                      <td style={{ padding: '11px 14px' }}>
+                        <DeviceBadge device={log.login_device} isRtl={isRtl} />
                       </td>
                     </tr>
                   )

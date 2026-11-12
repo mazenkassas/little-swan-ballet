@@ -32,7 +32,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
     .order('login_time', { ascending: false })
 
   const totalHours   = attendance?.reduce((s, a) => s + (a.hours_on_shift || 0), 0) || 0
-  const flaggedCount = attendance?.filter(a => a.location_status === 'invalid').length || 0
+  const flaggedCount = attendance?.filter(a => (a.location_status === 'invalid' || a.location_status === 'denied')).length || 0
 
   const role        = ROLE_LABEL[member.role] || { en: member.role, ar: member.role }
   const displayName = isRtl ? (member.name || member.name_en) : (member.name_en || member.name)

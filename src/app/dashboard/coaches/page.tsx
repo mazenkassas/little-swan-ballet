@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { getLocale } from 'next-intl/server'
 import CoachCardActions from './CoachCardActions'
+import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
 
 export default async function CoachesPage({
   searchParams,
@@ -37,7 +38,7 @@ export default async function CoachesPage({
   attendance?.forEach(a => {
     if (!coachStats[a.coach_id]) coachStats[a.coach_id] = { hours: 0, flagged: 0 }
     coachStats[a.coach_id].hours += a.hours_worked || 0
-    if (a.location_status === 'invalid') coachStats[a.coach_id].flagged++
+    if (a.location_status === 'invalid' || a.location_status === 'denied') coachStats[a.coach_id].flagged++
   })
 
   const { data: monthLog } = await supabase
@@ -57,7 +58,7 @@ export default async function CoachesPage({
     payroll: 'الراتب المتوقع',
     ratePerHour: 'ج.م / ساعة',
     noCoaches: 'لا توجد مدربات',
-    col: { coach: 'المدربة', group: 'المجموعة', checkIn: 'تسجيل دخول', checkOut: 'تسجيل خروج', hours: 'الساعات', location: 'الموقع' },
+    col: { coach: 'المدربة', group: 'المجموعة', checkIn: 'تسجيل دخول', checkOut: 'تسجيل خروج', hours: 'الساعات', location: 'الموقع', device: 'الجهاز' },
     active: 'جارٍ', inProgress: 'في الحصة',
     locationValid: 'داخل النطاق', locationInvalid: 'خارج النطاق',
     noLog: 'لا توجد سجلات هذا الشهر',
@@ -71,7 +72,7 @@ export default async function CoachesPage({
     payroll: 'Payroll',
     ratePerHour: 'EGP/hr',
     noCoaches: 'No coaches',
-    col: { coach: 'Coach', group: 'Group', checkIn: 'Check In', checkOut: 'Check Out', hours: 'Hours', location: 'Location' },
+    col: { coach: 'Coach', group: 'Group', checkIn: 'Check In', checkOut: 'Check Out', hours: 'Hours', location: 'Location', device: 'Device' },
     active: 'Active', inProgress: 'In Progress',
     locationValid: 'Valid ✓', locationInvalid: 'Invalid ⚠',
     noLog: 'No check-ins this month',
@@ -211,7 +212,7 @@ export default async function CoachesPage({
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
-                  {[L.col.coach, L.col.group, L.col.checkIn, L.col.checkOut, L.col.hours, L.col.location].map(col => (
+                  {[L.col.coach, L.col.group, L.col.checkIn, L.col.checkOut, L.col.hours, L.col.location, L.col.device].map(col => (
                     <th key={col} style={{
                       textAlign: isRtl ? 'right' : 'left', color: 'var(--txt2)',
                       fontSize: 11, fontWeight: 600, padding: '10px 14px', whiteSpace: 'nowrap',
@@ -227,7 +228,6 @@ export default async function CoachesPage({
                   const checkOutStr = fmtTime(log.check_out_time)
                   const coachName   = isRtl ? (log.coach?.name_ar || log.coach?.name_en) : (log.coach?.name_en || log.coach?.name_ar)
                   const groupName   = log.session?.class?.name || '—'
-                  const isValid     = log.location_status === 'valid'
                   return (
                     <tr key={log.id} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '11px 14px' }}>
@@ -270,14 +270,10 @@ export default async function CoachesPage({
                         )}
                       </td>
                       <td style={{ padding: '11px 14px' }}>
-                        <span style={{
-                          background: isValid ? '#3dab7e18' : '#e0404018',
-                          color: isValid ? '#3dab7e' : '#e04040',
-                          border: `1px solid ${isValid ? '#3dab7e28' : '#e0404028'}`,
-                          borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600,
-                        }}>
-                          {isValid ? L.locationValid : L.locationInvalid}
-                        </span>
+                        <LocationBadge status={log.location_status} distance={log.check_in_distance_m} isRtl={isRtl} />
+                      </td>
+                      <td style={{ padding: '11px 14px' }}>
+                        <DeviceBadge device={log.check_in_device} isRtl={isRtl} />
                       </td>
                     </tr>
                   )

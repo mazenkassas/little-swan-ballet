@@ -1,5 +1,6 @@
 // Super-admin view: who is present today and whether they are within their working hours.
 import { createAdminClient } from '@/lib/supabase/admin'
+import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
 import {
   GRACE_MIN, cairoDayRange, cairoInstant, cairoToday, fmtCairoTime, fmtDuration,
   isLive, sessionEnd, weekDay, type ClockSession,
@@ -23,7 +24,7 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
       .eq('is_active', true)
       .order('name'),
     admin.from('staff_attendance')
-      .select('staff_id, login_time, logout_time, last_seen')
+      .select('staff_id, login_time, logout_time, last_seen, location_status, login_distance_m, login_device')
       .gte('login_time', dayStart.toISOString())
       .lt('login_time', dayEnd.toISOString())
       .order('login_time'),
@@ -31,21 +32,22 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
 
   const L = isRtl ? {
     present: 'حاضر', late: 'متأخر', absent: 'غائب', online: 'متصل الآن',
-    col: { staff: 'الموظف', shift: 'الدوام', in: 'دخول', out: 'خروج', time: 'مدة التواجد', status: 'الحالة' },
+    col: { staff: 'الموظف', shift: 'الدوام', in: 'دخول', out: 'خروج', time: 'مدة التواجد', location: 'الموقع', device: 'الجهاز', status: 'الحالة' },
     onTime: 'في الموعد', lateBy: (m: number) => `متأخر ${m} د`, leftEarly: (m: number) => `خرج مبكرًا ${m} د`,
     absentS: 'غائب', dayOff: 'إجازة', notYet: 'لم يبدأ بعد', extra: 'يوم إضافي', noShift: 'لا يوجد دوام',
     onlineNow: 'متصل الآن', sessions: (n: number) => `${n} جلسات`, go: 'عرض',
     empty: 'لا يوجد مديرون أو موظفون نشطون', role: { admin: 'مدير', staff: 'موظف' } as Record<string, string>,
   } : {
     present: 'Present', late: 'Late', absent: 'Absent', online: 'Online now',
-    col: { staff: 'Staff', shift: 'Shift', in: 'Clock In', out: 'Clock Out', time: 'Online Time', status: 'Status' },
+    col: { staff: 'Staff', shift: 'Shift', in: 'Clock In', out: 'Clock Out', time: 'Online Time', location: 'Location', device: 'Device', status: 'Status' },
     onTime: 'On time', lateBy: (m: number) => `Late ${m}m`, leftEarly: (m: number) => `Left early ${m}m`,
     absentS: 'Absent', dayOff: 'Day off', notYet: 'Not yet', extra: 'Extra day', noShift: 'No shift set',
     onlineNow: 'Online now', sessions: (n: number) => `${n} sessions`, go: 'Show',
     empty: 'No active admins or staff', role: { admin: 'Admin', staff: 'Staff' } as Record<string, string>,
   }
 
-  const byStaff: Record<string, ClockSession[]> = {}
+  type Row = ClockSession & { location_status: string | null; login_distance_m: number | null; login_device: string | null }
+  const byStaff: Record<string, Row[]> = {}
   sessions?.forEach(s => { (byStaff[s.staff_id] ||= []).push(s) })
 
   const dow = weekDay(date)
@@ -132,7 +134,7 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
-              {[L.col.staff, L.col.shift, L.col.in, L.col.out, L.col.time, L.col.status].map(c => <th key={c} style={th}>{c}</th>)}
+              {[L.col.staff, L.col.shift, L.col.in, L.col.out, L.col.time, L.col.location, L.col.device, L.col.status].map(c => <th key={c} style={th}>{c}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -152,6 +154,22 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
                   <td style={td}>
                     <span dir="ltr" style={{ fontWeight: 600 }}>{list.length ? fmtDuration(total) : '—'}</span>
                     {list.length > 1 && <span style={{ color: 'var(--txt2)', fontSize: 11, marginInlineStart: 6 }}>({L.sessions(list.length)})</span>}
+                  </td>
+                  <td style={td}>
+                    {list.length === 0 ? '—' : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                        {list.map((s, i) => (
+                          <LocationBadge key={i} status={s.location_status} distance={s.login_distance_m} isRtl={isRtl} />
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td style={td}>
+                    {list.length === 0 ? '—' : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                        {list.map((s, i) => <DeviceBadge key={i} device={s.login_device} isRtl={isRtl} />)}
+                      </div>
+                    )}
                   </td>
                   <td style={td}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{badges.map(pill)}</div></td>
                 </tr>

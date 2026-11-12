@@ -35,13 +35,13 @@ export default function CheckInPanel({
   const [pending, startTransition] = useTransition()
   const [flash, setFlash] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
 
-  async function getGps(): Promise<{ lat: number | null; lng: number | null }> {
+  async function getGps(): Promise<{ lat: number | null; lng: number | null; denied: boolean }> {
     return new Promise(resolve => {
-      if (!navigator.geolocation) return resolve({ lat: null, lng: null })
+      if (!navigator.geolocation) return resolve({ lat: null, lng: null, denied: true })
       navigator.geolocation.getCurrentPosition(
-        pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => resolve({ lat: null, lng: null }),
-        { timeout: 10000 },
+        pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, denied: false }),
+        err => resolve({ lat: null, lng: null, denied: err.code === err.PERMISSION_DENIED }),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
       )
     })
   }
@@ -49,8 +49,8 @@ export default function CheckInPanel({
   function handleCheckIn(sessionId: string | null) {
     startTransition(async () => {
       setFlash(null)
-      const { lat, lng } = await getGps()
-      const result = await coachCheckIn(sessionId, lat, lng)
+      const { lat, lng, denied } = await getGps()
+      const result = await coachCheckIn(sessionId, lat, lng, denied)
       setFlash(result?.error
         ? { type: 'err', msg: result.error }
         : { type: 'ok', msg: isRtl ? 'تم تسجيل الدخول ✓' : 'Checked in successfully ✓' })
@@ -250,7 +250,7 @@ export default function CheckInPanel({
                 </tr>
               ) : history.map(l => {
                 const className    = l.session?.class?.name || (isRtl ? 'يدوي' : 'Manual')
-                const isFlagged    = l.location_status === 'invalid'
+                const isFlagged    = l.location_status === 'invalid' || l.location_status === 'denied'
                 const isActiveNow  = !l.check_out_time
                 return (
                   <tr key={l.id}>

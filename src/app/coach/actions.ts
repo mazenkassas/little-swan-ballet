@@ -3,16 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { emailPattern } from '@/lib/emailMatch'
 import { revalidatePath } from 'next/cache'
-
-function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
+import { checkLocation, requestDevice } from '@/lib/geo'
 
 async function getCoachId(supabase: Awaited<ReturnType<typeof createClient>>, email: string) {
   const { data } = await supabase
@@ -25,24 +16,11 @@ async function getCoachId(supabase: Awaited<ReturnType<typeof createClient>>, em
   return data?.id ?? null
 }
 
-async function getAcademyCoords(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data } = await supabase
-    .from('system_settings')
-    .select('key, value')
-    .in('key', ['academy_lat', 'academy_lng', 'checkin_radius_meters'])
-  const map: Record<string, string> = {}
-  ;(data || []).forEach((r: any) => { map[r.key] = r.value })
-  return {
-    lat: parseFloat(map['academy_lat'] ?? '0') || 0,
-    lng: parseFloat(map['academy_lng'] ?? '0') || 0,
-    radius: parseFloat(map['checkin_radius_meters'] ?? '500') || 500,
-  }
-}
-
 export async function coachCheckIn(
   sessionId: string | null,
   lat: number | null,
   lng: number | null,
+  denied = false,
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -51,14 +29,8 @@ export async function coachCheckIn(
   const coachId = await getCoachId(supabase, user.email)
   if (!coachId) return { error: 'Coach record not found' }
 
-  let locationStatus = 'pending'
-  if (lat != null && lng != null) {
-    const { lat: aLat, lng: aLng, radius } = await getAcademyCoords(supabase)
-    if (aLat !== 0 || aLng !== 0) {
-      const dist = haversineMeters(lat, lng, aLat, aLng)
-      locationStatus = dist <= radius ? 'valid' : 'invalid'
-    }
-  }
+  // Same geofence as admin/staff: academy location + allowed radius from Settings
+  const { status: locationStatus, distance } = await checkLocation(supabase, { lat, lng, denied })
 
   const { error } = await supabase.from('coach_attendance').insert({
     coach_id: coachId,
@@ -67,6 +39,8 @@ export async function coachCheckIn(
     check_in_lat: lat,
     check_in_lng: lng,
     location_status: locationStatus,
+    check_in_distance_m: distance,
+    check_in_device: await requestDevice(),
   })
 
   if (error) return { error: error.message }

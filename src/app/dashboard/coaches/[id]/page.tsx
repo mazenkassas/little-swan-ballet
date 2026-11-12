@@ -69,7 +69,7 @@ export default async function CoachDetailPage({ params }: { params: Promise<{ id
   const classHours      = classAttendance.reduce((s, a) => s + (a.hours_worked || 0), 0)
   const privateHours    = (privateSessions || []).reduce((s, p) => s + (p.duration_hours || 0), 0)
   const totalHours      = classHours + privateHours
-  const flaggedCount    = (attendance || []).filter(a => a.location_status === 'invalid').length
+  const flaggedCount    = (attendance || []).filter(a => (a.location_status === 'invalid' || a.location_status === 'denied')).length
   const earnings        = coach.hourly_rate ? totalHours * coach.hourly_rate : null
 
   const displayName = isRtl ? (coach.name_ar || coach.name_en) : (coach.name_en || coach.name_ar)
@@ -326,7 +326,7 @@ export default async function CoachDetailPage({ params }: { params: Promise<{ id
                     </td>
                   </tr>
                 ) : classAttendance.map(a => {
-                  const isFlagged = a.location_status === 'invalid'
+                  const isFlagged = (a.location_status === 'invalid' || a.location_status === 'denied')
                   const isActive  = !a.check_out_time
                   return (
                     <tr key={a.id} style={{ borderLeft: `3px solid ${isFlagged ? '#e8960a' : '#7c5cdb30'}` }}>
