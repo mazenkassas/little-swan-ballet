@@ -7,11 +7,26 @@ const pill = (color: string): React.CSSProperties => ({
   display: 'inline-flex', alignItems: 'center', gap: 4,
 })
 
-export function LocationBadge({ status, distance, isRtl }: {
+const GPS_REASON: Record<string, { en: string; ar: string }> = {
+  'gps:unavailable': { en: 'No GPS signal', ar: 'لا توجد إشارة GPS' },
+  'gps:timeout':     { en: 'GPS timed out', ar: 'انتهت مهلة GPS' },
+  'gps:unsupported': { en: 'Browser has no GPS', ar: 'المتصفح لا يدعم GPS' },
+}
+
+export function LocationBadge({ status, distance, isRtl, note, live }: {
   status: string | null | undefined
   distance?: number | null
   isRtl: boolean
+  /** staff_attendance.notes — holds why GPS failed while the location is unknown */
+  note?: string | null
+  /** session still open: an unknown location may still arrive */
+  live?: boolean
 }) {
+  if (status === 'pending' || !status) {
+    const reason = note ? GPS_REASON[note] : undefined
+    if (reason) return <span style={pill('#e8960a')}>{isRtl ? reason.ar : reason.en}</span>
+    if (live) return <span style={pill('#8a8a9a')}>{isRtl ? 'جارٍ تحديد الموقع…' : 'Locating…'}</span>
+  }
   const dist = distance != null ? ` · ${distance >= 1000 ? `${(distance / 1000).toFixed(1)} km` : `${distance} m`}` : ''
   if (status === 'valid') return <span style={pill('#3dab7e')}>{isRtl ? 'داخل الأكاديمية' : 'At academy'}</span>
   if (status === 'invalid') return <span style={pill('#e04040')} dir="auto">{isRtl ? 'خارج الأكاديمية' : 'Outside academy'}{dist}</span>

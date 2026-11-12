@@ -45,14 +45,15 @@ export async function clockPing(): Promise<{ locate?: string }> {
 
   const { data: open } = await admin
     .from('staff_attendance')
-    .select('id, login_time, logout_time, last_seen, location_status')
+    .select('id, login_time, logout_time, last_seen, location_status, login_device')
     .eq('staff_id', staffId)
     .is('logout_time', null)
     .maybeSingle()
 
   if (open && isLive(open, now)) {
-    await admin.from('staff_attendance')
-      .update({ last_seen: new Date(now).toISOString() }).eq('id', open.id)
+    const patch: Record<string, unknown> = { last_seen: new Date(now).toISOString() }
+    if (!open.login_device) patch.login_device = await requestDevice()
+    await admin.from('staff_attendance').update(patch).eq('id', open.id)
     return open.location_status === 'pending' ? { locate: open.id } : {}
   }
 
@@ -68,21 +69,28 @@ export async function clockPing(): Promise<{ locate?: string }> {
   return created ? { locate: created.id } : {}
 }
 
-/** Record where the person clocked in from (or that they blocked location access). */
+/**
+ * Record where the person clocked in from (or that they blocked location access).
+ * `failure` is why the browser couldn't get a position ('unavailable' | 'timeout' | 'unsupported');
+ * it is kept in `notes` while the location stays unknown, so the super admin sees the reason.
+ */
 export async function clockLocation(
   sessionId: string,
   lat: number | null,
   lng: number | null,
   denied = false,
+  failure?: string,
 ): Promise<void> {
   const staffId = await trackedStaffId()
   if (!staffId) return
   const admin = createAdminClient()
   const { status, distance } = await checkLocation(admin, { lat, lng, denied })
-  if (status === 'pending') return
-  await admin.from('staff_attendance').update({
-    login_lat: lat, login_lng: lng, location_status: status, login_distance_m: distance,
-  }).eq('id', sessionId).eq('staff_id', staffId).eq('location_status', 'pending')
+  const update = status === 'pending'
+    ? { notes: failure ? `gps:${failure}`.slice(0, 40) : null }
+    : { login_lat: lat, login_lng: lng, location_status: status, login_distance_m: distance, notes: null }
+  if (status === 'pending' && !failure) return
+  await admin.from('staff_attendance').update(update)
+    .eq('id', sessionId).eq('staff_id', staffId).eq('location_status', 'pending')
 }
 
 /** Clock out now (called on logout). */

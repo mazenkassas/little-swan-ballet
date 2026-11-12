@@ -5,25 +5,37 @@ import { useEffect, useRef } from 'react'
 import { clockLocation, clockPing } from '@/lib/actions/clock'
 import { PING_MS } from '@/lib/staffClock'
 
+const GPS_TIMEOUT_MS = 20000
+
 export default function ClockTracker() {
-  const locating = useRef(false)
+  // When the current location request started (0 = none in flight)
+  const locatingSince = useRef(0)
 
   useEffect(() => {
     function locate(sessionId: string) {
-      if (locating.current) return
-      if (!navigator.geolocation) { clockLocation(sessionId, null, null, true).catch(() => {}); return }
-      locating.current = true
+      // The browser may never answer (e.g. the permission prompt is ignored): retry after a while.
+      if (locatingSince.current && Date.now() - locatingSince.current < GPS_TIMEOUT_MS + 15000) return
+      if (!navigator.geolocation || !window.isSecureContext) {
+        clockLocation(sessionId, null, null, false, 'unsupported').catch(() => {})
+        return
+      }
+      locatingSince.current = Date.now()
       navigator.geolocation.getCurrentPosition(
         pos => {
-          locating.current = false
+          locatingSince.current = 0
           clockLocation(sessionId, pos.coords.latitude, pos.coords.longitude).catch(() => {})
         },
         err => {
-          locating.current = false
-          // Refused → flag it. Timeout/unavailable → stay pending and retry on the next ping.
-          if (err.code === err.PERMISSION_DENIED) clockLocation(sessionId, null, null, true).catch(() => {})
+          locatingSince.current = 0
+          if (err.code === err.PERMISSION_DENIED) {
+            clockLocation(sessionId, null, null, true).catch(() => {})
+          } else {
+            // No GPS fix yet: note why, stay pending and retry on the next ping.
+            const why = err.code === err.TIMEOUT ? 'timeout' : 'unavailable'
+            clockLocation(sessionId, null, null, false, why).catch(() => {})
+          }
         },
-        { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 },
+        { enableHighAccuracy: true, timeout: GPS_TIMEOUT_MS, maximumAge: 60000 },
       )
     }
 

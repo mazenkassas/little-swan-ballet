@@ -290,7 +290,8 @@ export default async function StaffPage({
                         )}
                       </td>
                       <td style={{ padding: '11px 14px' }}>
-                        <LocationBadge status={log.location_status} distance={log.login_distance_m} isRtl={isRtl} />
+                        <LocationBadge status={log.location_status} distance={log.login_distance_m}
+                          note={log.notes} live={live} isRtl={isRtl} />
                       </td>
                       <td style={{ padding: '11px 14px' }}>
                         <DeviceBadge device={log.login_device} isRtl={isRtl} />

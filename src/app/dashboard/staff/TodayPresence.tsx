@@ -24,7 +24,7 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
       .eq('is_active', true)
       .order('name'),
     admin.from('staff_attendance')
-      .select('staff_id, login_time, logout_time, last_seen, location_status, login_distance_m, login_device')
+      .select('staff_id, login_time, logout_time, last_seen, location_status, login_distance_m, login_device, notes')
       .gte('login_time', dayStart.toISOString())
       .lt('login_time', dayEnd.toISOString())
       .order('login_time'),
@@ -46,7 +46,9 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
     empty: 'No active admins or staff', role: { admin: 'Admin', staff: 'Staff' } as Record<string, string>,
   }
 
-  type Row = ClockSession & { location_status: string | null; login_distance_m: number | null; login_device: string | null }
+  type Row = ClockSession & {
+    location_status: string | null; login_distance_m: number | null; login_device: string | null; notes: string | null
+  }
   const byStaff: Record<string, Row[]> = {}
   sessions?.forEach(s => { (byStaff[s.staff_id] ||= []).push(s) })
 
@@ -159,7 +161,8 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
                     {list.length === 0 ? '—' : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                         {list.map((s, i) => (
-                          <LocationBadge key={i} status={s.location_status} distance={s.login_distance_m} isRtl={isRtl} />
+                          <LocationBadge key={i} status={s.location_status} distance={s.login_distance_m}
+                            note={s.notes} live={isLive(s, now)} isRtl={isRtl} />
                         ))}
                       </div>
                     )}
