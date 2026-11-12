@@ -226,7 +226,7 @@ function Filter({ label, all, value, options, isRtl, icon: Icon, onChange }: {
 }) {
   return (
     <label className={`lsw-filter${value ? ' on' : ''}`}>
-      <Icon size={17} aria-hidden />
+      <Icon size={14} aria-hidden />
       <span>{label}</span>
       <select value={value} onChange={e => onChange(e.target.value)}>
         <option value="">{all}</option>
@@ -593,7 +593,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
           <div>
             <h1>{L.title}</h1>
             <div className="lsw-crumb">
-              <Link href="/dashboard" aria-label={L.home} title={L.home}><House size={16} /></Link>
+              <Link href="/dashboard" aria-label={L.home} title={L.home}><House size={13} /></Link>
               <span>{activeLabel}</span>
             </div>
           </div>
@@ -606,10 +606,10 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
         {!isStock && !setupNeeded && (
           <div className="lsw-tools">
             <button className="lsw-btn ghost" onClick={exportCsv} disabled={!visible.length}>
-              <Download size={18} aria-hidden />{L.exportCsv}
+              <Download size={15} aria-hidden />{L.exportCsv}
             </button>
             <button className="lsw-btn" onClick={addRow} disabled={adding}>
-              <Plus size={18} aria-hidden />{L.addRow}
+              <Plus size={15} aria-hidden />{L.addRow}
             </button>
           </div>
         )}
@@ -627,7 +627,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
           {/* Search and filters */}
           <div className="lsw-filters">
             <label className="lsw-search">
-              <Search size={18} aria-hidden />
+              <Search size={14} aria-hidden />
               <input type="search" value={query} onChange={e => setQuery(e.target.value)}
                 placeholder={L.search} aria-label={L.search} />
             </label>
@@ -642,27 +642,27 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
           {/* Summary */}
           <div className="lsw-stats">
             <div className="lsw-stat pink">
-              <i className="ic"><ShoppingCart size={24} aria-hidden /></i>
+              <i className="ic"><ShoppingCart size={17} aria-hidden /></i>
               <span className="tx"><span>{L.statCount}</span><b>{visible.length}</b></span>
             </div>
             <div className="lsw-stat info">
-              <i className="ic"><Wallet size={24} aria-hidden /></i>
+              <i className="ic"><Wallet size={17} aria-hidden /></i>
               <span className="tx"><span>{L.statTotal}</span><b>{fmt(total)}</b></span>
             </div>
             <div className="lsw-stat ok">
-              <i className="ic"><HandCoins size={24} aria-hidden /></i>
+              <i className="ic"><HandCoins size={17} aria-hidden /></i>
               <span className="tx"><span>{L.statPaid}</span><b>{fmt(paid)}</b></span>
             </div>
             <button type="button" title={L.filterHint} aria-pressed={fPay === 'remaining'}
               className={`lsw-stat click amber${rem > 0 ? '' : ' calm'}`}
               onClick={() => setFPay(fPay === 'remaining' ? '' : 'remaining')}>
-              <i className="ic"><Clock size={24} aria-hidden /></i>
+              <i className="ic"><Clock size={17} aria-hidden /></i>
               <span className="tx"><span>{L.statRemaining}</span><b>{fmt(rem)}</b></span>
             </button>
             <button type="button" title={L.filterHint} aria-pressed={fDelivery === 'pending'}
               className="lsw-stat click lav calm"
               onClick={() => setFDelivery(fDelivery === 'pending' ? '' : 'pending')}>
-              <i className="ic"><UserRound size={24} aria-hidden /></i>
+              <i className="ic"><UserRound size={17} aria-hidden /></i>
               <span className="tx"><span>{L.statNotDelivered}</span><b>{notDelivered}</b></span>
             </button>
           </div>
@@ -790,7 +790,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
                 <div>{sheetRows.length ? L.emptySearch : L.emptySheet}</div>
                 {sheetRows.length
                   ? <button className="lsw-btn ghost" onClick={clearFilters}>{L.clear}</button>
-                  : <button className="lsw-btn" onClick={addRow} disabled={adding}><Plus size={18} aria-hidden />{L.addRow}</button>}
+                  : <button className="lsw-btn" onClick={addRow} disabled={adding}><Plus size={15} aria-hidden />{L.addRow}</button>}
               </div>
             )}
           </div>
@@ -803,7 +803,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
       {/* Month tabs */}
       <div className="lsw-tabbar">
         <button type="button" className="lsw-tabnav" aria-label={L.prevTabs} title={L.prevTabs} onClick={() => scrollTabs(-1)}>
-          {isRtl ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {isRtl ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
         <nav className="lsw-tabs" role="tablist" ref={tabsRef}>
           {tabs.map(t => {
@@ -811,7 +811,7 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
             return (
               <button key={t.id} className="lsw-tab" role="tab" aria-selected={on}
                 onClick={() => setActive(t.id)}>
-                {on && t.id !== STOCK && <CalendarDays size={17} aria-hidden />}
+                {on && t.id !== STOCK && <CalendarDays size={14} aria-hidden />}
                 {t.label}
                 {monthCounts[t.id] > 0 && <span className="lsw-tabn">{monthCounts[t.id]}</span>}
               </button>
@@ -819,10 +819,10 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
           })}
         </nav>
         <button type="button" className="lsw-tabnav" aria-label={L.nextTabs} title={L.nextTabs} onClick={() => scrollTabs(1)}>
-          {isRtl ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+          {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </button>
         {!setupNeeded && (
-          <button className="lsw-addmonth" onClick={openMonthForm}><Plus size={18} aria-hidden />{L.addMonth}</button>
+          <button className="lsw-addmonth" onClick={openMonthForm}><Plus size={15} aria-hidden />{L.addMonth}</button>
         )}
       </div>
 

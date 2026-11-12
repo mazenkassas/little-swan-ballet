@@ -66,7 +66,7 @@ html.dark .lsw-ribbon{opacity:.45}
 .lsw-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:18px;margin-bottom:22px}
 .lsw-stat{--tone:var(--lsw-rose);position:relative;overflow:hidden;display:flex;align-items:center;gap:16px;min-height:112px;background:var(--lsw-card);border:1px solid var(--lsw-line);border-radius:20px;padding:18px 20px;box-shadow:var(--lsw-shadow);isolation:isolate}
 .lsw-stat::after{content:"";position:absolute;z-index:-1;inset-inline-end:-18%;bottom:-58%;width:95%;height:95%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--tone) 16%,transparent),transparent)}
-.lsw-stat .ic{flex-shrink:0;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;color:var(--tone);background:color-mix(in srgb,var(--tone) 15%,var(--lsw-card))}
+.lsw-stat .ic{flex-shrink:0;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--tone);background:color-mix(in srgb,var(--tone) 15%,var(--lsw-card))}
 .lsw-stat .tx{min-width:0}
 .lsw-stat span{display:block;color:var(--lsw-muted);font-size:14px;font-weight:500;line-height:1.3}
 .lsw-stat b{display:block;margin-top:6px;font-size:26px;line-height:1.15;font-weight:700;color:var(--lsw-ink);font-variant-numeric:tabular-nums}
@@ -153,7 +153,7 @@ html.dark .lsw-wrap td input[type=date]{color-scheme:dark}
 
 /* Month tabs */
 .lsw-tabbar{display:flex;align-items:center;gap:6px;margin-top:18px;padding:8px;background:var(--lsw-card);border:1px solid var(--lsw-line);border-radius:20px;box-shadow:var(--lsw-shadow)}
-.lsw-tabnav{flex-shrink:0;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:1px solid var(--lsw-line);background:var(--lsw-card);color:var(--lsw-rose);cursor:pointer;transition:background .15s}
+.lsw-tabnav{flex-shrink:0;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;border:1px solid var(--lsw-line);background:var(--lsw-card);color:var(--lsw-rose);cursor:pointer;transition:background .15s}
 .lsw-tabnav:hover{background:var(--lsw-hover)}
 .lsw-tabs{display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0;padding:2px;scroll-behavior:smooth;scrollbar-width:none}
 .lsw-tabs::-webkit-scrollbar{display:none}
@@ -201,8 +201,8 @@ html.dark .lsw-wrap td input[type=date]{color-scheme:dark}
 .lsw-fcount{width:100%;margin:0}
 .lsw-stats{grid-template-columns:repeat(2,1fr);gap:10px}
 .lsw-stat{min-height:0;gap:10px;padding:12px;border-radius:16px}
-.lsw-stat .ic{width:40px;height:40px}
-.lsw-stat .ic svg{width:18px;height:18px}
+.lsw-stat .ic{width:30px;height:30px}
+.lsw-stat .ic svg{width:14px;height:14px}
 .lsw-stat span{font-size:12.5px}
 .lsw-stat b{font-size:19px;margin-top:2px}
 .lsw-stats > .lsw-stat:last-child{grid-column:1/-1}

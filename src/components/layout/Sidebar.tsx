@@ -157,7 +157,7 @@ return (
             {collapsed && <div style={{ height: 8 }} />}
             {group.items.map(item => navLink(
               item.href,
-              <item.icon size={16} strokeWidth={1.8} />,
+              <item.icon size={14} />,
               item.label,
               item.exact
             ))}
@@ -167,7 +167,7 @@ return (
 
       {/* Settings */}
       <div style={{ padding: '0 8px 4px', flexShrink: 0 }}>
-        {navLink('/dashboard/settings', <Settings size={16} strokeWidth={1.8} />, t('settings'))}
+        {navLink('/dashboard/settings', <Settings size={14} />, t('settings'))}
       </div>
 
       {/* User profile footer */}
