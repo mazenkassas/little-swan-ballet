@@ -4,15 +4,18 @@ import { Plus } from 'lucide-react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { getLocale } from 'next-intl/server'
 import CoachCardActions from './CoachCardActions'
+import CoachTodayPresence from './CoachTodayPresence'
+import { cairoToday } from '@/lib/staffClock'
 import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
 
 export default async function CoachesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; date?: string }>
 }) {
   const params   = await searchParams
-  const tab      = params.tab === 'log' ? 'log' : 'coaches'
+  const tab      = params.tab === 'log' ? 'log' : params.tab === 'today' ? 'today' : 'coaches'
+  const todayDate = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : cairoToday()
   const locale   = await getLocale()
   const isRtl    = locale === 'ar'
   const supabase = await createClient()
@@ -54,6 +57,7 @@ export default async function CoachesPage({
     add: 'إضافة مدربة',
     tabCoaches: 'المدربات',
     tabLog: 'سجل الشهر',
+    tabToday: 'الحضور اليوم',
     hoursMonth: 'ساعات الشهر',
     payroll: 'الراتب المتوقع',
     ratePerHour: 'ج.م / ساعة',
@@ -68,6 +72,7 @@ export default async function CoachesPage({
     add: 'Add Coach',
     tabCoaches: 'Coaches',
     tabLog: "Month's Log",
+    tabToday: 'Today',
     hoursMonth: 'Hours This Month',
     payroll: 'Payroll',
     ratePerHour: 'EGP/hr',
@@ -116,6 +121,7 @@ export default async function CoachesPage({
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
           {[
             { key: 'coaches', label: L.tabCoaches, href: '/dashboard/coaches' },
+            { key: 'today',   label: L.tabToday,   href: '/dashboard/coaches?tab=today' },
             { key: 'log',     label: L.tabLog,     href: '/dashboard/coaches?tab=log' },
           ].map(t => (
             <Link key={t.key} href={t.href} style={{
@@ -133,6 +139,9 @@ export default async function CoachesPage({
           ))}
         </div>
       </div>
+
+      {/* ── Today Tab ── */}
+      {tab === 'today' && <CoachTodayPresence date={todayDate} isRtl={isRtl} />}
 
       {/* ── Coaches Tab ── */}
       {tab === 'coaches' && (
