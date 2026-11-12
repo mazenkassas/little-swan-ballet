@@ -91,7 +91,7 @@ export default async function DashboardHome() {
   const { data: { user } } = await supabase.auth.getUser()
   const [{ data: me }, { data: permSetting }] = await Promise.all([
     user?.email
-      ? supabase.from('staff').select('name, role, is_active').ilike('email', user.email.trim().replace(/[\\%_]/g, '\\$&')).maybeSingle()
+      ? supabase.from('staff').select('name, name_en, role, is_active').ilike('email', user.email.trim().replace(/[\\%_]/g, '\\$&')).maybeSingle()
       : Promise.resolve({ data: null }),
     supabase.from('system_settings').select('value').eq('key', 'role_permissions').maybeSingle(),
   ])
@@ -203,7 +203,8 @@ export default async function DashboardHome() {
 
   const Chevron = isRtl ? ChevronLeft : ChevronRight
   const dateLabel = new Intl.DateTimeFormat(isRtl ? 'ar-EG-u-nu-latn' : 'en-GB', { timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())
-  const firstName = String(me?.name || user?.user_metadata?.full_name || '').trim().split(/\s+/)[0]
+  // The greeting always uses the English name (falls back to the stored name)
+  const firstName = String(me?.name_en || me?.name || user?.user_metadata?.full_name || '').trim().split(/\s+/)[0]
   const newCount = n(newStudents)
 
   const stats = [
@@ -249,36 +250,66 @@ export default async function DashboardHome() {
       </div>
 
       <div className="dh-main">
-        {/* Today's classes */}
-        <section className="dh-card dh-classes">
-          <div className="dh-card-head">
-            <h2>{T.todayClasses}</h2>
-            {can('daily') && <Link href="/dashboard/daily">{T.openDaily}<Chevron size={14} /></Link>}
-          </div>
-          {sess.length === 0 ? <p className="dh-empty">{T.noClasses}</p> : (
-            <ul className="dh-list">
-              {sess.map(s => {
-                const marked = markedBy.get(s.id) || 0
-                const live = s.id === nowId ? 'now' : s.id === nextId ? 'next' : ''
-                return (
-                  <li key={s.id} className={live === 'now' ? 'is-now' : undefined}>
-                    <span className="dh-grow">
-                      <span className="dh-name" dir="auto">{s.cls?.name || '—'}</span>
-                      <span className="dh-sub dh-coach" dir="auto">
-                        {name(s.coachRow)}
-                        {coachIn(s) && <Check size={12} className="dh-coach-in" aria-label={T.coachIn} />}
+        <div className="dh-col">
+          {/* Today's classes */}
+          <section className="dh-card dh-classes">
+            <div className="dh-card-head">
+              <h2>{T.todayClasses}</h2>
+              {can('daily') && <Link href="/dashboard/daily">{T.openDaily}<Chevron size={14} /></Link>}
+            </div>
+            {sess.length === 0 ? <p className="dh-empty">{T.noClasses}</p> : (
+              <ul className="dh-list">
+                {sess.map(s => {
+                  const marked = markedBy.get(s.id) || 0
+                  const live = s.id === nowId ? 'now' : s.id === nextId ? 'next' : ''
+                  return (
+                    <li key={s.id} className={live === 'now' ? 'is-now' : undefined}>
+                      <span className="dh-grow">
+                        <span className="dh-name" dir="auto">{s.cls?.name || '—'}</span>
+                        <span className="dh-sub dh-coach" dir="auto">
+                          {name(s.coachRow)}
+                          {coachIn(s) && <Check size={12} className="dh-coach-in" aria-label={T.coachIn} />}
+                        </span>
                       </span>
-                    </span>
-                    {live && <span className={`dh-live ${live}`}>{live === 'now' ? T.now : T.next}</span>}
-                    {marked > 0
-                      ? <span className="dh-pill ok">{presentBy.get(s.id) || 0}/{marked}</span>
-                      : <span className={`dh-pill ${s.status === 'cancelled' ? 'bad' : ''}`}>{T.status[s.status] || s.status}</span>}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
+                      {live && <span className={`dh-live ${live}`}>{live === 'now' ? T.now : T.next}</span>}
+                      {marked > 0
+                        ? <span className="dh-pill ok">{presentBy.get(s.id) || 0}/{marked}</span>
+                        : <span className={`dh-pill ${s.status === 'cancelled' ? 'bad' : ''}`}>{T.status[s.status] || s.status}</span>}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
+
+          {/* Needs attention: 0 sessions left first, then 1 left */}
+          {can('subscriptions') || can('students') ? (
+            <section className="dh-card">
+              <div className="dh-card-head">
+                <h2>{T.attention}</h2>
+                {follow.length > 5 && can('subscriptions') && <Link href="/dashboard/subscriptions">{T.viewAll(follow.length)}<Chevron size={14} /></Link>}
+              </div>
+              {follow.length === 0 ? (
+                <p className="dh-empty"><CheckCircle2 size={15} style={{ color: '#3dab7e', verticalAlign: '-3px', marginInlineEnd: 6 }} />{T.allGood}</p>
+              ) : (
+                <ul className="dh-list">
+                  {follow.slice(0, 5).map(d => (
+                    <li key={d.id}>
+                      <MaybeLink ok={can('students')} href={`/dashboard/students/${d.st!.id}`} className="dh-row-link">
+                        <span className="dh-avatar">{name(d.st).charAt(0)}</span>
+                        <span className="dh-grow">
+                          <span className="dh-name" dir="auto">{name(d.st)}</span>
+                          {d.cls?.name && <span className="dh-sub" dir="auto">{d.cls.name}</span>}
+                        </span>
+                        <span className={`dh-pill ${d.left <= 0 ? 'bad' : 'warn'}`}>{d.left <= 0 ? T.zeroLeft : T.oneLeft}</span>
+                      </MaybeLink>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : null}
+        </div>
 
         <div className="dh-side">
           {/* Birthdays (only when there are any) */}
@@ -320,34 +351,6 @@ export default async function DashboardHome() {
               </ul>
             )}
           </section>
-
-          {/* Needs attention: 0 sessions left first, then 1 left */}
-          {can('subscriptions') || can('students') ? (
-            <section className="dh-card">
-              <div className="dh-card-head">
-                <h2>{T.attention}</h2>
-                {follow.length > 5 && can('subscriptions') && <Link href="/dashboard/subscriptions">{T.viewAll(follow.length)}<Chevron size={14} /></Link>}
-              </div>
-              {follow.length === 0 ? (
-                <p className="dh-empty"><CheckCircle2 size={15} style={{ color: '#3dab7e', verticalAlign: '-3px', marginInlineEnd: 6 }} />{T.allGood}</p>
-              ) : (
-                <ul className="dh-list">
-                  {follow.slice(0, 5).map(d => (
-                    <li key={d.id}>
-                      <MaybeLink ok={can('students')} href={`/dashboard/students/${d.st!.id}`} className="dh-row-link">
-                        <span className="dh-avatar">{name(d.st).charAt(0)}</span>
-                        <span className="dh-grow">
-                          <span className="dh-name" dir="auto">{name(d.st)}</span>
-                          {d.cls?.name && <span className="dh-sub" dir="auto">{d.cls.name}</span>}
-                        </span>
-                        <span className={`dh-pill ${d.left <= 0 ? 'bad' : 'warn'}`}>{d.left <= 0 ? T.zeroLeft : T.oneLeft}</span>
-                      </MaybeLink>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ) : null}
         </div>
       </div>
     </div>

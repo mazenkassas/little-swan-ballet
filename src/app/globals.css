@@ -203,3 +203,4 @@ html.dark .dh-pill.warn { color: #f2b04a; }
   .dh-actions { width: 100%; }
   .dh-btn { flex: 1 1 auto; justify-content: center; padding: 0 10px; font-size: 12px; }
 }
+.dh-col { display: grid; gap: 16px; align-content: start; }
