@@ -157,7 +157,10 @@ export default function EditClassPage() {
         if (!existing) return
         for (const cls of existing) {
           const overlap = cls.days_of_week?.filter((d: string) => form.days_of_week.includes(d))
-          if (overlap?.length > 0 && form.start_time < cls.end_time && form.end_time > cls.start_time) {
+          // DB times are 'HH:MM:SS'; compare as 'HH:MM' like the form, so back-to-back groups don't clash
+          const clsStart = cls.start_time?.slice(0, 5)
+          const clsEnd   = cls.end_time?.slice(0, 5)
+          if (overlap?.length > 0 && form.start_time < clsEnd && form.end_time > clsStart) {
             const dayLabels = overlap.map((d: string) => DAYS_LABELS[d]?.[isRtl ? 'ar' : 'en'] || d)
             setConflict(L.conflict(cls.name, dayLabels.join(', '), `${cls.start_time.slice(0,5)}–${cls.end_time.slice(0,5)}`))
             return
