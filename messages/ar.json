@@ -296,7 +296,16 @@
     "locationUnknown": "غير محدد",
     "noLogs": "لا يوجد سجل لهذا اليوم",
     "role": { "super_admin": "مشرف عام", "admin": "مدير", "staff": "موظف" },
-    "hoursUnit": "ساعة"
+    "hoursUnit": "ساعة",
+    "device": "الجهاز",
+    "today": "اليوم",
+    "prevDay": "اليوم السابق",
+    "nextDay": "اليوم التالي",
+    "pickDate": "اختر تاريخًا",
+    "soFar": "حتى الآن",
+    "autoClosed": "تلقائي",
+    "autoClosedHint": "لم يتم تسجيل الخروج — أُغلق عند آخر ظهور على لوحة التحكم",
+    "stats": { "people": "الموظفون الحاضرون", "working": "في الدوام الآن", "hours": "إجمالي الساعات", "flagged": "تسجيلات مشكوكة" }
   },
   "logs": {
     "title": "سجل العمليات",

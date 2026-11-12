@@ -296,7 +296,16 @@
     "locationUnknown": "Unknown",
     "noLogs": "No logs for this day",
     "role": { "super_admin": "Super Admin", "admin": "Admin", "staff": "Staff" },
-    "hoursUnit": "hr(s)"
+    "hoursUnit": "hr(s)",
+    "device": "Device",
+    "today": "Today",
+    "prevDay": "Previous day",
+    "nextDay": "Next day",
+    "pickDate": "Pick a date",
+    "soFar": "so far",
+    "autoClosed": "auto",
+    "autoClosedHint": "No check-out recorded — closed at the last time the dashboard was open",
+    "stats": { "people": "Staff present", "working": "Working now", "hours": "Total hours", "flagged": "Flagged check-ins" }
   },
   "logs": {
     "title": "Audit Logs",
