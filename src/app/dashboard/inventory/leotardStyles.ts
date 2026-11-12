@@ -61,6 +61,15 @@ html.dark .lsw-ribbon{opacity:.45}
 .lsw-clear{border:0;background:none;color:var(--lsw-rose);font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;height:40px;padding:0 12px;border-radius:999px}
 .lsw-clear:hover{background:color-mix(in srgb,var(--lsw-rose) 10%,transparent)}
 .lsw-fcount{margin-inline-start:auto;color:var(--lsw-muted);font-size:13px;font-variant-numeric:tabular-nums}
+/* Search + all filters stay on one line (above phone width): controls shrink first, then the row scrolls */
+@media (min-width:641px){
+.lsw-filters{flex-wrap:nowrap;overflow-x:auto;padding:3px;margin:-3px -3px 11px;scrollbar-width:none}
+.lsw-filters::-webkit-scrollbar{display:none}
+.lsw-search{flex:1 1 200px;min-width:150px}
+.lsw-filter{flex:0 1 auto;min-width:0}
+.lsw-filter select{flex:1 1 auto;min-width:68px;text-overflow:ellipsis}
+.lsw-clear,.lsw-fcount{flex-shrink:0;white-space:nowrap}
+}
 
 /* Stat cards */
 .lsw-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
