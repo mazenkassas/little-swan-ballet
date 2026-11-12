@@ -4,17 +4,27 @@ import { Plus } from 'lucide-react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { getLocale } from 'next-intl/server'
 import StaffCardActions from './StaffCardActions'
+import TodayPresence from './TodayPresence'
+import { cairoToday, hoursBetween, isLive, sessionEnd } from '@/lib/staffClock'
 
 export default async function StaffPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; date?: string }>
 }) {
   const params   = await searchParams
-  const tab      = params.tab === 'log' ? 'log' : 'staff'
   const locale   = await getLocale()
   const isRtl    = locale === 'ar'
   const supabase = await createClient()
+
+  // The Today (clock-in) tab is for super admins only
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: viewer } = user?.email
+    ? await supabase.from('staff').select('role').ilike('email', user.email.trim().replace(/[\\%_]/g, '\\$&')).maybeSingle()
+    : { data: null }
+  const canSeeToday = viewer?.role === 'super_admin'
+  const tab = params.tab === 'log' ? 'log' : params.tab === 'today' && canSeeToday ? 'today' : 'staff'
+  const todayDate = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : cairoToday()
   const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
   const monthEnd   = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
@@ -59,6 +69,7 @@ export default async function StaffPage({
     add: 'إضافة موظف',
     tabStaff: 'الموظفون',
     tabLog: 'سجل الشهر',
+    tabToday: 'الحضور اليوم',
     hoursMonth: 'ساعات الشهر',
     noStaff: 'لا يوجد موظفون',
     col: { staff: 'الموظف', checkIn: 'تسجيل دخول', checkOut: 'تسجيل خروج', hours: 'الساعات', location: 'الموقع' },
@@ -72,6 +83,7 @@ export default async function StaffPage({
     add: 'Add Staff',
     tabStaff: 'Staff',
     tabLog: "Month's Log",
+    tabToday: 'Today',
     hoursMonth: 'Hours This Month',
     noStaff: 'No staff members',
     col: { staff: 'Staff', checkIn: 'Check In', checkOut: 'Check Out', hours: 'Hours', location: 'Location' },
@@ -119,6 +131,7 @@ export default async function StaffPage({
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
           {[
             { key: 'staff', label: L.tabStaff, href: '/dashboard/staff' },
+            ...(canSeeToday ? [{ key: 'today', label: L.tabToday, href: '/dashboard/staff?tab=today' }] : []),
             { key: 'log',   label: L.tabLog,   href: '/dashboard/staff?tab=log' },
           ].map(t => (
             <Link key={t.key} href={t.href} style={{
@@ -204,7 +217,10 @@ export default async function StaffPage({
         </div>
       )}
 
-      {/* ── Today's Log Tab ── */}
+      {/* ── Today (clock-in presence) Tab ── */}
+      {tab === 'today' && <TodayPresence date={todayDate} isRtl={isRtl} />}
+
+      {/* ── Month's Log Tab ── */}
       {tab === 'log' && (
         <div style={{ padding: '24px 28px' }}>
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
@@ -223,8 +239,13 @@ export default async function StaffPage({
               </thead>
               <tbody>
                 {monthLog?.map((log: any) => {
+                  const live            = isLive(log)
                   const checkInStr      = fmtDateTime(log.login_time)
-                  const checkOutStr     = fmtTime(log.logout_time)
+                  const checkOutStr     = live ? null : fmtTime(log.logout_time ?? new Date(sessionEnd(log)).toISOString())
+                  const hours           = log.hours_on_shift != null
+                    ? Number(log.hours_on_shift)
+                    : live ? null : hoursBetween(new Date(log.login_time).getTime(), sessionEnd(log))
+                  const hasLocation     = log.location_status === 'valid' || log.location_status === 'invalid'
                   const isLocationValid = log.location_status === 'valid'
                   const role            = ROLE_LABEL[log.staff?.role] || { en: log.staff?.role, ar: log.staff?.role }
                   const displayName     = isRtl ? (log.staff?.name || log.staff?.name_en) : (log.staff?.name_en || log.staff?.name)
@@ -259,8 +280,8 @@ export default async function StaffPage({
                         )}
                       </td>
                       <td style={{ padding: '11px 14px', fontSize: 12 }}>
-                        {log.hours_on_shift != null ? (
-                          <span style={{ color: 'var(--txt1)', fontWeight: 600 }}>{Number(log.hours_on_shift).toFixed(1)}h</span>
+                        {hours != null ? (
+                          <span style={{ color: 'var(--txt1)', fontWeight: 600 }}>{hours.toFixed(1)}h</span>
                         ) : (
                           <span style={{
                             background: '#e8960a18', color: '#e8960a',
@@ -270,14 +291,14 @@ export default async function StaffPage({
                         )}
                       </td>
                       <td style={{ padding: '11px 14px' }}>
-                        <span style={{
+                        {!hasLocation ? <span style={{ color: 'var(--txt2)', fontSize: 12 }}>—</span> : <span style={{
                           background: isLocationValid ? '#3dab7e18' : '#e0404018',
                           color: isLocationValid ? '#3dab7e' : '#e04040',
                           border: `1px solid ${isLocationValid ? '#3dab7e28' : '#e0404028'}`,
                           borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600,
                         }}>
                           {isLocationValid ? L.locationValid : L.locationInvalid}
-                        </span>
+                        </span>}
                       </td>
                     </tr>
                   )

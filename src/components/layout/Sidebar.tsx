@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { clockOut } from '@/lib/actions/clock'
 import {
   LayoutDashboard, Users, GraduationCap, ClipboardCheck,
   CreditCard, UserCog, BookOpen, ShoppingBag, Star, Dumbbell,
@@ -59,6 +60,7 @@ export default function Sidebar({ user, mobileOpen = false }: { user: UserInfo; 
   ]
 
   async function handleLogout() {
+    await clockOut().catch(() => {})
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')

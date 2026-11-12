@@ -1,5 +1,6 @@
 import DashboardShell from '@/components/layout/DashboardShell'
 import { emailPattern } from '@/lib/emailMatch'
+import ClockTracker from '@/components/layout/ClockTracker'
 import ThemeToggle from '@/components/layout/ThemeToggle'
 import LanguageToggle from '@/components/layout/LanguageToggle'
 import { createClient } from '@/lib/supabase/server'
@@ -31,6 +32,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       user={{ displayName, role, email: user.email || '', initials }}
       topbarActions={<><LanguageToggle /><ThemeToggle /></>}
     >
+      <ClockTracker />
       {children}
     </DashboardShell>
   )

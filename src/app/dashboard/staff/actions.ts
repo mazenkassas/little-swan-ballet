@@ -19,6 +19,21 @@ export type StaffInput = {
   role: string
   phone: string
   monthly_salary?: number
+  /** Working hours ('HH:MM') and days (0 = Sunday … 6 = Saturday); ignored for super admins. */
+  shift_start?: string | null
+  shift_end?: string | null
+  work_days?: number[] | null
+}
+
+/** Shift columns for a staff row: super admins aren't clock-tracked, so they get none. */
+function shiftColumns(input: StaffInput): Record<string, unknown> {
+  if (input.role === 'super_admin') return { shift_start: null, shift_end: null, work_days: null }
+  const days = (input.work_days ?? []).filter(d => Number.isInteger(d) && d >= 0 && d <= 6)
+  return {
+    shift_start: input.shift_start || null,
+    shift_end: input.shift_end || null,
+    work_days: days,
+  }
 }
 
 export async function createStaff(
@@ -43,6 +58,7 @@ export async function createStaff(
     phone: input.phone,
     is_active: true,
     password_hash: AUTH_MANAGED,
+    ...shiftColumns(input),
   }
   if (input.monthly_salary != null) row.monthly_salary = input.monthly_salary
 
@@ -88,6 +104,7 @@ export async function updateStaff(
     phone: input.phone,
     is_active: input.is_active,
     password_hash: AUTH_MANAGED,
+    ...shiftColumns(input),
   }
   if (input.monthly_salary != null) row.monthly_salary = input.monthly_salary
 

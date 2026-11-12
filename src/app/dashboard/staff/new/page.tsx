@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
 import { createStaff } from '../actions'
 import Link from 'next/link'
+import ShiftFields, { shiftError, type Shift } from '../ShiftFields'
+import { DEFAULT_WORK_DAYS } from '@/lib/staffClock'
 
 const LABELS = {
   en: {
@@ -105,6 +107,9 @@ export default function NewStaffPage() {
     name_ar: '', name_en: '', role: '', email: '',
     password: '', phone: '', hourly_rate: '',
   })
+  const [shift,    setShift]    = useState<Shift>({ shift_start: '', shift_end: '', work_days: DEFAULT_WORK_DAYS })
+  const [shiftErr, setShiftErr] = useState<string | undefined>()
+  const isSuperAdmin = form.role === 'super_admin'
 
   function validateField(field: FormFields, value: string): string | undefined {
     switch (field) {
@@ -171,7 +176,9 @@ export default function NewStaffPage() {
     ) as Record<FormFields, boolean>
     setTouched(allTouched)
     setErrors(allErrors)
-    if (Object.keys(allErrors).length > 0) return
+    const sErr = !form.role || isSuperAdmin ? undefined : shiftError(shift, isRtl)
+    setShiftErr(sErr)
+    if (Object.keys(allErrors).length > 0 || sErr) return
 
     setLoading(true)
     const { error: err } = await createStaff({
@@ -182,6 +189,7 @@ export default function NewStaffPage() {
       role:           form.role,
       phone:          form.phone,
       monthly_salary: form.hourly_rate ? parseFloat(form.hourly_rate) : undefined,
+      ...shift,
     })
     if (err) { setServerErr(err); setLoading(false) }
     else router.push('/dashboard/staff')
@@ -336,6 +344,11 @@ export default function NewStaffPage() {
                 <Err field="hourly_rate" />
               </div>
             </div>
+
+            {form.role && !isSuperAdmin && (
+              <ShiftFields value={shift} isRtl={isRtl} error={shiftErr}
+                onChange={s => { setShift(s); if (shiftErr) setShiftErr(shiftError(s, isRtl)) }} />
+            )}
 
             {serverErr && (
               <div style={{

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { clockOut } from './clock'
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -18,6 +19,7 @@ export async function login(formData: FormData) {
 }
 
 export async function logout() {
+  await clockOut().catch(() => {})
   const supabase = await createClient()
   await supabase.auth.signOut()
   redirect('/login')

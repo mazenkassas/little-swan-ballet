@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
 import { updateStaff } from '../../actions'
 import Link from 'next/link'
+import ShiftFields, { shiftError, type Shift } from '../../ShiftFields'
+import { DEFAULT_WORK_DAYS } from '@/lib/staffClock'
 
 const LABELS = {
   en: {
@@ -62,6 +64,9 @@ interface StaffRecord {
   phone: string | null
   monthly_salary: number | null
   is_active: boolean
+  shift_start?: string | null
+  shift_end?: string | null
+  work_days?: number[] | null
 }
 
 export default function EditStaffForm({ staff }: { staff: StaffRecord }) {
@@ -85,6 +90,13 @@ export default function EditStaffForm({ staff }: { staff: StaffRecord }) {
     phone:       staff.phone           || '',
     hourly_rate: staff.monthly_salary != null ? String(staff.monthly_salary) : '',
   })
+
+  const [shift,      setShift]      = useState<Shift>({
+    shift_start: staff.shift_start?.slice(0, 5) || '',
+    shift_end:   staff.shift_end?.slice(0, 5)   || '',
+    work_days:   staff.work_days ?? DEFAULT_WORK_DAYS,
+  })
+  const [shiftErr,   setShiftErr]   = useState<string | undefined>()
 
   const isSuperAdmin = form.role === 'super_admin'
 
@@ -151,7 +163,9 @@ export default function EditStaffForm({ staff }: { staff: StaffRecord }) {
     ) as Record<FormFields, boolean>
     setTouched(allTouched)
     setErrors(allErrors)
-    if (Object.keys(allErrors).length > 0) return
+    const sErr = isSuperAdmin ? undefined : shiftError(shift, isRtl)
+    setShiftErr(sErr)
+    if (Object.keys(allErrors).length > 0 || sErr) return
 
     setLoading(true)
     const { error: err } = await updateStaff(staff.id, {
@@ -163,6 +177,7 @@ export default function EditStaffForm({ staff }: { staff: StaffRecord }) {
       is_active:      isActive,
       password:       form.password || undefined,
       monthly_salary: !isSuperAdmin && form.hourly_rate ? parseFloat(form.hourly_rate) : undefined,
+      ...shift,
     })
     if (err) { setServerErr(err); setLoading(false) }
     else router.push('/dashboard/staff')
@@ -272,6 +287,11 @@ export default function EditStaffForm({ staff }: { staff: StaffRecord }) {
                 <Err field="hourly_rate" />
               </div>
             </div>
+
+            {!isSuperAdmin && (
+              <ShiftFields value={shift} isRtl={isRtl} error={shiftErr}
+                onChange={s => { setShift(s); if (shiftErr) setShiftErr(shiftError(s, isRtl)) }} />
+            )}
 
             {!isSuperAdmin && (
               <div style={{ marginBottom: 14 }}>
