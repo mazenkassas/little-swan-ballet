@@ -136,7 +136,8 @@ export default function SubscriptionsBoard({ rows, isRtl }: { rows: SubRow[]; is
   }, [rows, query, filter, groupId, isRtl])
 
   return (
-    <div style={{ padding: '20px 16px', maxWidth: 980, margin: '0 auto', direction: isRtl ? 'rtl' : 'ltr' }}>
+    <div className={isRtl ? 'lss-rtl' : undefined} style={{ padding: '20px 16px', maxWidth: 980, margin: '0 auto', direction: isRtl ? 'rtl' : 'ltr' }}>
+      <style>{SELECT_CSS}</style>
       <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--txt1)', margin: 0 }}>{L.title}</h1>
       <p style={{ fontSize: 13, color: 'var(--txt2)', margin: '4px 0 16px' }}>{L.subtitle}</p>
 
@@ -157,9 +158,9 @@ export default function SubscriptionsBoard({ rows, isRtl }: { rows: SubRow[]; is
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ position: 'relative', flex: '1 1 220px' }}>
           <Search size={15} style={{ position: 'absolute', insetInlineStart: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--txt2)' }} />
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={L.search} style={{ ...input, paddingInlineStart: 34 }} />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={L.search} style={{ ...input, height: 40, paddingInlineStart: 34 }} />
         </div>
-        <select value={groupId} onChange={e => setGroupId(e.target.value)} style={{ ...input, flex: '0 1 240px' }}>
+        <select className="lss-select" value={groupId} onChange={e => setGroupId(e.target.value)} style={{ flex: '1 1 240px' }} title={groups.find(g => g[0] === groupId)?.[1] ?? L.allGroups}>
           <option value="">{L.allGroups}</option>
           {groups.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
         </select>
@@ -382,7 +383,7 @@ function RenewForm({ detail, row, isRtl, onCancel, onDone }: {
         <select value={planId} onChange={e => {
           setPlanId(e.target.value)
           if (detail.student.fee == null) setAmount(String(detail.plans.find(p => p.id === e.target.value)?.price ?? ''))
-        }} style={input}>
+        }} className="lss-select">
           {detail.plans.map(p => <option key={p.id} value={p.id}>{p.name} · {p.sessions_count} {L.sessions}</option>)}
         </select>
       </label>
@@ -435,3 +436,18 @@ const primaryBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 16px', borderRadius: 10,
   border: 'none', background: ACCENT, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
 }
+
+// Themed dropdowns (same approach as the inventory page): no native look,
+// readable options in light and dark mode, arrow on the correct side for RTL.
+const SELECT_CSS = `
+.lss-select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:40px;cursor:pointer;
+  font-family:inherit;font-size:13px;color:var(--txt1);background-color:var(--bg-card);
+  border:1px solid var(--border);border-radius:10px;outline:none;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a8f95' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding:0 34px 0 12px;transition:border-color .15s}
+[dir=rtl] .lss-select,.lss-rtl .lss-select{background-position:left 12px center;padding:0 12px 0 34px}
+.lss-select:hover{border-color:#d4667a99}
+.lss-select:focus{border-color:#d4667a}
+.lss-select option{background:var(--bg-popup);color:var(--txt1)}
+`
