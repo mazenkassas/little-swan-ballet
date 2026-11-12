@@ -8,10 +8,13 @@ type UserInfo = { displayName: string; role: string; email: string; initials: st
 
 export default function DashboardShell({
   user,
+  visiblePages,
   topbarActions,
   children,
 }: {
   user: UserInfo
+  /** Page keys the user may open; null = all (super admin). */
+  visiblePages: readonly string[] | null
   topbarActions: React.ReactNode
   children: React.ReactNode
 }) {
@@ -25,7 +28,7 @@ export default function DashboardShell({
         onClick={() => setMobOpen(false)}
       />
 
-      <Sidebar user={user} mobileOpen={mobOpen} />
+      <Sidebar user={user} visiblePages={visiblePages} mobileOpen={mobOpen} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         {/* Topbar */}

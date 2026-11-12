@@ -41,6 +41,7 @@ const PAGES = [
   { key: 'inventory',  group: 'management', en: 'Inventory',       ar: 'المخزون'          },
   { key: 'events',     group: 'management', en: 'Events',          ar: 'الفعاليات'        },
   { key: 'private',    group: 'management', en: 'Private Lessons', ar: 'البرايفيت'        },
+  { key: 'holidays',   group: 'management', en: 'Holidays',        ar: 'الإجازات'         },
   { key: 'settings',   group: 'other',      en: 'Settings',        ar: 'الإعدادات'        },
 ]
 

@@ -16,7 +16,16 @@ import {
 
 type UserInfo = { displayName: string; role: string; email: string; initials: string }
 
-export default function Sidebar({ user, mobileOpen = false }: { user: UserInfo; mobileOpen?: boolean }) {
+export default function Sidebar({
+  user,
+  visiblePages,
+  mobileOpen = false,
+}: {
+  user: UserInfo
+  /** Page keys the user may open (see src/lib/rolePermissions.ts); null = all (super admin). */
+  visiblePages: readonly string[] | null
+  mobileOpen?: boolean
+}) {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
@@ -58,6 +67,13 @@ export default function Sidebar({ user, mobileOpen = false }: { user: UserInfo; 
       ]
     }
   ]
+
+  // Only show links the user's role can open (same rule the proxy enforces).
+  const canSee = (href: string) =>
+    visiblePages === null || visiblePages.includes(href.split('/')[2] || 'dashboard')
+  const visibleGroups = navGroups
+    .map(g => ({ ...g, items: g.items.filter(i => canSee(i.href)) }))
+    .filter(g => g.items.length > 0)
 
   async function handleLogout() {
     await clockOut().catch(() => {})
@@ -142,7 +158,7 @@ return (
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '10px 8px', overflowY: 'auto' }}>
-        {navGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label} style={{ marginBottom: 4 }}>
             {!collapsed && (
               <div style={{
@@ -168,9 +184,11 @@ return (
       </nav>
 
       {/* Settings */}
-      <div style={{ padding: '0 8px 4px', flexShrink: 0 }}>
-        {navLink('/dashboard/settings', <Settings size={14} />, t('settings'))}
-      </div>
+      {canSee('/dashboard/settings') && (
+        <div style={{ padding: '0 8px 4px', flexShrink: 0 }}>
+          {navLink('/dashboard/settings', <Settings size={14} />, t('settings'))}
+        </div>
+      )}
 
       {/* User profile footer */}
       <div style={{

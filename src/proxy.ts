@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { canViewPage, homePathFor, pageKeyFromPath, parseRolePerms } from '@/lib/rolePermissions'
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -72,27 +73,21 @@ export async function proxy(request: NextRequest) {
       return supabaseResponse
     }
 
-    if (role === 'admin' || role === 'staff') {
-      const pathParts = request.nextUrl.pathname.split('/')
-      const page = pathParts[2]
+    // Every other role (admin, staff, …): access follows the "View" toggle on the
+    // Roles page (system_settings.role_permissions), including the Dashboard home.
+    const { data: setting } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'role_permissions')
+      .maybeSingle()
+    const perms = parseRolePerms(setting?.value, role)
+    const page = pageKeyFromPath(request.nextUrl.pathname)
 
-      // Access follows the "View" toggle on the Roles page
-      // (stored as JSON in system_settings.role_permissions).
-      // The Subscriptions page checks the Roles-page permissions itself.
-      if (page && page !== '' && page !== 'subscriptions') {
-        const { data: setting } = await supabase
-          .from('system_settings')
-          .select('value')
-          .eq('key', 'role_permissions')
-          .maybeSingle()
-
-        let canView = false
-        try { canView = !!JSON.parse(setting?.value || '{}')?.[role]?.[page]?.view } catch {}
-
-        if (!canView) {
-          return NextResponse.redirect(new URL('/dashboard', request.url))
-        }
-      }
+    if (!canViewPage(role, perms, page)) {
+      const home = homePathFor(role, perms)
+      // Never redirect to the page we are already on (avoids a redirect loop)
+      if (home === request.nextUrl.pathname) return supabaseResponse
+      return NextResponse.redirect(new URL(home, request.url))
     }
   }
 
