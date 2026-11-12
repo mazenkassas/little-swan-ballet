@@ -168,7 +168,7 @@ export default async function ExamDetailPage({
               borderRadius: 10, padding: '8px 16px',
             }}>
               <p style={{ fontSize: 20, fontWeight: 700, color: '#8B6EC8', margin: 0 }}>{other}</p>
-              <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0 }}>{isRtl ? 'تقييم / لجنة / منقول' : 'Eval / committee / moved'}</p>
+              <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0 }}>{isRtl ? 'تقييم / لجنة / منقول / مستوى آخر' : 'Eval / committee / moved / other level'}</p>
             </div>
           )}
           <div style={{

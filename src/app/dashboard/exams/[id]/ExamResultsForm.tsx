@@ -2,12 +2,12 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Save, ArrowLeftRight, Search, X, SlidersHorizontal } from 'lucide-react'
+import { Save, ArrowLeftRight, Search, X, SlidersHorizontal, UserX, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { transferStudent } from '../../students/actions'
 import { compareClassNames } from '@/lib/classOrder'
 
-type Result = 'pass' | 'fail' | 'evaluation' | 'special_committee' | 'transferred'
+type Result = 'pass' | 'fail' | 'evaluation' | 'special_committee' | 'transferred' | 'wrong_level'
 type ClassRow = {
   id: string; name: string; days_of_week: string[] | null; start_time: string | null; end_time: string | null
   grade: { name: string } | { name: string }[] | null; term: { name: string } | { name: string }[] | null
@@ -82,6 +82,10 @@ export default function ExamResultsForm({
     fAll: 'الكل', fAllLevels: 'كل المستويات', fAllClasses: 'كل المجموعات', fClear: 'مسح الفلاتر',
     fShowing: (n: number, t: number) => `عرض ${n} من ${t}`, fNone: 'لا توجد طالبات مطابقة للفلاتر',
     fSavedHint: 'فلتر النتيجة يعتمد على النتائج المحفوظة',
+    wrongLevel: 'ليست من هذا المستوى',
+    wTitle: 'الطالبة ليست من هذه المجموعة',
+    wBody: (n: string) => `${n} لا تنتمي لهذه المجموعة — قد تكون مسجلة في مستوى أعلى أو أقل. سيتم استبعادها من نتائج هذا الامتحان.`,
+    wConfirm: 'تأكيد', wCancel: 'إلغاء', wHint: 'اضغط "حفظ النتائج" بعد التأكيد.',
   } : {
     pass: 'Pass', fail: 'Fail', evaluation: 'Evaluation', committee: 'Special Committee', transferred: 'Transferred',
     notes: 'Notes…', noClass: 'Not enrolled in a class', save: 'Save Results', saving: 'Saving…', saved: 'Saved ✓',
@@ -95,6 +99,10 @@ export default function ExamResultsForm({
     fAll: 'All', fAllLevels: 'All levels', fAllClasses: 'All classes', fClear: 'Clear filters',
     fShowing: (n: number, t: number) => `Showing ${n} of ${t}`, fNone: 'No students match these filters',
     fSavedHint: 'Result filter uses saved results',
+    wrongLevel: 'Not this level',
+    wTitle: "Student isn't in this group",
+    wBody: (n: string) => `${n} doesn't belong to this group — she may be enrolled in a higher or lower level. She will be excluded from this exam's results.`,
+    wConfirm: 'Confirm', wCancel: 'Cancel', wHint: 'Press "Save Results" after confirming.',
   }
 
   const RESULTS: { key: Result; label: string; color: string }[] = [
@@ -113,6 +121,7 @@ export default function ExamResultsForm({
   const [saved,  setSaved]  = useState(false)
   const [error,  setError]  = useState('')
   const [transferFor, setTransferFor] = useState<any | null>(null)
+  const [wrongFor,    setWrongFor]    = useState<any | null>(null)
 
   // ── Filters ──
   const [query,       setQuery]       = useState('')
@@ -211,9 +220,27 @@ export default function ExamResultsForm({
   const listProps = {
     results, notes, classesByStudent, RESULTS, L, isRtl,
     onResultChange: changeResult, onNoteChange: changeNote, onTransfer: (s: any) => setTransferFor(s),
+    onWrongLevel: (s: any) => {
+      // Already marked → pressing again clears it; otherwise ask first
+      if (results[s.id] === 'wrong_level') changeResult(s.id, 'wrong_level')
+      else setWrongFor(s)
+    },
   }
   const errorBox = error && (
     <p role="alert" style={{ margin: 0, padding: '10px 14px', borderRadius: 10, background: '#e0404012', border: '1px solid #e0404040', color: '#e04040', fontSize: 12.5, fontWeight: 600 }}>{error}</p>
+  )
+  const wrongModal = wrongFor && (
+    <WrongLevelAlert
+      student={wrongFor}
+      L={L}
+      isRtl={isRtl}
+      onClose={() => setWrongFor(null)}
+      onConfirm={() => {
+        setResults(prev => ({ ...prev, [wrongFor.id]: 'wrong_level' }))
+        setSaved(false)
+        setWrongFor(null)
+      }}
+    />
   )
   const modal = transferFor && (
     <TransferModal
@@ -244,6 +271,7 @@ export default function ExamResultsForm({
     { key: 'pending',     label: L.pending,      color: '#8a8a9a' },
     ...RESULTS,
     { key: 'transferred', label: L.transferred,  color: '#e8960a' },
+    { key: 'wrong_level', label: L.wrongLevel,   color: '#6b7280' },
   ]
   const selectStyle: React.CSSProperties = {
     width: '100%', height: 34, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-page)',
@@ -386,6 +414,7 @@ export default function ExamResultsForm({
         {errorBox}
         <SaveBar saving={saving} saved={saved} L={L} isRtl={isRtl} onSave={saveResults} />
         {modal}
+        {wrongModal}
       </div>
     )
   }
@@ -406,6 +435,7 @@ export default function ExamResultsForm({
         <SaveBar saving={saving} saved={saved} L={L} isRtl={isRtl} onSave={saveResults} />
       </div>
       {modal}
+      {wrongModal}
     </div>
   )
 }
@@ -422,7 +452,7 @@ function Count({ n, label, color, muted }: { n: number; label: string; color: st
   )
 }
 
-function StudentList({ students, results, notes, classesByStudent, RESULTS, L, isRtl, onResultChange, onNoteChange, onTransfer }: {
+function StudentList({ students, results, notes, classesByStudent, RESULTS, L, isRtl, onResultChange, onNoteChange, onTransfer, onWrongLevel }: {
   students: any[]
   results: Record<string, Result | ''>
   notes: Record<string, string>
@@ -433,6 +463,7 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
   onResultChange: (studentId: string, result: Result) => void
   onNoteChange: (studentId: string, value: string) => void
   onTransfer: (student: any) => void
+  onWrongLevel: (student: any) => void
 }) {
   return (
     <div>
@@ -440,9 +471,10 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
         const result      = results[student.id] || ''
         const displayName = isRtl ? student.name_ar : (student.name_en || student.name_ar)
         const initials    = (student.name_ar || '').slice(0, 1)
-        const rowColor    = result === 'transferred' ? '#e8960a' : RESULTS.find(r => r.key === result)?.color
+        const rowColor    = result === 'transferred' ? '#e8960a' : result === 'wrong_level' ? '#6b7280' : RESULTS.find(r => r.key === result)?.color
         const classes     = classesByStudent[student.id] || []
         const moved       = result === 'transferred'
+        const wrong       = result === 'wrong_level'
 
         return (
           <div key={student.id} style={{
@@ -500,6 +532,15 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
                   color: moved ? '#c27c00' : 'var(--txt2)',
                 }}>
                   <ArrowLeftRight size={12} />{L.transferred}
+                </button>
+                <button type="button" onClick={() => onWrongLevel(student)} aria-pressed={wrong} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '5px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                  background: wrong ? '#6b728022' : 'var(--bg-page)',
+                  border: `1px solid ${wrong ? '#6b728066' : 'var(--border)'}`,
+                  color: wrong ? 'var(--txt1)' : 'var(--txt2)',
+                }}>
+                  <UserX size={12} />{L.wrongLevel}
                 </button>
               </div>
             </div>
@@ -618,6 +659,45 @@ function TransferModal({ student, current, allClasses, L, isRtl, onClose, onDone
           </button>
           <button type="button" onClick={onClose} style={{ flex: 1, height: 38, borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--txt1)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             {L.tCancel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function WrongLevelAlert({ student, L, isRtl, onClose, onConfirm }: {
+  student: any; L: Record<string, any>; isRtl: boolean; onClose: () => void; onConfirm: () => void
+}) {
+  const name = isRtl ? student.name_ar : (student.name_en || student.name_ar)
+  return (
+    <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{
+      position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(30,12,20,.5)', backdropFilter: 'blur(3px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+    }}>
+      <div role="alertdialog" aria-modal="true" aria-label={L.wTitle} style={{
+        width: '100%', maxWidth: 420, background: 'var(--bg-popup)', border: '1px solid var(--border)', borderRadius: 16,
+        boxShadow: '0 20px 60px rgba(0,0,0,.35)', direction: isRtl ? 'rtl' : 'ltr', overflow: 'hidden',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '18px 18px 6px' }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10, flexShrink: 0, background: '#e8960a18', border: '1px solid #e8960a30',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <AlertTriangle size={18} color="#e8960a" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--txt1)' }}>{L.wTitle}</p>
+            <p style={{ margin: '6px 0 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--txt2)' }}>{L.wBody(name)}</p>
+            <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--txt2)', opacity: .8 }}>{L.wHint}</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, padding: 14, borderTop: '1px solid var(--border)', marginTop: 12 }}>
+          <button type="button" onClick={onConfirm} autoFocus style={{ flex: 1, height: 38, borderRadius: 10, border: 0, background: '#d4667a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {L.wConfirm}
+          </button>
+          <button type="button" onClick={onClose} style={{ flex: 1, height: 38, borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--txt1)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {L.wCancel}
           </button>
         </div>
       </div>
