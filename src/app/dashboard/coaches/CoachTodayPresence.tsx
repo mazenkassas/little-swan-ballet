@@ -16,12 +16,14 @@ function hour12(t: string | null) {
   return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''} ${h < 12 ? 'AM' : 'PM'}`
 }
 
-export default async function CoachTodayPresence({ date, isRtl }: { date: string; isRtl: boolean }) {
+export default async function CoachTodayPresence({ isRtl }: { isRtl: boolean }) {
   const supabase = await createClient()
+  // Today only (Cairo time)
+  const today = cairoToday()
+  const date = today
   const [dayStart, dayEnd] = cairoDayRange(date)
   const now = Date.now()
-  const today = cairoToday()
-  const isToday = date === today
+  const isToday = true
 
   const [{ data: coaches }, { data: sessions }, { data: privates }, { data: checkins }] = await Promise.all([
     supabase.from('coaches').select('id, name_ar, name_en').eq('is_active', true).order('name_ar'),
@@ -41,13 +43,13 @@ export default async function CoachTodayPresence({ date, isRtl }: { date: string
     col: { coach: 'المدربة', classes: 'حصص اليوم', in: 'دخول', out: 'خروج', time: 'الساعات', location: 'الموقع', device: 'الجهاز', status: 'الحالة' },
     onTime: 'في الموعد', lateBy: (m: number) => `متأخرة ${m} د`, absentS: 'غائبة', notYet: 'لم تبدأ بعد',
     noClasses: 'لا توجد حصص', extra: 'بدون حصص مجدولة', inClassNow: 'في الحصة الآن', privateS: 'برايفت',
-    checkins: (n: number) => `${n} مرات`, go: 'عرض', empty: 'لا توجد مدربات نشطات', cancelled: 'ملغاة',
+    checkins: (n: number) => `${n} مرات`, today: 'اليوم', empty: 'لا توجد مدربات لديها حصص أو تسجيل حضور اليوم', cancelled: 'ملغاة',
   } : {
     present: 'Present', late: 'Late', absent: 'Absent', inClass: 'In class now',
     col: { coach: 'Coach', classes: "Today's classes", in: 'Check In', out: 'Check Out', time: 'Hours', location: 'Location', device: 'Device', status: 'Status' },
     onTime: 'On time', lateBy: (m: number) => `Late ${m}m`, absentS: 'Absent', notYet: 'Not yet',
     noClasses: 'No classes', extra: 'No classes scheduled', inClassNow: 'In class now', privateS: 'Private',
-    checkins: (n: number) => `${n} check-ins`, go: 'Show', empty: 'No active coaches', cancelled: 'cancelled',
+    checkins: (n: number) => `${n} check-ins`, today: 'Today', empty: 'No coaches have classes or check-ins today', cancelled: 'cancelled',
   }
 
   // Each coach's schedule for the day: her classes (session coach, or the class's default coach) and private sessions
@@ -104,12 +106,13 @@ export default async function CoachTodayPresence({ date, isRtl }: { date: string
     }
     return { c, list, sched, badges, firstIn, lastOut, open, total }
   })
-    // Coaches with classes or check-ins first (by first class time), coaches with nothing today last
-    .sort((a, b) => {
-      const busyA = a.sched.length || a.list.length ? 0 : 1, busyB = b.sched.length || b.list.length ? 0 : 1
-      if (busyA !== busyB) return busyA - busyB
-      return String(a.sched[0]?.start || '99').localeCompare(String(b.sched[0]?.start || '99'))
-    })
+    // Only coaches with classes or check-ins today, in order of their first class
+    .filter(r => r.sched.length > 0 || r.list.length > 0)
+    .sort((a, b) => String(a.sched[0]?.start || '99').localeCompare(String(b.sched[0]?.start || '99')))
+
+  const dateLabel = new Intl.DateTimeFormat(isRtl ? 'ar-EG-u-nu-latn' : 'en-GB', {
+    timeZone: 'Africa/Cairo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  }).format(new Date())
 
   const card = (label: string, value: number, color: string) => (
     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' }}>
@@ -131,17 +134,9 @@ export default async function CoachTodayPresence({ date, isRtl }: { date: string
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <form style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <input type="hidden" name="tab" value="today" />
-        <input type="date" name="date" defaultValue={date} max={today} style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8,
-          padding: '7px 12px', fontSize: 13, color: 'var(--txt1)', colorScheme: 'light dark',
-        }} />
-        <button type="submit" style={{
-          background: '#d4667a', border: 'none', borderRadius: 8, padding: '7px 16px',
-          color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-        }}>{L.go}</button>
-      </form>
+      <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--txt2)' }}>
+        <b style={{ color: 'var(--txt1)' }}>{L.today}</b> · {dateLabel}
+      </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 16 }}>
         {card(L.present, present, C.green)}

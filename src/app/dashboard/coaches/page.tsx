@@ -5,17 +5,15 @@ import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { getLocale } from 'next-intl/server'
 import CoachCardActions from './CoachCardActions'
 import CoachTodayPresence from './CoachTodayPresence'
-import { cairoToday } from '@/lib/staffClock'
 import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
 
 export default async function CoachesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; date?: string }>
+  searchParams: Promise<{ tab?: string }>
 }) {
   const params   = await searchParams
   const tab      = params.tab === 'log' ? 'log' : params.tab === 'today' ? 'today' : 'coaches'
-  const todayDate = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : cairoToday()
   const locale   = await getLocale()
   const isRtl    = locale === 'ar'
   const supabase = await createClient()
@@ -141,7 +139,7 @@ export default async function CoachesPage({
       </div>
 
       {/* ── Today Tab ── */}
-      {tab === 'today' && <CoachTodayPresence date={todayDate} isRtl={isRtl} />}
+      {tab === 'today' && <CoachTodayPresence isRtl={isRtl} />}
 
       {/* ── Coaches Tab ── */}
       {tab === 'coaches' && (
