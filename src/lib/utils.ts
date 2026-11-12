@@ -68,6 +68,7 @@ export function getStatusLabel(status: string): string {
     private: 'برايفيت',
     exam: 'امتحان',
     enrollment: 'تسجيل جديد',
+    level_test: 'تحديد مستوى',
     scheduled: 'مجدول',
     completed: 'منتهي',
     cancelled: 'ملغي',

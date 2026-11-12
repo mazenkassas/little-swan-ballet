@@ -12,6 +12,7 @@ const TYPE_COLORS: Record<string, string> = {
   private:      '#4a90d9',
   exam:         '#e8960a',
   enrollment:   '#d4667a',
+  level_test:   '#C8A66E',
 }
 
 export default async function PaymentsPage({
@@ -64,7 +65,7 @@ export default async function PaymentsPage({
     all: 'الكل',
     noPayments: 'لا توجد مدفوعات في هذا اليوم',
     col: { num: '#', student: 'الطالبة', type: 'النوع', due: 'المبلغ', paid: 'المدفوع', method: 'طريقة الدفع', date: 'التاريخ', staff: 'الموظفة' },
-    types: { subscription: 'اشتراك', product: 'منتج', event: 'فعالية', private: 'خاص', exam: 'اختبار', enrollment: 'تسجيل' },
+    types: { subscription: 'اشتراك', product: 'منتج', event: 'فعالية', private: 'خاص', exam: 'اختبار', enrollment: 'تسجيل', level_test: 'تحديد مستوى' },
     methods: { cash: 'كاش', instapay: 'إنستاباي' },
   } : {
     title: 'Payments & Revenue',
@@ -78,7 +79,7 @@ export default async function PaymentsPage({
     all: 'All',
     noPayments: 'No payments for this day',
     col: { num: '#', student: 'Student', type: 'Type', due: 'Amount Due', paid: 'Paid', method: 'Method', date: 'Date', staff: 'Staff' },
-    types: { subscription: 'Subscription', product: 'Product', event: 'Event', private: 'Private', exam: 'Exam', enrollment: 'Enrollment' },
+    types: { subscription: 'Subscription', product: 'Product', event: 'Event', private: 'Private', exam: 'Exam', enrollment: 'Enrollment', level_test: 'Placement Test' },
     methods: { cash: 'Cash', instapay: 'Instapay' },
   }
 
@@ -90,6 +91,7 @@ export default async function PaymentsPage({
     { value: 'private',      label: L.types.private },
     { value: 'exam',         label: L.types.exam },
     { value: 'enrollment',   label: L.types.enrollment },
+    { value: 'level_test',   label: L.types.level_test },
   ]
 
   const cols = [L.col.num, L.col.student, L.col.type, L.col.due, L.col.paid, L.col.method, L.col.date, L.col.staff]

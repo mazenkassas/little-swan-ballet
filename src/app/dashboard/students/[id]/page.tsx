@@ -102,12 +102,12 @@ export default async function StudentDetailPage({
   }
 
   const PAY_TYPE: Record<string, string> = isRtl
-    ? { subscription: 'اشتراك', product: 'منتج', event: 'فعالية', private: 'برايفيت', exam: 'امتحان', enrollment: 'تسجيل جديد' }
-    : { subscription: 'Subscription', product: 'Product', event: 'Event', private: 'Private', exam: 'Exam', enrollment: 'Enrollment' }
+    ? { subscription: 'اشتراك', product: 'منتج', event: 'فعالية', private: 'برايفيت', exam: 'امتحان', enrollment: 'تسجيل جديد', level_test: 'تحديد مستوى' }
+    : { subscription: 'Subscription', product: 'Product', event: 'Event', private: 'Private', exam: 'Exam', enrollment: 'Enrollment', level_test: 'Placement Test' }
 
   const PAY_TYPE_COLOR: Record<string, string> = {
     subscription: '#C8788A', product: '#4A8C6A', event: '#8B6EC8',
-    private: '#4a90d9', exam: '#C8A66E', enrollment: '#C8788A',
+    private: '#4a90d9', exam: '#C8A66E', enrollment: '#C8788A', level_test: '#C8A66E',
   }
 
   const card: React.CSSProperties = {

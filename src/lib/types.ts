@@ -4,7 +4,7 @@
 
 export type StudentStatus = 'active' | 'frozen' | 'inactive'
 export type AttendanceStatus = 'present' | 'absent' | 'make_up'
-export type PaymentType = 'subscription' | 'product' | 'event' | 'private' | 'exam' | 'enrollment'
+export type PaymentType = 'subscription' | 'product' | 'event' | 'private' | 'exam' | 'enrollment' | 'level_test'
 export type PaymentMethod = 'cash' | 'instapay'
 export type SessionStatus = 'scheduled' | 'completed' | 'cancelled'
 export type TransferStatus = 'pending' | 'approved' | 'rejected'

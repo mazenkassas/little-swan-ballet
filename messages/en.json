@@ -62,7 +62,7 @@
     "paymentMethod": { "cash": "Cash", "instapay": "Instapay" },
     "paymentType": {
       "subscription": "Subscription", "product": "Product", "event": "Event",
-      "private": "Private", "exam": "Exam", "enrollment": "Enrollment"
+      "private": "Private", "exam": "Exam", "enrollment": "Enrollment", "level_test": "Placement Test"
     }
   },
   "dashboard": {

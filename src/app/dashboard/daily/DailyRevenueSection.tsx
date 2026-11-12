@@ -16,7 +16,7 @@ type Payment = {
 }
 type NewRow = { student_id: string; amount: string; type: string; payment_method: string }
 
-const TYPES = ['subscription', 'product', 'event', 'private', 'exam', 'enrollment']
+const TYPES = ['subscription', 'level_test', 'product', 'event', 'private', 'exam', 'enrollment']
 
 export default function DailyRevenueSection({
   payments, students, date, locale,
@@ -32,6 +32,7 @@ export default function DailyRevenueSection({
 
   const TYPE_LABELS: Record<string, string> = {
     subscription: isRtl ? 'اشتراك'  : 'Subscription',
+    level_test:   isRtl ? 'تحديد مستوى' : 'Placement Test',
     product:      isRtl ? 'منتج'     : 'Product',
     event:        isRtl ? 'فعالية'   : 'Event',
     private:      isRtl ? 'برايفيت' : 'Private',
@@ -42,6 +43,7 @@ export default function DailyRevenueSection({
   const [rows,     setRows]     = useState<NewRow[]>([])
   const [saving,   setSaving]   = useState<number | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [error,    setError]    = useState('')
 
   function sName(s: { name_ar: string; name_en?: string | null } | null) {
     if (!s) return '—'
@@ -59,12 +61,15 @@ export default function DailyRevenueSection({
     const row = rows[i]
     if (!row.student_id || !row.amount) return
     setSaving(i)
-    await supabase.from('payments').insert({
+    setError('')
+    const { error: err } = await supabase.from('payments').insert({
       student_id: row.student_id, type: row.type,
       amount_due: parseFloat(row.amount), amount_paid: parseFloat(row.amount),
       payment_method: row.payment_method, date,
     })
     setSaving(null)
+    // Keep the row on failure so nothing typed is lost
+    if (err) { setError(isRtl ? `تعذّر حفظ الدفعة: ${err.message}` : `Could not save payment: ${err.message}`); return }
     removeRow(i)
     router.refresh()
   }
@@ -121,6 +126,15 @@ export default function DailyRevenueSection({
         </div>
         <span style={{ fontSize: 16, fontWeight: 800, color: '#3dab7e' }}>{formatCurrency(total)}</span>
       </div>
+
+      {error && (
+        <div role="alert" style={{
+          margin: '10px 16px 0', padding: '8px 12px', borderRadius: 8, fontSize: 12,
+          background: '#e0404012', border: '1px solid #e0404030', color: '#e04040',
+        }}>
+          {error}
+        </div>
+      )}
 
       {/* Table */}
       <div style={{ overflowX: 'auto' }}>
