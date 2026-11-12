@@ -15,13 +15,14 @@ const LABELS = {
   en: {
     back: 'Back', title: 'New Event', sub: 'Create a new event',
     name: 'Event Name', namePlaceholder: 'e.g. End of Year Performance',
-    type: 'Event Type',
+    type: 'Event Type', typePick: 'Select type…',
     date: 'Event Date',
     price: 'Registration Fee (EGP)',
     deadline: 'Payment Deadline',
     save: 'Create Event', saving: 'Saving…', cancel: 'Cancel',
     err: {
       name:     'Event name is required',
+      type:     'Please choose the event type',
       date:     'Event date is required',
       price:    'Registration fee is required',
       deadline: 'Payment deadline is required',
@@ -30,13 +31,14 @@ const LABELS = {
   ar: {
     back: 'رجوع', title: 'فعالية جديدة', sub: 'إنشاء فعالية جديدة',
     name: 'اسم الفعالية', namePlaceholder: 'مثال: حفل نهاية العام',
-    type: 'نوع الفعالية',
+    type: 'نوع الفعالية', typePick: 'اختاري النوع…',
     date: 'تاريخ الفعالية',
     price: 'رسوم التسجيل (جنيه)',
     deadline: 'آخر موعد للدفع',
     save: 'إنشاء الفعالية', saving: 'جارٍ الحفظ…', cancel: 'إلغاء',
     err: {
       name:     'اسم الفعالية مطلوب',
+      type:     'من فضلك اختاري نوع الفعالية',
       date:     'تاريخ الفعالية مطلوب',
       price:    'رسوم التسجيل مطلوبة',
       deadline: 'آخر موعد للدفع مطلوب',
@@ -56,7 +58,7 @@ export default function NewEventPage() {
   const [errors,    setErrors]    = useState<Record<string, string>>({})
   const [serverErr, setServerErr] = useState('')
   const [form, setForm] = useState({
-    name: '', type: 'annual_performance', date: '', price: '', payment_deadline: '',
+    name: '', type: '', date: '', price: '', payment_deadline: '',
   })
 
   function setField(key: keyof typeof form, value: string) {
@@ -66,6 +68,7 @@ export default function NewEventPage() {
   function validate(f = form) {
     const e: Record<string, string> = {}
     if (!f.name.trim())         e.name     = L.err.name
+    if (!f.type)                e.type     = L.err.type
     if (!f.date)                e.date     = L.err.date
     if (!f.price)               e.price    = L.err.price
     if (!f.payment_deadline)    e.deadline = L.err.deadline
@@ -155,12 +158,14 @@ export default function NewEventPage() {
                 aria-label={L.type}
                 style={{ ...fieldBase('type'), cursor: 'pointer' }}
               >
+                <option value="" disabled style={{ background: 'var(--bg-popup)', color: 'var(--txt2)' }}>{L.typePick}</option>
                 {EVENT_TYPES.map(t => (
                   <option key={t.value} value={t.value} style={{ background: 'var(--bg-popup)', color: 'var(--txt1)' }}>
                     {isRtl ? t.ar : t.en}
                   </option>
                 ))}
               </select>
+              {errors.type && <p style={errTxt}>{errors.type}</p>}
             </div>
 
             {/* Event Date + Payment Deadline */}

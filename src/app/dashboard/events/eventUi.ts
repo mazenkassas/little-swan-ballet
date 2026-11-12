@@ -7,8 +7,8 @@ export const TYPE_COLORS: Record<string, string> = {
 
 export const TYPE_LABELS: Record<string, { en: string; ar: string }> = {
   recital:            { en: 'Recital',            ar: 'عرض' },
-  tv_show:            { en: 'TV Show',            ar: 'تلفزيون' },
-  workshop:           { en: 'Workshop',           ar: 'ورشة عمل' },
+  tv_show:            { en: 'TV Show',            ar: 'عرض تلفزيوني' },
+  workshop:           { en: 'Workshop',           ar: 'ورشة' },
   competition:        { en: 'Competition',        ar: 'مسابقة' },
   annual_performance: { en: 'Annual Performance', ar: 'عرض سنوي' },
   event:              { en: 'Event',              ar: 'فعالية' },
