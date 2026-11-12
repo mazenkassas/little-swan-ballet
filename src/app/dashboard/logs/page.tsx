@@ -201,10 +201,20 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
   const tableOptions = Object.keys(TABLES).sort((a, b) => tableLabel(a).localeCompare(tableLabel(b)))
 
   const field: React.CSSProperties = {
+    boxSizing: 'border-box', height: 38, width: '100%', minWidth: 0,
     background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10,
-    padding: '8px 12px', fontSize: 13, color: 'var(--txt1)', outline: 'none', minWidth: 0,
+    padding: '0 12px', fontSize: 13, color: 'var(--txt1)', outline: 'none',
+    fontFamily: 'inherit', colorScheme: 'light dark',
   }
-  const label: React.CSSProperties = { fontSize: 11, color: 'var(--txt2)', display: 'flex', flexDirection: 'column', gap: 4 }
+  const label: React.CSSProperties = {
+    flex: '1 1 150px', minWidth: 0, fontSize: 11, fontWeight: 500, color: 'var(--txt2)',
+    display: 'flex', flexDirection: 'column', gap: 6,
+  }
+  const btn: React.CSSProperties = {
+    boxSizing: 'border-box', height: 38, padding: '0 18px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap',
+    cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit',
+  }
 
   return (
     <div style={{ padding: 32, background: 'var(--bg-page)', minHeight: '100%' }}>
@@ -220,7 +230,7 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
       <form
         method="get"
         style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, alignItems: 'end',
+          display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end',
           background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 16, marginBottom: 16,
         }}
       >
@@ -251,11 +261,11 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
             <option value="__system">{t('system')}</option>
           </select>
         </label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button type="submit" style={{ ...field, background: '#C8788A', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500, flex: 1 }}>
+        <div style={{ display: 'flex', gap: 8, flex: '0 0 auto' }}>
+          <button type="submit" className="logs-apply" style={{ ...btn, background: '#C8788A', color: '#fff', border: '1px solid #C8788A' }}>
             {t('apply')}
           </button>
-          <Link href="/dashboard/logs" style={{ ...field, textDecoration: 'none', textAlign: 'center', flex: 1 }}>
+          <Link href="/dashboard/logs" className="logs-reset" style={{ ...btn, background: 'transparent', color: 'var(--txt2)', border: '1px solid var(--border)' }}>
             {t('reset')}
           </Link>
         </div>
@@ -357,6 +367,8 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
       )}
 
       <style>{`
+        .logs-apply:hover { filter: brightness(0.94); }
+        .logs-reset:hover { background: var(--bg2) !important; color: var(--txt1) !important; }
         .audit-row summary::-webkit-details-marker { display: none; }
         .audit-row summary:hover { background: var(--bg2); }
         .audit-row[open] summary { background: var(--bg2); }
