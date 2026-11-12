@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Search, X, RefreshCw } from 'lucide-react'
 import { getStudentDetail, renewSubscription, setAttendanceMark, type StudentDetail } from './actions'
 import type { AttendanceStatus } from '@/lib/subscriptionLogic'
+import { compareClassNames } from '@/lib/classOrder'
 
 export type SubRow = {
   key: string
@@ -115,7 +116,7 @@ export default function SubscriptionsBoard({ rows, isRtl }: { rows: SubRow[]; is
   const groups = useMemo(() => {
     const m = new Map<string, string>()
     rows.forEach(r => { if (r.classId && r.className) m.set(r.classId, r.className) })
-    return [...m].sort((a, b) => a[1].localeCompare(b[1]))
+    return [...m].sort((a, b) => compareClassNames(a[1], b[1]))
   }, [rows])
 
   const counts = useMemo(() => ({
