@@ -14,17 +14,20 @@ import {
   isStudentOnHoliday,
   getActiveSubForClass,
 } from '@/lib/subscriptionLogic'
+import { syncStudentPackage } from '../subscriptions/actions'
 
 type AttStatus = 'present' | 'absent' | 'make_up' | null
 
 export default function DailySessionCard({
-  session, students, existingAttendance, makeupStudents, allStudents, allCoaches, isRtl, locale, activeHoliday, today,
+  session, students, existingAttendance, makeupStudents, allStudents, allCoaches, isRtl, locale, activeHoliday, today, autoCount = false,
 }: {
   session: any; students: any[]; existingAttendance: any[]
   makeupStudents?: any[]; allStudents?: any[]
   allCoaches: any[]; isRtl?: boolean; locale?: string
   activeHoliday?: { name: string; student_ids: string[] | null } | null
   today: string
+  /** automatic (calendar) session counting is switched on */
+  autoCount?: boolean
 }) {
   const router   = useRouter()
   const supabase = createClient()
@@ -226,7 +229,15 @@ export default function DailySessionCard({
 
     const student = students.find((s: any) => s.id === studentId)
     const sub = getActiveSubForClass(student?.subscriptions, session.class_id)
-    if (sub) {
+    if (sub && autoCount) {
+      // Automatic counting: the server recalculates the whole package from the calendar
+      const r = await syncStudentPackage(studentId, session.class_id)
+      if (r.remaining != null) {
+        const newRemaining = r.remaining
+        remainingRef.current[sub.id] = newRemaining
+        setRemainingOverride(o => ({ ...o, [sub.id]: newRemaining }))
+      }
+    } else if (sub) {
       const remaining = remainingRef.current[sub.id] ?? sub.remaining_sessions ?? 0
       const total     = sub.total_sessions ?? 4
       const counts = sessionCountsForStudent({

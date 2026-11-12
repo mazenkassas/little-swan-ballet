@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
   computeDeduction,
-  computePackageFromDates,
   computeRefund,
   computeSubscriptionStartDate,
   getActiveSubForClass,
@@ -12,7 +11,9 @@ import {
   isStudentOnHoliday,
   sessionCountsForStudent,
   type AttendanceStatus,
+  type PackageClassState,
 } from '@/lib/subscriptionLogic'
+import { AUTO_COUNT_KEY, applyPackages, computePackages, isAutoCountOn, syncPackages } from '@/lib/packageSync'
 import { cairoToday, checkSubscriptionsAccess } from './access'
 
 const SUB_FIELDS = 'id, class_id, plan_id, total_sessions, remaining_sessions, start_date, end_date, status, next_cycle_start, created_at, plan:subscription_plans(id, name, sessions_count, price)'
@@ -20,12 +21,11 @@ const SUB_FIELDS = 'id, class_id, plan_id, total_sessions, remaining_sessions, s
 type Holiday = { start_date: string; end_date: string; student_ids: string[] | null; name: string }
 
 export type DetailSession = {
-  id: string
   date: string
   status: AttendanceStatus
-  attendanceId: string | null
   holiday: string | null      // holiday name if the student is on holiday that day
-  counts: boolean             // true when a present/absent mark uses a session of the current package
+  /** used / today / upcoming / skipped (holiday or make-up) — see computePackageSchedule */
+  state: PackageClassState
 }
 
 export type StudentDetail = {
@@ -35,8 +35,12 @@ export type StudentDetail = {
     id: string; total_sessions: number; remaining_sessions: number; start_date: string
     end_date: string | null; expected_end: string | null
     next_cycle_start: string | null; plan_id: string | null; planName: string | null
+    /** what the automatic (calendar) count gives — equals the stored numbers once it is switched on */
+    auto: { total: number; remaining: number } | null
   } | null
+  /** every class of the current package, in date order */
   sessions: DetailSession[]
+  autoCount: boolean
   makeups: { date: string; className: string }[]
   plans: { id: string; name: string; sessions_count: number; price: number }[]
   suggestedStart: string
@@ -77,43 +81,41 @@ export async function getStudentDetail(studentId: string, classId: string | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sub: any = getActiveSubForClass(subs as any, classId)
   const plan = sub ? (Array.isArray(sub.plan) ? sub.plan[0] : sub.plan) : null
+  const autoCount = await isAutoCountOn(supabase)
 
-  // Sessions of this class: from 8 weeks before the package start (or today) up to today
-  const anchor = sub?.start_date && sub.start_date < today ? sub.start_date : today
-  const from = new Date(anchor + 'T00:00:00Z')
-  from.setUTCDate(from.getUTCDate() - 56)
-  const fromStr = from.toISOString().slice(0, 10)
+  // The package's classes come from the calendar, not from session rows
+  const [computed] = sub ? await computePackages(supabase, { subIds: [sub.id], today }) : []
+  const schedule = computed?.schedule ?? null
+  const fromStr = sub?.start_date ?? today
 
-  const [{ data: sessions }, { data: holidays }, { data: myAttendance }] = await Promise.all([
-    classId
-      ? supabase.from('sessions').select('id, date').eq('class_id', classId).gte('date', fromStr).lte('date', today).order('date', { ascending: false })
-      : Promise.resolve({ data: [] as { id: string; date: string }[] }),
+  const [{ data: holidays }, { data: myAttendance }] = await Promise.all([
     supabase.from('holidays').select('name, start_date, end_date, student_ids').gte('end_date', fromStr),
-    supabase.from('attendance').select('id, session_id, status, session:sessions!session_id(date, class_id, class:classes(name))').eq('student_id', studentId),
+    supabase.from('attendance').select('id, status, session:sessions!session_id(date, class_id, class:classes(name))').eq('student_id', studentId).eq('status', 'make_up'),
   ])
 
-  const bySession = new Map<string, { id: string; status: AttendanceStatus }>()
   const makeups: StudentDetail['makeups'] = []
   for (const a of myAttendance || []) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const s: any = Array.isArray(a.session) ? a.session[0] : a.session
-    if (s?.class_id === classId) bySession.set(a.session_id, { id: a.id, status: a.status as AttendanceStatus })
-    else if (a.status === 'make_up' && s?.date >= fromStr) {
+    if (s && s.class_id !== classId && s.date >= fromStr) {
       const c = Array.isArray(s.class) ? s.class[0] : s.class
       makeups.push({ date: s.date, className: c?.name ?? '' })
     }
   }
   makeups.sort((a, b) => b.date.localeCompare(a.date))
 
-  const detailSessions: DetailSession[] = (sessions || []).map(s => {
-    const att = bySession.get(s.id)
-    const h = holidayFor((holidays || []) as Holiday[], s.date, studentId)
-    const counts = !!sub && sessionCountsForStudent({ holiday: h, studentId, subStartDate: sub.start_date, subEndDate: sub.end_date, sessionDate: s.date })
-    return { id: s.id, date: s.date, status: att?.status ?? null, attendanceId: att?.id ?? null, holiday: h?.name ?? null, counts }
-  })
+  const detailSessions: DetailSession[] = (schedule?.classes ?? []).map(c => ({
+    date: c.date,
+    status: c.mark ?? null,
+    holiday: c.reason === 'holiday' ? holidayFor((holidays || []) as Holiday[], c.date, studentId)?.name ?? '' : null,
+    state: c.state,
+  }))
 
   const classDays: string[] = klass?.days_of_week || []
-  const suggestedStart = computeSubscriptionStartDate(sub, classDays, new Date(today + 'T00:00:00'))
+  // Next package starts at the first class after this one ends (e.g. 19 Nov → 26 Nov)
+  const suggestedStart = schedule?.nextStart && (!sub || sub.start_date <= today)
+    ? schedule.nextStart
+    : computeSubscriptionStartDate(sub, classDays, new Date(today + 'T00:00:00'))
 
   return {
     data: {
@@ -123,10 +125,12 @@ export async function getStudentDetail(studentId: string, classId: string | null
         id: sub.id, total_sessions: sub.total_sessions, remaining_sessions: sub.remaining_sessions,
         start_date: sub.start_date, next_cycle_start: sub.next_cycle_start ?? null,
         end_date: sub.end_date ?? null,
-        expected_end: sub.end_date ?? getNthClassDate(classDays, sub.start_date, sub.total_sessions),
+        expected_end: sub.end_date ?? schedule?.endDate ?? getNthClassDate(classDays, sub.start_date, sub.total_sessions),
         plan_id: sub.plan_id ?? null, planName: plan?.name ?? null,
+        auto: schedule?.ok ? { total: schedule.total, remaining: schedule.remaining } : null,
       } : null,
       sessions: detailSessions,
+      autoCount,
       makeups,
       plans: (plans || []).map(p => ({ id: p.id, name: p.name, sessions_count: p.sessions_count, price: Number(p.price) })),
       suggestedStart,
@@ -181,7 +185,7 @@ export async function renewSubscription(input: {
     if (error) return { error: error.message }
   }
 
-  const { error: insErr } = await supabase.from('subscriptions').insert({
+  const { data: created, error: insErr } = await supabase.from('subscriptions').insert({
     student_id: input.studentId,
     class_id: input.classId,
     plan_id: plan.id,
@@ -190,13 +194,15 @@ export async function renewSubscription(input: {
     start_date: input.startDate,
     status: 'active',
     payment_id: paymentId,
-  })
+  }).select('id').single()
   if (insErr) {
     // put things back so the student is never left without a package
     if (current) await supabase.from('subscriptions').update({ status: 'active' }).eq('id', current.id)
     if (paymentId) await supabase.from('payments').delete().eq('id', paymentId)
     return { error: insErr.message }
   }
+  // A package that starts in the past has already used the classes since then
+  if (created && await isAutoCountOn(supabase)) await syncPackages(supabase, [created.id])
 
   revalidatePath('/dashboard/subscriptions')
   revalidatePath('/dashboard/daily')
@@ -210,20 +216,39 @@ export async function renewSubscription(input: {
  */
 export async function setAttendanceMark(input: {
   studentId: string
-  sessionId: string
+  classId: string
+  date: string
   status: AttendanceStatus
 }): Promise<{ error?: string; remaining?: number | null }> {
   const supabase = await createClient()
   if (!(await checkSubscriptionsAccess(supabase, 'edit'))) return { error: 'Not allowed' }
   const status = input.status ?? null
   if (status !== null && !['present', 'absent', 'make_up'].includes(status)) return { error: 'Invalid status' }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { error: 'Invalid date' }
+  if (input.date > cairoToday()) return { error: 'This class has not happened yet' }
+
+  // The class row may not exist yet (rows are only created when the Daily page opens that day)
+  const { data: existing } = await supabase
+    .from('sessions').select('id').eq('class_id', input.classId).eq('date', input.date).order('created_at').limit(1)
+  let sessionId: string | undefined = existing?.[0]?.id
+  if (!sessionId) {
+    if (status === null) return {}
+    const { data: cls } = await supabase.from('classes').select('hall_id, default_coach_id').eq('id', input.classId).single()
+    if (!cls) return { error: 'Group not found' }
+    const { data: made, error } = await supabase.from('sessions').insert({
+      class_id: input.classId, date: input.date, hall_id: cls.hall_id,
+      coach_id: cls.default_coach_id ?? null, status: 'scheduled',
+    }).select('id').single()
+    if (error || !made) return { error: error?.message ?? 'Could not create the class' }
+    sessionId = made.id
+  }
 
   const { data: session } = await supabase
-    .from('sessions').select('id, date, class_id, status, class:classes(days_of_week)').eq('id', input.sessionId).single()
+    .from('sessions').select('id, date, class_id, status, class:classes(days_of_week)').eq('id', sessionId).single()
   if (!session) return { error: 'Session not found' }
 
   const { data: prevRows } = await supabase
-    .from('attendance').select('id, status').eq('session_id', input.sessionId).eq('student_id', input.studentId).limit(1)
+    .from('attendance').select('id, status').eq('session_id', session.id).eq('student_id', input.studentId).limit(1)
   const prev = prevRows?.[0] ?? null
   const prevStatus = (prev?.status ?? null) as AttendanceStatus
   if (prevStatus === status) return {}
@@ -237,7 +262,7 @@ export async function setAttendanceMark(input: {
     const { error } = await supabase.from('attendance').update({ status }).eq('id', prev.id)
     if (error) return { error: error.message }
   } else {
-    const { error } = await supabase.from('attendance').insert({ session_id: input.sessionId, student_id: input.studentId, status })
+    const { error } = await supabase.from('attendance').insert({ session_id: session.id, student_id: input.studentId, status })
     if (error) return { error: error.message }
   }
 
@@ -249,7 +274,11 @@ export async function setAttendanceMark(input: {
   const sub: any = getActiveSubForClass(subs, session.class_id)
   let remaining: number | null = sub?.remaining_sessions ?? null
 
-  if (sub) {
+  if (sub && await isAutoCountOn(supabase)) {
+    // Automatic counting: recalculate the whole package from the calendar
+    const [p] = await syncPackages(supabase, [sub.id])
+    if (p?.schedule.ok) remaining = p.schedule.remaining
+  } else if (sub) {
     const { data: hol } = await supabase
       .from('holidays').select('student_ids').lte('start_date', session.date).gte('end_date', session.date).limit(1).maybeSingle()
     const counts = sessionCountsForStudent({ holiday: hol, studentId: input.studentId, subStartDate: sub.start_date, subEndDate: sub.end_date, sessionDate: session.date })
@@ -278,10 +307,10 @@ export async function setAttendanceMark(input: {
   }
 
   // Session is "completed" as soon as any attendance is recorded (same as Daily)
-  const { count } = await supabase.from('attendance').select('id', { count: 'exact', head: true }).eq('session_id', input.sessionId)
+  const { count } = await supabase.from('attendance').select('id', { count: 'exact', head: true }).eq('session_id', session.id)
   const nextStatus = (count ?? 0) > 0 ? 'completed' : 'scheduled'
   if (session.status !== nextStatus && (session.status === 'completed' || session.status === 'scheduled')) {
-    await supabase.from('sessions').update({ status: nextStatus }).eq('id', input.sessionId)
+    await supabase.from('sessions').update({ status: nextStatus }).eq('id', session.id)
   }
 
   revalidatePath('/dashboard/subscriptions')
@@ -290,10 +319,10 @@ export async function setAttendanceMark(input: {
 }
 
 /**
- * Sets a package's start and end date. The group's class days in that range
- * (holidays excluded) become the package's sessions; sessions already used
- * (Present/Absent marks in the range) are subtracted. Saved on the package,
- * so the Daily, Students and Attendance pages all show the new numbers.
+ * Sets a package's start and end date. Every class of the group in that range
+ * (holidays and make-ups excluded) is a package class; classes whose day has
+ * passed are used automatically. Saved on the package, so the Daily, Students
+ * and Attendance pages all show the new numbers.
  */
 export async function updatePackageDates(input: {
   subscriptionId: string
@@ -307,47 +336,91 @@ export async function updatePackageDates(input: {
   if (input.endDate < input.startDate) return { error: 'End date must be on or after the start date' }
 
   const { data: sub } = await supabase
-    .from('subscriptions')
-    .select('id, student_id, class_id, status, class:classes(days_of_week)')
-    .eq('id', input.subscriptionId)
-    .single()
+    .from('subscriptions').select('id, class_id, start_date, end_date').eq('id', input.subscriptionId).single()
   if (!sub) return { error: 'Package not found' }
   if (!sub.class_id) return { error: 'This package is not linked to a group' }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cls: any = Array.isArray(sub.class) ? sub.class[0] : sub.class
-  const classDays: string[] = cls?.days_of_week || []
 
-  const [{ data: holidays }, { data: marks }, { data: otherSubs }] = await Promise.all([
-    supabase.from('holidays').select('start_date, end_date, student_ids').lte('start_date', input.endDate).gte('end_date', input.startDate),
-    supabase.from('attendance').select('status, session:sessions!session_id(date, class_id)').eq('student_id', sub.student_id).in('status', ['present', 'absent']),
-    supabase.from('subscriptions').select('class_id').eq('student_id', sub.student_id).eq('status', 'active').neq('id', sub.id),
-  ])
-
-  const onHoliday = (date: string) => {
-    const h = (holidays || []).find(x => x.start_date <= date && x.end_date >= date)
-    return !!h && isStudentOnHoliday(h, sub.student_id)
-  }
-  // Marks in this package's group, or in another group the student has no other package for
-  const coveredElsewhere = new Set((otherSubs || []).map(s => s.class_id).filter(Boolean))
-  const used = (marks || []).filter(m => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const s: any = Array.isArray(m.session) ? m.session[0] : m.session
-    if (!s || s.date < input.startDate || s.date > input.endDate || onHoliday(s.date)) return false
-    return s.class_id === sub.class_id || !coveredElsewhere.has(s.class_id)
-  }).length
-
-  const pkg = computePackageFromDates({ classDays, start: input.startDate, end: input.endDate, usedSessions: used, isHoliday: onHoliday })
-  if (pkg.total === 0) return { error: 'There are no classes for this group between these dates' }
-
-  const { error } = await supabase.from('subscriptions').update({
-    start_date: input.startDate,
-    end_date: input.endDate,
-    total_sessions: pkg.total,
-    remaining_sessions: pkg.remaining,
-    next_cycle_start: pkg.nextCycleStart,
-  }).eq('id', sub.id)
+  const { error } = await supabase.from('subscriptions')
+    .update({ start_date: input.startDate, end_date: input.endDate }).eq('id', sub.id)
   if (error) return { error: error.message }
 
-  for (const p of ['/dashboard/subscriptions', '/dashboard/daily', '/dashboard/students', '/dashboard/attendance', '/dashboard']) revalidatePath(p)
-  return { total: pkg.total, remaining: pkg.remaining }
+  const [p] = await computePackages(supabase, { subIds: [sub.id] })
+  if (!p?.schedule.ok || p.schedule.total === 0) {
+    await supabase.from('subscriptions').update({ start_date: sub.start_date, end_date: sub.end_date }).eq('id', sub.id)
+    return { error: 'There are no classes for this group between these dates' }
+  }
+  await applyPackages(supabase, [p])
+
+  for (const path of ['/dashboard/subscriptions', '/dashboard/daily', '/dashboard/students', '/dashboard/attendance', '/dashboard']) revalidatePath(path)
+  return { total: p.schedule.total, remaining: p.schedule.remaining }
+}
+
+/* ─── Automatic counting: review + switch on ───────────────────────── */
+
+export type ReviewRow = {
+  id: string
+  name: string
+  group: string
+  start: string
+  end: string | null
+  current: { remaining: number; total: number }
+  next: { remaining: number; total: number } | null
+  changed: boolean
+}
+
+/** Every active package with its current numbers next to the automatic ones. */
+export async function getPackageReview(): Promise<{ error?: string; rows?: ReviewRow[]; autoCount?: boolean }> {
+  const supabase = await createClient()
+  if (!(await checkSubscriptionsAccess(supabase, 'view'))) return { error: 'Not allowed' }
+  const [packages, autoCount] = await Promise.all([computePackages(supabase), isAutoCountOn(supabase)])
+  if (!packages.length) return { rows: [], autoCount }
+
+  const [{ data: students }, { data: classes }] = await Promise.all([
+    supabase.from('students').select('id, name_ar, name_en').in('id', [...new Set(packages.map(p => p.studentId))]),
+    supabase.from('classes').select('id, name').in('id', [...new Set(packages.map(p => p.classId).filter(Boolean) as string[])]),
+  ])
+  const sName = new Map((students ?? []).map(s => [s.id, s.name_en || s.name_ar]))
+  const cName = new Map((classes ?? []).map(c => [c.id, c.name]))
+
+  const rows: ReviewRow[] = packages.map(p => ({
+    id: p.id,
+    name: sName.get(p.studentId) ?? '—',
+    group: (p.classId && cName.get(p.classId)) || '—',
+    start: p.start,
+    end: p.schedule.endDate,
+    current: { remaining: p.stored.remaining, total: p.stored.total },
+    next: p.schedule.ok ? { remaining: p.schedule.remaining, total: p.schedule.total } : null,
+    changed: !!p.schedule.ok && (p.schedule.remaining !== p.stored.remaining || p.schedule.total !== p.stored.total),
+  }))
+  rows.sort((a, b) => Number(b.changed) - Number(a.changed) || a.name.localeCompare(b.name))
+  return { rows, autoCount }
+}
+
+/** Switches automatic counting on and recalculates every package now. */
+export async function enableAutoCount(): Promise<{ error?: string; updated?: number }> {
+  const supabase = await createClient()
+  if (!(await checkSubscriptionsAccess(supabase, 'edit'))) return { error: 'Not allowed' }
+  const packages = await computePackages(supabase)
+  const updated = await applyPackages(supabase, packages)
+  const now = new Date().toISOString()
+  const { error } = await supabase.from('system_settings').upsert([
+    { key: AUTO_COUNT_KEY, value: 'on', updated_at: now },
+    { key: 'packages_synced_on', value: cairoToday(), updated_at: now },
+  ])
+  if (error) return { error: error.message }
+  for (const path of ['/dashboard/subscriptions', '/dashboard/daily', '/dashboard/students', '/dashboard/attendance', '/dashboard']) revalidatePath(path)
+  return { updated }
+}
+
+/** For the Daily page: recalculate one student's package for a group after a mark. */
+export async function syncStudentPackage(studentId: string, classId: string): Promise<{ remaining?: number }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || !(await isAutoCountOn(supabase))) return {}
+  const { data: subs } = await supabase
+    .from('subscriptions').select('id, status, class_id').eq('student_id', studentId).eq('status', 'active')
+  const sub = getActiveSubForClass(subs, classId)
+  if (!sub) return {}
+  const [p] = await syncPackages(supabase, [sub.id])
+  return p?.schedule.ok ? { remaining: p.schedule.remaining } : {}
 }

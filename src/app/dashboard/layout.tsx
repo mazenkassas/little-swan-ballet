@@ -7,6 +7,7 @@ import LanguageToggle from '@/components/layout/LanguageToggle'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { GRANTABLE_PAGES, canViewPage, parseRolePerms } from '@/lib/rolePermissions'
+import { dailyPackageSync } from '@/lib/packageSync'
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
@@ -39,6 +40,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     supabase.from('system_settings').select('value').eq('key', 'role_permissions').maybeSingle(),
   ])
   const staffRole: string = me?.role ?? ''
+
+  // Once a day (when automatic session counting is on), count classes that passed overnight
+  if (me) await dailyPackageSync(supabase).catch(() => {})
   const perms = parseRolePerms(permSetting?.value, staffRole)
   const visiblePages = staffRole === 'super_admin'
     ? null // everything

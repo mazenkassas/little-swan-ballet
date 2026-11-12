@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Search, X, RefreshCw, Filter as FilterIcon, Check, CalendarDays } from 'lucide-react'
 import { getStudentDetail, renewSubscription, setAttendanceMark, updatePackageDates, type StudentDetail } from './actions'
 import type { AttendanceStatus } from '@/lib/subscriptionLogic'
@@ -74,8 +75,12 @@ const T = {
     cancel: 'Cancel',
     renewed: 'Package renewed ✓',
     attendance: 'Attendance',
-    attHint: 'Present and Absent use a session. Make-up and holidays don’t.',
-    noSessions: 'No sessions recorded for this group yet.',
+    attHint: 'Every class in the package uses a session once its day has passed, marked or not. Make-up and holidays don’t — the package moves on by one class.',
+    noSessions: 'This group has no class days set.',
+    used: 'Used', todayTag: 'Today', upcoming: 'Upcoming',
+    autoPreview: (r: number, t: number) => `Automatic count: ${r} of ${t} left — not switched on yet`,
+    autoOff: 'Automatic session counting is off. Numbers only change when attendance is marked.',
+    autoReview: 'Review and switch on',
     present: 'Present', absent: 'Absent', makeup: 'Make-up', clear: 'Clear',
     counted: 'Counts', notCounted: 'Not counted', beforePkg: 'Before package', afterPkg: 'After package', holiday: 'Holiday',
     makeupsElsewhere: 'Make-up sessions in other groups',
@@ -124,8 +129,12 @@ const T = {
     cancel: 'إلغاء',
     renewed: 'تم التجديد ✓',
     attendance: 'الحضور',
-    attHint: 'الحضور والغياب يخصمان حصة. التعويض والإجازات لا تُخصم.',
-    noSessions: 'لا توجد حصص مسجلة لهذه المجموعة بعد.',
+    attHint: 'كل حصة في الباقة تُخصم تلقائياً بمجرد مرور يومها، سواء سُجل الحضور أم لا. التعويض والإجازات لا تُخصم وتمتد الباقة حصة.',
+    noSessions: 'لم تُحدد أيام الحصص لهذه المجموعة.',
+    used: 'تم خصمها', todayTag: 'اليوم', upcoming: 'قادمة',
+    autoPreview: (r: number, t: number) => `العد التلقائي: متبقي ${r} من ${t} — لم يُفعّل بعد`,
+    autoOff: 'العد التلقائي للحصص غير مفعّل. الأرقام تتغير فقط عند تسجيل الحضور.',
+    autoReview: 'مراجعة وتفعيل',
     present: 'حاضرة', absent: 'غائبة', makeup: 'تعويض', clear: 'مسح',
     counted: 'تُحسب', notCounted: 'لا تُحسب', beforePkg: 'قبل الباقة', afterPkg: 'بعد الباقة', holiday: 'إجازة',
     makeupsElsewhere: 'حصص تعويض في مجموعات أخرى',
@@ -138,7 +147,7 @@ function fmtDate(d: string, isRtl: boolean) {
   return new Date(d + 'T00:00:00').toLocaleDateString(isRtl ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
 }
 
-export default function SubscriptionsBoard({ rows, isRtl, canEdit }: { rows: SubRow[]; isRtl: boolean; canEdit: boolean }) {
+export default function SubscriptionsBoard({ rows, isRtl, canEdit, autoCount }: { rows: SubRow[]; isRtl: boolean; canEdit: boolean; autoCount: boolean }) {
   const L = isRtl ? T.ar : T.en
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
@@ -179,6 +188,16 @@ export default function SubscriptionsBoard({ rows, isRtl, canEdit }: { rows: Sub
       <style>{SELECT_CSS}</style>
       <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--txt1)', margin: 0 }}>{L.title}</h1>
       <p style={{ fontSize: 13, color: 'var(--txt2)', margin: '4px 0 16px' }}>{L.subtitle}</p>
+
+      {!autoCount && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14, padding: '10px 14px',
+          borderRadius: 12, border: '1px solid #e8960a55', background: '#e8960a12', fontSize: 13, color: 'var(--txt1)',
+        }}>
+          <span style={{ flex: '1 1 240px' }}>{L.autoOff}</span>
+          <Link href="/dashboard/subscriptions/review" style={{ ...primaryBtn, padding: '7px 14px', textDecoration: 'none' }}>{L.autoReview}</Link>
+        </div>
+      )}
 
       {/* Search + group filter */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -413,9 +432,10 @@ function StudentPanel({ row, isRtl, onClose }: { row: SubRow; isRtl: boolean; on
     return () => { cancelled = true }
   }, [row.studentId, row.classId, L.error])
 
-  async function mark(sessionId: string, status: AttendanceStatus) {
-    setBusy(sessionId); setError('')
-    const r = await setAttendanceMark({ studentId: row.studentId, sessionId, status })
+  async function mark(date: string, status: AttendanceStatus) {
+    if (!row.classId) return
+    setBusy(date); setError('')
+    const r = await setAttendanceMark({ studentId: row.studentId, classId: row.classId, date, status })
     if (r.error) setError(r.error)
     await load()
     setBusy(null)
@@ -459,9 +479,14 @@ function StudentPanel({ row, isRtl, onClose }: { row: SubRow; isRtl: boolean; on
                   <span style={{ fontSize: 13, color: 'var(--txt2)' }}>{L.sessionsLeft}</span>
                   <div style={{ width: '100%', fontSize: 12, color: 'var(--txt2)' }}>
                     {sub.start_date > detail.today ? L.starts : L.started}: {fmt(sub.start_date)}
-                    {sub.expected_end ? ` · ${L.ends}: ${sub.end_date ? '' : '~'}${fmt(sub.expected_end)}` : ''}
+                    {sub.expected_end ? ` · ${L.ends}: ${fmt(sub.expected_end)}` : ''}
                     {sub.planName ? ` · ${sub.planName}` : ''}
                   </div>
+                  {!detail.autoCount && sub.auto && (sub.auto.remaining !== sub.remaining_sessions || sub.auto.total !== sub.total_sessions) && (
+                    <div style={{ width: '100%', marginTop: 6, fontSize: 12, color: '#e8960a', fontWeight: 600 }}>
+                      {L.autoPreview(sub.auto.remaining, sub.auto.total)}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--txt2)', margin: 0 }}>{L.noPackage}</p>
@@ -482,35 +507,43 @@ function StudentPanel({ row, isRtl, onClose }: { row: SubRow; isRtl: boolean; on
             <section style={box}>
               <div style={label}>{L.attendance}</div>
               <p style={{ fontSize: 11, color: 'var(--txt2)', margin: '0 0 10px' }}>{L.attHint}</p>
-              {detail.sessions.length === 0 && <p style={{ fontSize: 13, color: 'var(--txt2)', margin: 0 }}>{L.noSessions}</p>}
-              {detail.sessions.map(s => {
-                const tag = s.holiday ? L.holiday
-                  : !sub || s.date < sub.start_date ? L.beforePkg
-                  : sub.end_date && s.date > sub.end_date ? L.afterPkg
-                  : s.counts && (s.status === 'present' || s.status === 'absent') ? L.counted
-                  : null
+              {detail.sessions.length === 0 && <p style={{ fontSize: 13, color: 'var(--txt2)', margin: 0 }}>{sub ? L.noSessions : L.noPackage}</p>}
+              {detail.sessions.map((s, i) => {
+                const n = detail.sessions.slice(0, i + 1).filter(x => x.state !== 'skipped').length
+                const tag = s.state === 'skipped'
+                  ? { text: s.holiday !== null ? `${L.holiday}${s.holiday ? ` · ${s.holiday}` : ''} — ${L.notCounted}` : `${L.makeup} — ${L.notCounted}`, color: '#4a90d9' }
+                  : s.state === 'used' ? { text: L.used, color: '#3dab7e' }
+                  : s.state === 'today' ? { text: L.todayTag, color: '#e8960a' }
+                  : { text: L.upcoming, color: '#8a8a9a' }
+                const future = s.date > detail.today
+                const canMark = detail.canEdit && !future && s.holiday === null
                 return (
-                  <div key={s.id} style={{ padding: '10px 0', borderTop: '1px solid var(--border)', opacity: busy === s.id ? 0.5 : 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <div key={s.date} style={{ padding: '10px 0', borderTop: '1px solid var(--border)', opacity: busy === s.date ? 0.5 : 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: future ? 0 : 6 }}>
+                      {s.state !== 'skipped' && (
+                        <span style={{ width: 20, height: 20, borderRadius: 10, flexShrink: 0, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', background: tag.color + '22', color: tag.color }}>{n}</span>
+                      )}
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt1)', flex: 1 }}>{fmt(s.date)}</span>
-                      {tag && <span style={{ fontSize: 10, color: 'var(--txt2)', border: '1px solid var(--border)', borderRadius: 10, padding: '1px 7px' }}>{tag}</span>}
+                      <span style={{ fontSize: 10, fontWeight: 600, color: tag.color, border: `1px solid ${tag.color}55`, borderRadius: 10, padding: '1px 7px' }}>{tag.text}</span>
                     </div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {([['present', L.present, '#3dab7e'], ['absent', L.absent, '#e04040'], ['make_up', L.makeup, '#4a90d9']] as const).map(([v, text, c]) => {
-                        const on = s.status === v
-                        return (
-                          <button key={v} disabled={!detail.canEdit || !!busy}
-                            onClick={() => mark(s.id, on ? null : v)}
-                            style={{
-                              flex: '1 1 0', minWidth: 70, padding: '7px 6px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                              border: `1px solid ${on ? c : 'var(--border)'}`, background: on ? c + '22' : 'var(--bg-card)',
-                              color: on ? c : 'var(--txt2)', cursor: detail.canEdit ? 'pointer' : 'default',
-                            }}>
-                            {text}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    {!future && s.holiday === null && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {([['present', L.present, '#3dab7e'], ['absent', L.absent, '#e04040'], ['make_up', L.makeup, '#4a90d9']] as const).map(([v, text, c]) => {
+                          const on = s.status === v
+                          return (
+                            <button key={v} disabled={!canMark || !!busy}
+                              onClick={() => mark(s.date, on ? null : v)}
+                              style={{
+                                flex: '1 1 0', minWidth: 70, padding: '7px 6px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                                border: `1px solid ${on ? c : 'var(--border)'}`, background: on ? c + '22' : 'var(--bg-card)',
+                                color: on ? c : 'var(--txt2)', cursor: canMark ? 'pointer' : 'default',
+                              }}>
+                              {text}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}

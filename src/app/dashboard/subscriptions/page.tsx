@@ -3,6 +3,7 @@ import { getLocale } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
 import { getNthClassDate } from '@/lib/subscriptionLogic'
 import { cairoToday, checkSubscriptionsAccess } from './access'
+import { computePackages, isAutoCountOn } from '@/lib/packageSync'
 import SubscriptionsBoard, { type SubRow } from './SubscriptionsBoard'
 
 export const dynamic = 'force-dynamic'
@@ -18,7 +19,7 @@ export default async function SubscriptionsPage() {
   const isRtl = locale === 'ar'
   const today = cairoToday()
 
-  const [{ data: students }, { data: subs }] = await Promise.all([
+  const [{ data: students }, { data: subs }, computed, autoCount] = await Promise.all([
     supabase
       .from('students')
       .select('id, name_ar, name_en, class_students(class:classes(id, name, is_active, days_of_week))')
@@ -28,7 +29,11 @@ export default async function SubscriptionsPage() {
       .from('subscriptions')
       .select('id, student_id, class_id, total_sessions, remaining_sessions, start_date, end_date, class:classes(id, name, is_active, days_of_week)')
       .eq('status', 'active'),
+    computePackages(supabase, { today }),
+    isAutoCountOn(supabase),
   ])
+  // Calendar-based end date of each package (holidays and make-ups move it on)
+  const autoEnd = new Map(computed.filter(p => p.schedule.ok).map(p => [p.id, p.schedule.endDate]))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const one = (x: any) => (Array.isArray(x) ? x[0] : x)
@@ -47,7 +52,7 @@ export default async function SubscriptionsPage() {
       for (const sub of packages) {
         const c: Cls | null = one(sub.class) ?? null
         const otherGroups = groups.filter(g => g.id !== sub.class_id).map(g => g.name)
-        rows.push(makeRow(st, c, sub, otherGroups, today))
+        rows.push(makeRow(st, c, sub, otherGroups, today, autoEnd.get(sub.id) ?? null))
       }
     } else if (groups.length) {
       for (const g of groups) rows.push(makeRow(st, g, null, [], today))
@@ -56,7 +61,7 @@ export default async function SubscriptionsPage() {
     }
   }
 
-  return <SubscriptionsBoard rows={rows} isRtl={isRtl} canEdit={canEdit} />
+  return <SubscriptionsBoard rows={rows} isRtl={isRtl} canEdit={canEdit} autoCount={autoCount} />
 }
 
 function makeRow(
@@ -66,6 +71,7 @@ function makeRow(
   sub: any,
   otherGroups: string[],
   today: string,
+  autoEndDate: string | null = null,
 ): SubRow {
   let state: SubRow['state'] = 'none'
   if (sub) {
@@ -87,7 +93,7 @@ function makeRow(
     total: sub?.total_sessions ?? null,
     startDate: sub?.start_date ?? null,
     endDate: sub?.end_date ?? null,
-    expectedEnd: sub ? (sub.end_date ?? getNthClassDate(c?.days_of_week || [], sub.start_date, sub.total_sessions)) : null,
+    expectedEnd: sub ? (sub.end_date ?? autoEndDate ?? getNthClassDate(c?.days_of_week || [], sub.start_date, sub.total_sessions)) : null,
     state,
   }
 }

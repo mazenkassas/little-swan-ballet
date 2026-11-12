@@ -239,6 +239,101 @@ export function getNthClassDate(classDays: string[], start: string, n: number): 
   return null
 }
 
+/** First class date strictly after `date`, or null if the group has no class days. */
+export function nextClassDateAfter(classDays: string[], date: string): string | null {
+  const days = new Set(classDays.map(d => DAY_MAP[d]).filter(d => d !== undefined))
+  if (!days.size) return null
+  for (let d = addDays(date, 1), i = 0; i < 8; d = addDays(d, 1), i++) {
+    if (days.has(weekday(d))) return d
+  }
+  return null
+}
+
+/* ─── Automatic package schedule (calendar based) ───────────────── */
+
+export type PackageClassState =
+  | 'used'      // class has happened (or is marked today) — uses a session
+  | 'today'     // today's class, not marked yet — not used yet
+  | 'upcoming'  // future class of this package
+  | 'skipped'   // holiday or make-up — does not use a session; package extends
+
+export type PackageClass = {
+  date: string
+  state: PackageClassState
+  reason: 'holiday' | 'make_up' | null
+  mark: AttendanceStatus
+}
+
+export type PackageSchedule = {
+  /** false when the group has no class days, so nothing can be calculated */
+  ok: boolean
+  classes: PackageClass[]
+  total: number
+  used: number
+  remaining: number
+  /** last class of the package (the manual end date if one is set) */
+  endDate: string | null
+  /** first class after the package — where the next package starts */
+  nextStart: string | null
+}
+
+/**
+ * The core package rule. A package runs over the group's class days from `start`:
+ *  - with a manual `end`, it covers every class from start to end;
+ *  - otherwise it covers the next `size` classes (e.g. 4).
+ * A class the student is on holiday for, or that is marked Make-up, does not use a
+ * session — it is skipped and (without a manual end) the package extends by one class.
+ * Every other class uses a session automatically once its day has passed, whether or
+ * not attendance was marked; today's class uses one as soon as it is marked
+ * Present or Absent.
+ */
+export function computePackageSchedule(opts: {
+  classDays: string[]
+  start: string
+  end?: string | null
+  size: number
+  today: string
+  isHoliday?: (date: string) => boolean
+  markOn?: (date: string) => AttendanceStatus
+}): PackageSchedule {
+  const { classDays, start, end, today } = opts
+  const size = Math.max(0, Math.floor(opts.size || 0))
+  const days = new Set(classDays.map(d => DAY_MAP[d]).filter(d => d !== undefined))
+  const empty: PackageSchedule = {
+    ok: false, classes: [], total: size, used: 0, remaining: size, endDate: end ?? null, nextStart: null,
+  }
+  if (!days.size || (!end && size === 0) || (end && end < start)) return empty
+
+  const classes: PackageClass[] = []
+  let counted = 0
+  let used = 0
+  let lastCounted: string | null = null
+  for (let d = start, i = 0; i < 731; d = addDays(d, 1), i++) {
+    if (end ? d > end : counted >= size) break
+    if (!days.has(weekday(d))) continue
+    const mark = opts.markOn?.(d) ?? null
+    if (opts.isHoliday?.(d)) { classes.push({ date: d, state: 'skipped', reason: 'holiday', mark }); continue }
+    if (mark === 'make_up') { classes.push({ date: d, state: 'skipped', reason: 'make_up', mark }); continue }
+    counted++
+    lastCounted = d
+    const marked = mark === 'present' || mark === 'absent'
+    const state: PackageClassState = d < today || (d === today && marked) ? 'used' : d === today ? 'today' : 'upcoming'
+    if (state === 'used') used++
+    classes.push({ date: d, state, reason: null, mark })
+  }
+
+  const endDate = end ?? lastCounted
+  return {
+    ok: true,
+    classes,
+    total: counted,
+    used,
+    remaining: Math.max(0, counted - used),
+    endDate,
+    nextStart: endDate ? nextClassDateAfter(classDays, endDate) : null,
+  }
+}
+
 /**
  * Recalculates a package from its start and end dates:
  * total = class dates in range (holidays excluded),

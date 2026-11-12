@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { format, addDays, subDays, addWeeks, subWeeks, isToday, parseISO } from 'date-fns'
 import { formatCurrency } from '@/lib/utils'
 import DailySessionCard from './DailySessionCard'
+import { isAutoCountOn } from '@/lib/packageSync'
 import JumpToDate from './JumpToDate'
 import DailyPrivateSection from './DailyPrivateSection'
 import DailyRevenueSection from './DailyRevenueSection'
@@ -25,6 +26,7 @@ export default async function DailyPage({
   const locale = await getLocale()
   const isRtl  = locale === 'ar'
   const supabase = await createClient()
+  const autoCount = await isAutoCountOn(supabase)
 
   const now          = new Date()
   const selectedDate = dateParam && typeof dateParam === 'string' ? parseISO(dateParam) : now
@@ -551,6 +553,7 @@ export default async function DailyPage({
                 locale={locale}
                 activeHoliday={activeHoliday || null}
                 today={todayStr}
+                autoCount={autoCount}
               />
             ))}
           </div>
