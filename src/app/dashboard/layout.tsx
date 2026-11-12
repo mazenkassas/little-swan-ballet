@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { GRANTABLE_PAGES, canViewPage, parseRolePerms } from '@/lib/rolePermissions'
 import { dailyPackageSync } from '@/lib/packageSync'
+import { getLocale } from 'next-intl/server'
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
@@ -37,7 +38,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Real role from the staff table; drives which sidebar links are shown
   // (the same rules src/proxy.ts uses to guard the routes).
   const [{ data: me }, { data: permSetting }] = await Promise.all([
-    supabase.from('staff').select('name, role').ilike('email', emailPattern(user.email)).maybeSingle(),
+    supabase.from('staff').select('name, name_en, role').ilike('email', emailPattern(user.email)).maybeSingle(),
     supabase.from('system_settings').select('value').eq('key', 'role_permissions').maybeSingle(),
   ])
   const staffRole: string = me?.role ?? ''
@@ -49,7 +50,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ? null // everything
     : GRANTABLE_PAGES.filter(p => canViewPage(staffRole, perms, p))
 
-  const displayName = me?.name ||user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'مستخدم'
+  const isRtl = (await getLocale()) === 'ar'
+  const staffName = isRtl ? (me?.name || me?.name_en) : (me?.name_en || me?.name)
+  const displayName = staffName || user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'مستخدم'
   const role = ROLE_LABELS[staffRole] || staffRole || 'مشرف'
   const initials = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
 
