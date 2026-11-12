@@ -200,18 +200,12 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
   const actorOptions = [...people.entries()].sort((a, b) => a[1].localeCompare(b[1]))
   const tableOptions = Object.keys(TABLES).sort((a, b) => tableLabel(a).localeCompare(tableLabel(b)))
 
-  const field: React.CSSProperties = {
-    boxSizing: 'border-box', height: 38, width: '100%', minWidth: 0,
-    background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10,
-    padding: '0 12px', fontSize: 13, color: 'var(--txt1)', outline: 'none',
-    fontFamily: 'inherit', colorScheme: 'light dark',
-  }
   const label: React.CSSProperties = {
     flex: '1 1 150px', minWidth: 0, fontSize: 11, fontWeight: 500, color: 'var(--txt2)',
     display: 'flex', flexDirection: 'column', gap: 6,
   }
   const btn: React.CSSProperties = {
-    boxSizing: 'border-box', height: 38, padding: '0 18px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+    boxSizing: 'border-box', height: 40, padding: '0 18px', borderRadius: 10, fontSize: 13, fontWeight: 600,
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap',
     cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit',
   }
@@ -235,19 +229,19 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
         }}
       >
         <label style={label}>{t('from')}
-          <input type="date" name="from" defaultValue={from} style={field} />
+          <input type="date" name="from" defaultValue={from} className="logs-field" />
         </label>
         <label style={label}>{t('to')}
-          <input type="date" name="to" defaultValue={to} style={field} />
+          <input type="date" name="to" defaultValue={to} className="logs-field" />
         </label>
         <label style={label}>{t('section')}
-          <select name="table" defaultValue={table} style={field}>
+          <select name="table" defaultValue={table} className="logs-field logs-select">
             <option value="">{t('all')}</option>
             {tableOptions.map(k => <option key={k} value={k}>{tableLabel(k)}</option>)}
           </select>
         </label>
         <label style={label}>{t('action')}
-          <select name="action" defaultValue={action} style={field}>
+          <select name="action" defaultValue={action} className="logs-field logs-select">
             <option value="">{t('all')}</option>
             <option value="INSERT">{t('actions.INSERT')}</option>
             <option value="UPDATE">{t('actions.UPDATE')}</option>
@@ -255,7 +249,7 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
           </select>
         </label>
         <label style={label}>{t('user')}
-          <select name="user" defaultValue={actor} style={field}>
+          <select name="user" defaultValue={actor} className="logs-field logs-select">
             <option value="">{t('all')}</option>
             {actorOptions.map(([email, name]) => <option key={email} value={email}>{name}</option>)}
             <option value="__system">{t('system')}</option>
@@ -367,6 +361,22 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
       )}
 
       <style>{`
+        .logs-field {
+          display: block; width: 100%; min-width: 0; height: 40px; padding: 0 12px;
+          font-family: inherit; font-size: 13px; color: var(--txt1);
+          background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+          outline: none; cursor: pointer; transition: border-color .15s;
+        }
+        .logs-field:hover { border-color: #d4667a99; }
+        .logs-field:focus { border-color: #d4667a; }
+        .logs-select {
+          appearance: none; -webkit-appearance: none;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a8f95' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 12px center; padding: 0 34px 0 12px;
+        }
+        [dir=rtl] .logs-select { background-position: left 12px center; padding: 0 12px 0 34px; }
+        .logs-select option { background: var(--bg-popup); color: var(--txt1); }
         .logs-apply:hover { filter: brightness(0.94); }
         .logs-reset:hover { background: var(--bg2) !important; color: var(--txt1) !important; }
         .audit-row summary::-webkit-details-marker { display: none; }
