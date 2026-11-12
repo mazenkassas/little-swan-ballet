@@ -31,6 +31,7 @@ const t = {
     errEmail: 'يرجى إدخال البريد الإلكتروني',
     errInvalid: 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
     errGeneral: 'حدث خطأ، يرجى المحاولة مرة أخرى',
+    errNoAccess: 'هذا الحساب غير مفعّل للدخول. تواصل مع الإدارة.',
   },
   en: {
     title: 'Little Swan',
@@ -54,6 +55,7 @@ const t = {
     errEmail: 'Please enter your email',
     errInvalid: 'Invalid email or password',
     errGeneral: 'An error occurred, please try again',
+    errNoAccess: 'This account is not allowed to sign in. Please contact the administrator.',
   }
 }
 
@@ -104,14 +106,22 @@ export default function LoginPage() {
       else setError(T.errGeneral)
       setLoading(false)
     } else {
-      // Check if this user is a coach and send them to the coach portal directly
-      const { data: coachRow } = await supabase
-        .from('coaches')
-        .select('id')
-        .ilike('email', emailPattern(data.user?.email ?? ''))
-        .eq('can_login', true)
-        .eq('is_active', true)
-        .maybeSingle()
+      // Coaches go to the coach portal, staff to the dashboard. An account that is
+      // neither would be signed out by the server and land back here with the button
+      // still spinning, so stop and explain instead.
+      const pattern = emailPattern(data.user?.email ?? '')
+      const [{ data: coachRow }, { data: staffRow }] = await Promise.all([
+        supabase.from('coaches').select('id').ilike('email', pattern)
+          .eq('can_login', true).eq('is_active', true).limit(1).maybeSingle(),
+        supabase.from('staff').select('id, is_active').ilike('email', pattern).limit(1).maybeSingle(),
+      ])
+      const isStaff = !!staffRow && staffRow.is_active !== false
+      if (!coachRow && !isStaff) {
+        await supabase.auth.signOut()
+        setError(T.errNoAccess)
+        setLoading(false)
+        return
+      }
       router.push(coachRow ? '/coach' : '/dashboard')
       router.refresh()
     }

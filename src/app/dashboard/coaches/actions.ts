@@ -86,6 +86,8 @@ export async function updateCoach(
     hourly_rate: input.hourly_rate,
     is_active: input.is_active,
     password_hash: AUTH_MANAGED,
+    // updateLoginUser succeeded, so this coach now has a login account
+    can_login: true,
   }).eq('id', id)
   if (error) return { error: error.message }
 
