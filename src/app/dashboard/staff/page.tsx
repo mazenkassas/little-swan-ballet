@@ -3,62 +3,13 @@ import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { getLocale } from 'next-intl/server'
 import StaffCardActions from './StaffCardActions'
-import TodayPresence from './TodayPresence'
-import ClockLog, { type ClockEntry } from '@/components/ClockLog'
-import { cairoMonthRange, cairoToday, fmtDuration, isLive, sessionEnd, type ClockSession } from '@/lib/staffClock'
+import { cairoMonthRange, cairoToday, fmtDuration } from '@/lib/staffClock'
 
-type StaffName = { name?: string | null; name_en?: string | null }
-type StaffLogRow = ClockSession & {
-  id: string; staff_id: string; hours_on_shift: number | null
-  location_status: string | null; login_distance_m: number | null; notes: string | null; login_device: string | null
-  staff: (StaffName & { role?: string | null }) | null
-}
-
-/** Month's log rows → ClockLog entries (admins and staff only; super admins don't clock in). */
-function toLogEntries(
-  rows: StaffLogRow[],
-  nameOf: (s: StaffName | null) => string,
-  roleOf: (role: string | null | undefined) => string | null,
-  now = Date.now(),
-): ClockEntry[] {
-  return rows
-    .filter(log => log.staff?.role !== 'super_admin')
-    .map(log => {
-      const live = isLive(log, now)
-      const end  = sessionEnd(log, now)
-      return {
-        id: log.id, personId: log.staff_id, name: nameOf(log.staff), sub: roleOf(log.staff?.role),
-        inAt: log.login_time,
-        outAt: live ? null : end,
-        state: live ? 'live' : 'done',
-        ms: log.hours_on_shift != null && !live ? Number(log.hours_on_shift) * 3600000 : end - new Date(log.login_time).getTime(),
-        location: log.location_status, distance: log.login_distance_m, note: log.notes, device: log.login_device,
-      }
-    })
-}
-
-export default async function StaffPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ tab?: string; date?: string; month?: string; person?: string }>
-}) {
-  const params   = await searchParams
+export default async function StaffPage() {
   const locale   = await getLocale()
   const isRtl    = locale === 'ar'
   const supabase = await createClient()
-
-  // The Today (clock-in) tab is for super admins only
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: viewer } = user?.email
-    ? await supabase.from('staff').select('role').ilike('email', user.email.trim().replace(/[\\%_]/g, '\\$&')).maybeSingle()
-    : { data: null }
-  const canSeeToday = viewer?.role === 'super_admin'
-  const tab = params.tab === 'log' ? 'log' : params.tab === 'today' && canSeeToday ? 'today' : 'staff'
-  const todayDate = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : cairoToday()
-  const thisMonth = cairoToday().slice(0, 7)
-  const logMonth  = params.month && /^\d{4}-\d{2}$/.test(params.month) && params.month <= thisMonth ? params.month : thisMonth
-  const logPerson = params.person && /^[0-9a-f-]{36}$/i.test(params.person) ? params.person : ''
-  const [curStart, curEnd] = cairoMonthRange(thisMonth)
+  const [curStart, curEnd] = cairoMonthRange(cairoToday().slice(0, 7))
 
   const { data: staff } = await supabase
     .from('staff')
@@ -93,95 +44,39 @@ export default async function StaffPage({
     title: 'الموظفون',
     sub: `${activeCount} نشط • ${inactiveCount} غير نشط`,
     add: 'إضافة موظف',
-    tabStaff: 'الموظفون',
-    tabLog: 'سجل الشهر',
-    tabToday: 'الحضور اليوم',
     hoursMonth: 'ساعات الشهر',
     noStaff: 'لا يوجد موظفون',
-    stillHere: 'موجود الآن',
   } : {
     title: 'Staff',
     sub: `${activeCount} active • ${inactiveCount} inactive`,
     add: 'Add Staff',
-    tabStaff: 'Staff',
-    tabLog: "Month's Log",
-    tabToday: 'Today',
     hoursMonth: 'Hours This Month',
     noStaff: 'No staff members',
-    stillHere: 'Still here',
-  }
-
-  // ── Month's log (admins and staff only; super admins don't clock in) ──
-  const nameOf = (s: StaffName | null | undefined) =>
-    (isRtl ? (s?.name || s?.name_en) : (s?.name_en || s?.name)) || '—'
-  const logPeople: [string, string][] = ((staff ?? []) as (StaffName & { id: string; role: string })[])
-    .filter(m => m.role === 'admin' || m.role === 'staff')
-    .map(m => [m.id, nameOf(m)])
-  let logEntries: ClockEntry[] = []
-  if (tab === 'log') {
-    const [mStart, mEnd] = cairoMonthRange(logMonth)
-    let q = supabase
-      .from('staff_attendance')
-      .select('*, staff:staff(name, name_en, role)')
-      .gte('login_time', mStart.toISOString())
-      .lt('login_time', mEnd.toISOString())
-      .order('login_time', { ascending: false })
-    if (logPerson) q = q.eq('staff_id', logPerson)
-    const { data: monthLog } = await q
-    logEntries = toLogEntries((monthLog ?? []) as StaffLogRow[], nameOf, role => {
-      const r = ROLE_LABEL[role ?? '']
-      return r ? (isRtl ? r.ar : r.en) : null
-    })
   }
 
   return (
     <div style={{ background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
 
-      {/* Header + Tabs */}
+      {/* Header */}
       <div style={{ padding: '24px 28px 0' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p style={{ color: 'var(--txt2)', fontSize: 11, margin: '0 0 2px' }}>{L.sub}</p>
             <h1 style={{ color: 'var(--txt1)', fontSize: 18, fontWeight: 700, margin: 0 }}>{L.title}</h1>
           </div>
-          {tab === 'staff' && (
-            <Link href="/dashboard/staff/new" style={{
-              background: '#d4667a', borderRadius: 8, padding: '7px 14px',
-              color: '#fff', fontSize: 12, fontWeight: 600, textDecoration: 'none',
-              display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
-            }}>
-              <Plus size={14} />
-              {L.add}
-            </Link>
-          )}
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-          {[
-            { key: 'staff', label: L.tabStaff, href: '/dashboard/staff' },
-            ...(canSeeToday ? [{ key: 'today', label: L.tabToday, href: '/dashboard/staff?tab=today' }] : []),
-            { key: 'log',   label: L.tabLog,   href: '/dashboard/staff?tab=log' },
-          ].map(t => (
-            <Link key={t.key} href={t.href} style={{
-              padding: '10px 18px', fontSize: 13,
-              fontWeight: tab === t.key ? 600 : 400,
-              color: tab === t.key ? '#d4667a' : 'var(--txt2)',
-              textDecoration: 'none',
-              borderBottom: tab === t.key ? '2px solid #d4667a' : '2px solid transparent',
-              marginBottom: -1,
-              whiteSpace: 'nowrap',
-              transition: 'color 0.15s',
-            }}>
-              {t.label}
-            </Link>
-          ))}
+          <Link href="/dashboard/staff/new" style={{
+            background: '#d4667a', borderRadius: 8, padding: '7px 14px',
+            color: '#fff', fontSize: 12, fontWeight: 600, textDecoration: 'none',
+            display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+          }}>
+            <Plus size={14} />
+            {L.add}
+          </Link>
         </div>
       </div>
 
-      {/* ── Staff Tab ── */}
-      {tab === 'staff' && (
-        <div style={{ padding: '24px 28px' }}>
+      {/* ── Staff cards ── */}
+      <div style={{ padding: '24px 28px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
             {staff?.map((member: any) => {
               const stats        = staffStats[member.id] || { hours: 0, flagged: 0 }
@@ -243,24 +138,7 @@ export default async function StaffPage({
           {(!staff || staff.length === 0) && (
             <div style={{ textAlign: 'center', padding: '64px 0', color: 'var(--txt2)', fontSize: 13 }}>{L.noStaff}</div>
           )}
-        </div>
-      )}
-
-      {/* ── Today (clock-in presence) Tab ── */}
-      {tab === 'today' && <TodayPresence date={todayDate} isRtl={isRtl} />}
-
-      {/* ── Month's Log Tab ── */}
-      {tab === 'log' && (
-        <ClockLog
-          entries={logEntries}
-          people={logPeople}
-          month={logMonth}
-          person={logPerson}
-          basePath="/dashboard/staff"
-          isRtl={isRtl}
-          liveLabel={L.stillHere}
-        />
-      )}
+      </div>
     </div>
   )
 }

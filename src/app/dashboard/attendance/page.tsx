@@ -1,203 +1,208 @@
+// Staff & coaches attendance: who is in today, and the month's check-in log.
 import { createClient } from '@/lib/supabase/server'
-import { format } from 'date-fns'
-import AttendanceSheet from './AttendanceSheet'
+import Link from 'next/link'
 import { getLocale } from 'next-intl/server'
+import StaffToday from './StaffToday'
+import CoachToday from './CoachToday'
+import ClockLog, { type ClockEntry } from '@/components/ClockLog'
+import { cairoDateOf, cairoMonthRange, cairoToday, isLive, sessionEnd, type ClockSession } from '@/lib/staffClock'
+
+type StaffName = { name?: string | null; name_en?: string | null }
+type StaffLogRow = ClockSession & {
+  id: string; staff_id: string; hours_on_shift: number | null
+  location_status: string | null; login_distance_m: number | null; notes: string | null; login_device: string | null
+  staff: (StaffName & { role?: string | null }) | null
+}
+
+type CoachName = { name_ar?: string | null; name_en?: string | null }
+type CoachLogRow = {
+  id: string; coach_id: string; check_in_time: string; check_out_time: string | null; hours_worked: number | null
+  location_status: string | null; check_in_distance_m: number | null; notes: string | null; check_in_device: string | null
+  coach: CoachName | null
+  session: { class: { name: string | null } | null } | null
+}
+
+const ROLE_LABEL: Record<string, { en: string; ar: string }> = {
+  super_admin: { en: 'Super Admin', ar: 'مشرف عام' },
+  admin:       { en: 'Admin',       ar: 'مدير' },
+  staff:       { en: 'Staff',       ar: 'موظف' },
+}
+
+/** Staff log rows → ClockLog entries (admins and staff only; super admins don't clock in). */
+function staffEntries(rows: StaffLogRow[], nameOf: (s: StaffName | null) => string, isRtl: boolean, now = Date.now()): ClockEntry[] {
+  return rows
+    .filter(log => log.staff?.role !== 'super_admin')
+    .map(log => {
+      const live = isLive(log, now)
+      const end  = sessionEnd(log, now)
+      const role = ROLE_LABEL[log.staff?.role ?? '']
+      return {
+        id: log.id, personId: log.staff_id, name: nameOf(log.staff), sub: role ? (isRtl ? role.ar : role.en) : null,
+        inAt: log.login_time,
+        outAt: live ? null : end,
+        state: live ? 'live' : 'done',
+        ms: log.hours_on_shift != null && !live ? Number(log.hours_on_shift) * 3600000 : end - new Date(log.login_time).getTime(),
+        location: log.location_status, distance: log.login_distance_m, note: log.notes, device: log.login_device,
+      }
+    })
+}
+
+/** Coach log rows → ClockLog entries. */
+function coachEntries(rows: CoachLogRow[], nameOf: (c: CoachName | null) => string, today: string, now = Date.now()): ClockEntry[] {
+  return rows.map(log => {
+    const inMs  = new Date(log.check_in_time).getTime()
+    const outMs = log.check_out_time ? new Date(log.check_out_time).getTime() : null
+    // No check-out yet: still in class if it's today, otherwise she forgot to check out
+    const state = outMs != null ? 'done' : cairoDateOf(log.check_in_time) === today ? 'live' : 'open'
+    const ms = log.hours_worked != null ? Number(log.hours_worked) * 3600000
+      : outMs != null ? outMs - inMs : state === 'live' ? now - inMs : null
+    return {
+      id: log.id, personId: log.coach_id, name: nameOf(log.coach),
+      sub: log.session?.class?.name ?? null,
+      inAt: log.check_in_time, outAt: outMs, state, ms,
+      location: log.location_status, distance: log.check_in_distance_m, note: log.notes, device: log.check_in_device,
+    }
+  })
+}
 
 export default async function AttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ session?: string; date?: string }>
+  searchParams: Promise<{ who?: string; tab?: string; date?: string; month?: string; person?: string }>
 }) {
   const params   = await searchParams
   const locale   = await getLocale()
   const isRtl    = locale === 'ar'
   const supabase = await createClient()
-  const today    = params.date || format(new Date(), 'yyyy-MM-dd')
 
-  const { data: rawSessions } = await supabase
-    .from('sessions')
-    .select('*, class:classes(name, start_time, end_time, grade:grades(name), term:terms(name)), hall:halls(name), coach:coaches(name_ar, name_en)')
-    .eq('date', today)
-    .order('created_at')
+  // Staff "Today" (shift presence) is for super admins only
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: viewer } = user?.email
+    ? await supabase.from('staff').select('role').ilike('email', user.email.trim().replace(/[\\%_]/g, '\\$&')).maybeSingle()
+    : { data: null }
+  const canSeeStaffToday = viewer?.role === 'super_admin'
 
-  // Deduplicate by class_id then sort by class start_time
-  const seen = new Set<string>()
-  const sessions = (rawSessions || [])
-    .filter((s: any) => {
-      if (seen.has(s.class_id)) return false
-      seen.add(s.class_id)
-      return true
-    })
-    .sort((a: any, b: any) =>
-      (a.class?.start_time || '').localeCompare(b.class?.start_time || '')
-    )
+  const who = params.who === 'coaches' ? 'coaches' : 'staff'
+  const todayAllowed = who === 'coaches' || canSeeStaffToday
+  const tab = params.tab === 'log' || !todayAllowed ? 'log' : 'today'
 
-  let selectedSession = null
-  let enrolledStudents: any[] = []
-  let existingAttendance: any[] = []
+  const today     = cairoToday()
+  const todayDate = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) && params.date <= today ? params.date : today
+  const thisMonth = today.slice(0, 7)
+  const logMonth  = params.month && /^\d{4}-\d{2}$/.test(params.month) && params.month <= thisMonth ? params.month : thisMonth
+  const logPerson = params.person && /^[0-9a-f-]{36}$/i.test(params.person) ? params.person : ''
 
-  if (params.session) {
-    const { data: sess } = await supabase
-      .from('sessions')
-      .select('*, class:classes(*, grade:grades(*), term:terms(*)), hall:halls(*), coach:coaches(*)')
-      .eq('id', params.session)
-      .single()
-    selectedSession = sess
+  const L = isRtl ? {
+    title: 'الحضور',
+    sub: 'حضور وانصراف الموظفين والمدربات',
+    staff: 'الموظفون', coaches: 'المدربات',
+    tabToday: 'الحضور اليوم', tabLog: 'سجل الشهر',
+    stillHere: 'موجود الآن', inClassNow: 'في الحصة الآن',
+  } : {
+    title: 'Attendance',
+    sub: 'Staff & coaches check-in / check-out',
+    staff: 'Staff', coaches: 'Coaches',
+    tabToday: 'Today', tabLog: "Month's Log",
+    stillHere: 'Still here', inClassNow: 'In class now',
+  }
 
-    if (sess) {
-      const { data: enrolled } = await supabase
-        .from('class_students')
-        .select('*, student:students(*, level:levels(name), subscriptions:subscriptions(remaining_sessions, status, total_sessions, start_date))')
-        .eq('class_id', sess.class_id)
-
-      enrolledStudents = (enrolled || [])
-        .map((e: any) => e.student)
-        .filter((s: any) => s && s.status !== 'frozen' && s.status !== 'inactive')
-
-      const { data: att } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('session_id', params.session)
-
-      existingAttendance = att || []
+  // ── Month's log ──
+  let logEntries: ClockEntry[] = []
+  let logPeople: [string, string][] = []
+  if (tab === 'log') {
+    if (who === 'staff') {
+      const nameOf = (s: StaffName | null | undefined) =>
+        (isRtl ? (s?.name || s?.name_en) : (s?.name_en || s?.name)) || '—'
+      const { data: staff } = await supabase.from('staff').select('id, name, name_en, role').in('role', ['admin', 'staff']).order('name')
+      logPeople = (staff ?? []).map(m => [m.id, nameOf(m)])
+      const [mStart, mEnd] = cairoMonthRange(logMonth)
+      let q = supabase
+        .from('staff_attendance')
+        .select('*, staff:staff(name, name_en, role)')
+        .gte('login_time', mStart.toISOString())
+        .lt('login_time', mEnd.toISOString())
+        .order('login_time', { ascending: false })
+      if (logPerson) q = q.eq('staff_id', logPerson)
+      const { data } = await q
+      logEntries = staffEntries((data ?? []) as StaffLogRow[], nameOf, isRtl)
+    } else {
+      const nameOf = (c: CoachName | null | undefined) =>
+        (isRtl ? (c?.name_ar || c?.name_en) : (c?.name_en || c?.name_ar)) || '—'
+      const { data: coaches } = await supabase.from('coaches').select('id, name_ar, name_en').order('name_ar')
+      logPeople = (coaches ?? []).map(c => [c.id, nameOf(c)])
+      const [mStart, mEnd] = cairoMonthRange(logMonth)
+      let q = supabase
+        .from('coach_attendance')
+        .select('*, coach:coaches(name_ar, name_en), session:sessions(class:classes(name))')
+        .gte('check_in_time', mStart.toISOString())
+        .lt('check_in_time', mEnd.toISOString())
+        .order('check_in_time', { ascending: false })
+      if (logPerson) q = q.eq('coach_id', logPerson)
+      const { data } = await q
+      logEntries = coachEntries((data ?? []) as CoachLogRow[], nameOf, today)
     }
   }
 
-  function fmt12h(time: string) {
-    if (!time) return ''
-    const [h, m] = time.split(':').map(Number)
-    const h12 = h % 12 || 12
-    const suffix = isRtl
-      ? (h < 12 ? 'ص' : 'م')
-      : (h < 12 ? 'AM' : 'PM')
-    return m === 0 ? `${h12} ${suffix}` : `${h12}:${String(m).padStart(2, '0')} ${suffix}`
-  }
-
-  const L = isRtl ? {
-    title: 'الحضور والغياب',
-    sub: 'تسجيل حضور الطالبات',
-    todaySessions: 'حصص اليوم',
-    noSessions: 'لا توجد حصص اليوم',
-    selectSession: 'اختر حصة',
-    toRecord: 'اضغط على حصة من القائمة لعرض الطالبات',
-    noCoach: 'بدون مدربة',
-  } : {
-    title: 'Attendance',
-    sub: 'Record student attendance',
-    todaySessions: "Today's Sessions",
-    noSessions: 'No sessions today',
-    selectSession: 'Select a session',
-    toRecord: 'Click a session from the list to view students',
-    noCoach: 'No coach',
-  }
+  const href = (w: string, t: string) => `/dashboard/attendance?who=${w}&tab=${t}`
 
   return (
-    <div style={{ padding: '28px 32px', background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
+    <div style={{ background: 'var(--bg-page)', minHeight: '100%', direction: isRtl ? 'rtl' : 'ltr' }}>
 
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--txt1)', margin: 0 }}>{L.title}</h1>
-        <p style={{ fontSize: 13, color: 'var(--txt2)', marginTop: 3 }}>{L.sub}</p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20, alignItems: 'stretch' }}>
-
-        {/* Sessions sidebar */}
-        <div style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border)',
-          borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        }}>
-          <div style={{
-            padding: '14px 16px', borderBottom: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-          }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--txt1)' }}>{L.todaySessions}</p>
-            <form>
-              <input
-                type="date"
-                name="date"
-                defaultValue={today}
-                lang={isRtl ? 'ar' : 'en-GB'}
-                style={{
-                  background: 'var(--bg-page)', border: '1px solid var(--border)',
-                  borderRadius: 7, padding: '4px 8px', fontSize: 11,
-                  color: 'var(--txt2)', outline: 'none', cursor: 'pointer',
-                }}
-              />
-            </form>
+      {/* Header + Staff/Coaches switch + Tabs */}
+      <div style={{ padding: '24px 28px 0' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <p style={{ color: 'var(--txt2)', fontSize: 11, margin: '0 0 2px' }}>{L.sub}</p>
+            <h1 style={{ color: 'var(--txt1)', fontSize: 18, fontWeight: 700, margin: 0 }}>{L.title}</h1>
           </div>
-
-          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-            {sessions.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--txt2)', fontSize: 12, opacity: 0.6 }}>
-                {L.noSessions}
-              </div>
-            ) : sessions.map((s: any) => {
-              const isSelected = params.session === s.id
-              const gradeName  = s.class?.grade?.name  || ''
-              const termName   = s.class?.term?.name   || ''
-              const timeStr    = s.class?.start_time ? `${fmt12h(s.class.start_time)} – ${fmt12h(s.class.end_time)}` : ''
-              const coachName  = isRtl ? s.coach?.name_ar : s.coach?.name_en
-              return (
-                <a
-                  key={s.id}
-                  href={`?session=${s.id}&date=${today}`}
-                  style={{
-                    display: 'block', padding: '10px 12px', borderRadius: 10,
-                    border: `1px solid ${isSelected ? '#d4667a60' : 'var(--border)'}`,
-                    background: isSelected ? '#d4667a10' : 'var(--bg-page)',
-                    textDecoration: 'none', transition: 'background 0.15s',
-                  }}
-                >
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: isSelected ? '#d4667a' : 'var(--txt1)' }}>
-                    {[gradeName, termName].filter(Boolean).join(' · ')}
-                  </p>
-                  <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--txt2)', direction: 'ltr', textAlign: isRtl ? 'right' : 'left' }}>
-                    {[timeStr, s.hall?.name].filter(Boolean).join(' · ')}
-                  </p>
-                  {coachName && (
-                    <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--txt2)', opacity: 0.7 }}>{coachName}</p>
-                  )}
-                  <span style={{
-                    display: 'inline-block', marginTop: 6, fontSize: 10, fontWeight: 600,
-                    padding: '2px 8px', borderRadius: 20,
-                    background: s.status === 'completed' ? '#3dab7e18' : s.status === 'cancelled' ? '#e0404018' : '#7c3aed18',
-                    color:      s.status === 'completed' ? '#3dab7e'   : s.status === 'cancelled' ? '#e04040'   : '#7c3aed',
-                    border: `1px solid ${s.status === 'completed' ? '#3dab7e30' : s.status === 'cancelled' ? '#e0404030' : '#7c3aed30'}`,
-                  }}>
-                    {s.status === 'completed' ? (isRtl ? 'مكتملة' : 'Completed') :
-                     s.status === 'cancelled' ? (isRtl ? 'ملغاة'   : 'Cancelled') :
-                                                (isRtl ? 'مجدولة'  : 'Scheduled')}
-                  </span>
-                </a>
-              )
-            })}
+          <div style={{ display: 'inline-flex', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 3 }}>
+            {(['staff', 'coaches'] as const).map(w => (
+              <Link key={w} href={href(w, tab === 'today' && (w === 'coaches' || canSeeStaffToday) ? 'today' : 'log')} style={{
+                padding: '6px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none',
+                background: who === w ? '#d4667a' : 'transparent',
+                color: who === w ? '#fff' : 'var(--txt2)',
+              }}>
+                {w === 'staff' ? L.staff : L.coaches}
+              </Link>
+            ))}
           </div>
         </div>
 
-        {/* Attendance sheet */}
-        <div>
-          {selectedSession ? (
-            <AttendanceSheet
-              session={selectedSession}
-              students={enrolledStudents}
-              existingAttendance={existingAttendance}
-              isRtl={isRtl}
-            />
-          ) : (
-            <div style={{
-              background: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderRadius: 16, padding: 48,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+          {[
+            ...(todayAllowed ? [{ key: 'today', label: L.tabToday }] : []),
+            { key: 'log', label: L.tabLog },
+          ].map(t => (
+            <Link key={t.key} href={href(who, t.key)} style={{
+              padding: '10px 18px', fontSize: 13,
+              fontWeight: tab === t.key ? 600 : 400,
+              color: tab === t.key ? '#d4667a' : 'var(--txt2)',
+              textDecoration: 'none',
+              borderBottom: tab === t.key ? '2px solid #d4667a' : '2px solid transparent',
+              marginBottom: -1,
+              whiteSpace: 'nowrap',
             }}>
-              <div style={{ textAlign: 'center', color: 'var(--txt2)' }}>
-                <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{L.selectSession}</p>
-                <p style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>{L.toRecord}</p>
-              </div>
-            </div>
-          )}
+              {t.label}
+            </Link>
+          ))}
         </div>
       </div>
+
+      {tab === 'today' && who === 'staff'   && <StaffToday date={todayDate} isRtl={isRtl} />}
+      {tab === 'today' && who === 'coaches' && <CoachToday isRtl={isRtl} />}
+
+      {tab === 'log' && (
+        <ClockLog
+          entries={logEntries}
+          people={logPeople}
+          month={logMonth}
+          person={logPerson}
+          basePath="/dashboard/attendance"
+          query={{ who }}
+          isRtl={isRtl}
+          liveLabel={who === 'staff' ? L.stillHere : L.inClassNow}
+        />
+      )}
     </div>
   )
 }

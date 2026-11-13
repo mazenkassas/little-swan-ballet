@@ -82,7 +82,7 @@ export default function LocationAlerts() {
   const unread = alerts.filter(a => !seen.has(a.id))
   const name = (a: LocationAlert) => (isRtl ? (a.nameAr || a.nameEn) : (a.nameEn || a.nameAr)) || '—'
   const dist = (m: number | null) => m == null ? '' : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`
-  const href = (a: LocationAlert) => a.who === 'staff' ? '/dashboard/staff?tab=today' : '/dashboard/coaches?tab=log'
+  const href = (a: LocationAlert) => a.who === 'staff' ? '/dashboard/attendance?who=staff&tab=today' : '/dashboard/attendance?who=coaches&tab=log'
   const line = (a: LocationAlert) => [
     a.who === 'staff' ? L.staff : L.coach,
     fmtCairoTime(a.at),

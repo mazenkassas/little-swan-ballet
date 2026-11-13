@@ -12,9 +12,9 @@ export type RolePerms = Record<string, PagePerm>
  * The key is the first path segment after /dashboard ('dashboard' = the home page).
  */
 export const GRANTABLE_PAGES = [
-  'dashboard', 'daily', 'students', 'classes', 'attendance', 'subscriptions',
+  'dashboard', 'daily', 'students', 'classes', 'subscriptions',
   'payments', 'expenses', 'reports',
-  'staff', 'coaches', 'exams', 'events', 'inventory', 'private', 'holidays',
+  'staff', 'coaches', 'attendance', 'exams', 'events', 'inventory', 'private', 'holidays',
   'settings',
 ] as const
 

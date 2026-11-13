@@ -39,7 +39,6 @@ export default function Sidebar({
         { href: '/dashboard/daily', icon: ClipboardList, label: t('daily') },
         { href: '/dashboard/students', icon: Users, label: t('students') },
         { href: '/dashboard/classes', icon: GraduationCap, label: t('classes') },
-        { href: '/dashboard/attendance', icon: ClipboardCheck, label: t('attendance') },
         { href: '/dashboard/subscriptions', icon: RefreshCw, label: t('subscriptions') },
       ]
     },
@@ -56,6 +55,7 @@ export default function Sidebar({
       items: [
         { href: '/dashboard/staff', icon: Users, label: t('staff') },
         { href: '/dashboard/coaches', icon: UserCog, label: t('coaches') },
+        { href: '/dashboard/attendance', icon: ClipboardCheck, label: t('attendance') },
         { href: '/dashboard/exams', icon: BookOpen, label: t('exams') },
         { href: '/dashboard/events', icon: Star, label: t('events') },
         { href: '/dashboard/inventory', icon: ShoppingBag, label: t('inventory') },

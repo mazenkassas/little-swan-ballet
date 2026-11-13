@@ -1,4 +1,4 @@
-// Month's check-in log, shared by the Staff and Coaches pages.
+// Month's check-in log for staff and coaches (Attendance page).
 // One simple list grouped by day: who · in → out · how long · where from.
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -26,13 +26,15 @@ export type ClockEntry = {
 const C = { green: '#3dab7e', orange: '#e8960a', accent: '#d4667a' }
 
 export default function ClockLog({
-  entries, people, month, person, basePath, isRtl, liveLabel,
+  entries, people, month, person, basePath, query = {}, isRtl, liveLabel,
 }: {
   entries: ClockEntry[]
   people: [string, string][]
   month: string
   person: string
   basePath: string
+  /** Extra query params kept on every link (e.g. who=staff). */
+  query?: Record<string, string>
   isRtl: boolean
   liveLabel: string
 }) {
@@ -53,7 +55,7 @@ export default function ClockLog({
   }).format(new Date(month + '-15T12:00:00Z'))
 
   const href = (m: string) => {
-    const q = new URLSearchParams({ tab: 'log' })
+    const q = new URLSearchParams({ ...query, tab: 'log' })
     if (m !== thisMonth) q.set('month', m)
     if (person) q.set('person', person)
     return `${basePath}?${q}`
@@ -100,6 +102,7 @@ export default function ClockLog({
           )}
         </div>
         <form method="get" action={basePath} style={{ display: 'flex', gap: 8, marginInlineStart: 'auto' }}>
+          {Object.entries(query).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
           <input type="hidden" name="tab" value="log" />
           {month !== thisMonth && <input type="hidden" name="month" value={month} />}
           <select name="person" defaultValue={person} style={{

@@ -10,7 +10,7 @@ type Slot = { label: string; start: string | null; end: string | null; kind: 'cl
 const C = { green: '#3dab7e', orange: '#e8960a', red: '#e04040', grey: '#8a8a9a', purple: '#7c5cdb', blue: '#4a90d9' }
 const one = <T,>(x: T | T[] | null | undefined): T | null => (Array.isArray(x) ? x[0] ?? null : x ?? null)
 
-export default async function CoachTodayPresence({ isRtl }: { isRtl: boolean }) {
+export default async function CoachToday({ isRtl }: { isRtl: boolean }) {
   const supabase = await createClient()
   // Today only (Cairo time)
   const today = cairoToday()

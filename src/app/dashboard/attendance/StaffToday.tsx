@@ -12,7 +12,7 @@ type Badge = { label: string; color: string }
 
 const C = { green: '#3dab7e', orange: '#e8960a', red: '#e04040', grey: '#8a8a9a', purple: '#7c5cdb' }
 
-export default async function TodayPresence({ date, isRtl }: { date: string; isRtl: boolean }) {
+export default async function StaffToday({ date, isRtl }: { date: string; isRtl: boolean }) {
   const admin = createAdminClient()
   const [dayStart, dayEnd] = cairoDayRange(date)
   const now = Date.now()
@@ -117,7 +117,7 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
 
   const prevDay = addDays(date, -1)
   const nextDay = addDays(date, 1)
-  const dayHref = (d: string) => `/dashboard/staff?tab=today${d === today ? '' : `&date=${d}`}`
+  const dayHref = (d: string) => `/dashboard/attendance?who=staff&tab=today${d === today ? '' : `&date=${d}`}`
   const navBtn: React.CSSProperties = {
     width: 34, height: 34, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-card)',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--txt1)', textDecoration: 'none',
@@ -142,6 +142,7 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
           </Link>
         )}
         <form style={{ display: 'flex', gap: 8, marginInlineStart: 'auto' }}>
+          <input type="hidden" name="who" value="staff" />
           <input type="hidden" name="tab" value="today" />
           <input type="date" name="date" defaultValue={date} max={today} style={{
             height: 34, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8,

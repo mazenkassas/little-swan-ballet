@@ -351,7 +351,7 @@ export async function updatePackageDates(input: {
   }
   await applyPackages(supabase, [p])
 
-  for (const path of ['/dashboard/subscriptions', '/dashboard/daily', '/dashboard/students', '/dashboard/attendance', '/dashboard']) revalidatePath(path)
+  for (const path of ['/dashboard/subscriptions', '/dashboard/daily', '/dashboard/students', '/dashboard']) revalidatePath(path)
   return { total: p.schedule.total, remaining: p.schedule.remaining }
 }
 
@@ -408,7 +408,7 @@ export async function enableAutoCount(): Promise<{ error?: string; updated?: num
     { key: 'packages_synced_on', value: cairoToday(), updated_at: now },
   ])
   if (error) return { error: error.message }
-  for (const path of ['/dashboard/subscriptions', '/dashboard/daily', '/dashboard/students', '/dashboard/attendance', '/dashboard']) revalidatePath(path)
+  for (const path of ['/dashboard/subscriptions', '/dashboard/daily', '/dashboard/students', '/dashboard']) revalidatePath(path)
   return { updated }
 }
 
