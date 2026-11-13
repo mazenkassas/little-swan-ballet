@@ -106,7 +106,7 @@ export default async function DailyPage({
       const [{ data: enrolled }, { data: attendance }] = await Promise.all([
         supabase
           .from('class_students')
-          .select('*, student:students(*, subscriptions:subscriptions(id, remaining_sessions, total_sessions, status, start_date, end_date, plan_id, class_id, next_cycle_start, plan:subscription_plans(id, name, price, sessions_count), payment:payments(date)))')
+          .select('*, student:students(*, subscriptions:subscriptions(id, remaining_sessions, total_sessions, status, start_date, end_date, plan_id, class_id, next_cycle_start, payment_id, plan:subscription_plans(id, name, price, sessions_count), payment:payments(date)))')
           .eq('class_id', session.class_id),
         supabase.from('attendance').select('*').eq('session_id', session.id),
       ])
@@ -153,11 +153,33 @@ export default async function DailyPage({
     const computed = await computePackages(supabase, { subIds: shownSubIds, today: cairoDate() }).catch(() => [])
     for (const p of computed) if (p.schedule.ok) schedules.set(p.id, p.schedule)
   }
+  // Subscription payments of the students shown — a package is paid when it is linked to a
+  // payment, or the student paid a subscription between a week before it started and its end.
+  const shownStudentIds = [...new Set(sessionDetails.flatMap(d => d.students.map((s: any) => s.id)))]
+  const minStart = sessionDetails.flatMap(d => d.students.flatMap((s: any) => (s.subscriptions || []).map((x: any) => x.start_date)))
+    .filter(Boolean).sort()[0] as string | undefined
+  const subPayments = new Map<string, string[]>()
+  if (shownStudentIds.length && minStart) {
+    const from = format(subDays(parseISO(minStart), 7), 'yyyy-MM-dd')
+    const { data: pays } = await supabase.from('payments').select('student_id, date')
+      .eq('type', 'subscription').in('student_id', shownStudentIds).gte('date', from)
+    for (const p of pays || []) subPayments.set(p.student_id, [...(subPayments.get(p.student_id) || []), p.date])
+  }
+  const isPaid = (studentId: string, x: any, due: string | null) => {
+    if (x.payment_id) return true
+    if (!x.start_date) return true
+    const from = format(subDays(parseISO(x.start_date), 7), 'yyyy-MM-dd')
+    return (subPayments.get(studentId) || []).some(d => d >= from && (!due || d <= due))
+  }
+
   for (const d of sessionDetails) {
     const days: string[] = d.session.class?.days_of_week || []
     for (const s of d.students) {
       for (const x of s.subscriptions || []) {
-        const dates = subscriptionDates(x, days, schedules.get(x.id))
+        const sched = schedules.get(x.id)
+        const due = x.end_date || sched?.endDate || null
+        x.is_paid = isPaid(s.id, x, due)
+        const dates = subscriptionDates(x, days, sched, x.is_paid)
         x.due_date = dates.dueDate
         x.pay_date = dates.payDate
       }
@@ -194,7 +216,9 @@ export default async function DailyPage({
       const sub = s.subscriptions?.find(
         (x: any) => x.status === 'active' && (x.class_id === session.class_id || !x.class_id)
       )
-      if (sub && needsPayment(sub, { dueDate: sub.due_date ?? null, payDate: sub.pay_date ?? null }, selectedDay)) payRequiredMap.set(s.id, s)
+      // Only students whose pay date is this day (not every overdue student)
+      if (sub && sub.pay_date === selectedDay &&
+          needsPayment(sub, { dueDate: sub.due_date ?? null, payDate: sub.pay_date ?? null }, selectedDay)) payRequiredMap.set(s.id, s)
     })
   })
   const payRequired = [...payRequiredMap.values()]

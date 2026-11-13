@@ -326,11 +326,11 @@ export default function DailySessionCard({
     const sub       = getActiveSub(student)
     const plan      = sub?.plan
     const startDate = getSubscriptionStartDate(student)
-    await supabase.from('payments').insert({
+    const { data: pay } = await supabase.from('payments').insert({
       student_id: student.id, type: 'subscription',
       amount_due: plan?.price ?? 0, amount_paid: plan?.price ?? 0,
       payment_method: payMethod, date: new Date().toISOString().split('T')[0],
-    })
+    }).select('id').single()
     if (sub) await supabase.from('subscriptions').update({ status: 'expired' }).eq('id', sub.id)
     await supabase.from('subscriptions').insert({
       student_id: student.id,
@@ -339,6 +339,7 @@ export default function DailySessionCard({
       total_sessions: plan?.sessions_count ?? sub?.total_sessions ?? 4,
       remaining_sessions: plan?.sessions_count ?? sub?.total_sessions ?? 4,
       start_date: startDate, status: 'active',
+      payment_id: pay?.id ?? null,
     })
     setPaying(false)
     setConfirmPayFor(null)

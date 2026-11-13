@@ -370,12 +370,15 @@ export type SubDates = {
  *  - pay = the stored renewal date (next_cycle_start), else the first class after the due date
  */
 export function subscriptionDates(
-  sub: { end_date?: string | null; next_cycle_start?: string | null } | null | undefined,
+  sub: { start_date?: string | null; end_date?: string | null; next_cycle_start?: string | null } | null | undefined,
   classDays: string[],
   schedule?: { endDate: string | null; nextStart: string | null } | null,
+  paid = true,
 ): SubDates {
   if (!sub) return { dueDate: null, payDate: null }
   const dueDate = sub.end_date || schedule?.endDate || null
+  // Not paid yet → it had to be paid on its renewal day, i.e. the day the package started
+  if (!paid && sub.start_date) return { dueDate, payDate: sub.start_date }
   const payDate = sub.next_cycle_start
     || (sub.end_date ? nextClassDateAfter(classDays, sub.end_date) : null)
     || schedule?.nextStart
