@@ -46,7 +46,6 @@ export default async function ExamsPage() {
         {exams?.map((exam: any) => {
           const passed  = exam.student_exams?.filter((e: any) => e.result === 'pass').length  || 0
           const failed  = exam.student_exams?.filter((e: any) => e.result === 'fail').length  || 0
-          const pending = exam.student_exams?.filter((e: any) => e.result === 'pending').length || 0
 
           return (
             <div
@@ -92,10 +91,6 @@ export default async function ExamsPage() {
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ fontSize: 18, fontWeight: 700, color: '#e04040', margin: 0 }}>{failed}</p>
                   <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>{t('failed')}</p>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--txt2)', margin: 0 }}>{pending}</p>
-                  <p style={{ fontSize: 11, color: 'var(--txt2)', margin: 0 }}>{t('pending')}</p>
                 </div>
               </div>
 
