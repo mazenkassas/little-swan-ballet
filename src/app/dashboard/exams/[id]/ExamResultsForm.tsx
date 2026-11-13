@@ -163,16 +163,23 @@ export default function ExamResultsForm({
   const [fLevel,      setFLevel]      = useState('')
   const [fClass,      setFClass]      = useState('')
 
-  const levelKey = (s: { grade?: { id?: string } | null; term?: { id?: string } | null }) =>
-    `${s.grade?.id ?? 'none'}__${s.term?.id ?? 'none'}`
-  const levelOptions = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const s of students) {
-      const label = [s.grade?.name, s.term?.name].filter(Boolean).join(' ') || (isRtl ? 'غير محدد' : 'Unknown')
-      m.set(levelKey(s), label)
+  // The level a student sits THIS exam in: the exam-only level if one was picked, else her own
+  const effLevel = (s: any): { key: string; label: string } => {
+    const k = examLevel[s.id]
+    if (k) {
+      const lvl = levelByKey.get(k)
+      if (lvl) return { key: k, label: lvl.label.split(' · ').join(' ') }
     }
+    return {
+      key: `${s.grade?.id ?? ''}__${s.term?.id ?? ''}`,
+      label: [s.grade?.name, s.term?.name].filter(Boolean).join(' ') || (isRtl ? 'غير محدد' : 'Unknown'),
+    }
+  }
+  const levelOptions = (() => {
+    const m = new Map<string, string>()
+    for (const s of students) { const l = effLevel(s); m.set(l.key, l.label) }
     return [...m.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => sortGroupKey(a.label).localeCompare(sortGroupKey(b.label)))
-  }, [students, isRtl])
+  })()
   const classOptions = useMemo(() => {
     const m = new Map<string, ClassRow>()
     let anyWithout = false
@@ -185,25 +192,24 @@ export default function ExamResultsForm({
     return anyWithout ? [...opts, { value: NO_CLASS, label: L.noClass }] : opts
   }, [students, classesByStudent, isRtl, L.noClass])
 
-  const savedResult = (id: string): Result | '' => {
-    const r = existingBy.get(id)?.result
-    return r && r !== 'pending' ? r : ''
-  }
   const q = norm(query)
+  // If the chosen level disappears from the options (e.g. last student moved out), drop it
+  const fLevelOk = !fLevel || levelOptions.some(o => o.value === fLevel)
   const visible = students.filter(s => {
     if (q && !norm(s.name_ar).includes(q) && !norm(s.name_en).includes(q)) return false
     if (fResult !== 'all') {
-      const r = savedResult(s.id)
+      // Uses the result shown on screen, saved or not
+      const r = results[s.id] || ''
       if (fResult === 'pending' ? r !== '' : r !== fResult) return false
     }
-    if (fLevel && levelKey(s) !== fLevel) return false
+    if (fLevel && fLevelOk && effLevel(s).key !== fLevel) return false
     if (fClass) {
       const cs = classesByStudent[s.id] || []
       if (fClass === NO_CLASS ? cs.length > 0 : !cs.some(c => c.id === fClass)) return false
     }
     return true
   })
-  const activeFilters = (fResult !== 'all' ? 1 : 0) + (fLevel ? 1 : 0) + (fClass ? 1 : 0)
+  const activeFilters = (fResult !== 'all' ? 1 : 0) + (fLevel && fLevelOk ? 1 : 0) + (fClass ? 1 : 0)
   const filtering = !!q || activeFilters > 0
   function clearFilters() { setQuery(''); setFResult('all'); setFLevel(''); setFClass('') }
 
@@ -370,14 +376,13 @@ export default function ExamResultsForm({
                 )
               })}
             </div>
-            <p style={{ margin: '6px 0 0', fontSize: 10.5, color: 'var(--txt2)' }}>{L.fSavedHint}</p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
             {levelOptions.length > 1 && (
               <label>
                 <span style={fieldLabel}>{L.fLevel}</span>
-                <select value={fLevel} onChange={e => setFLevel(e.target.value)} style={selectStyle}>
+                <select value={fLevelOk ? fLevel : ''} onChange={e => setFLevel(e.target.value)} style={selectStyle}>
                   <option value="">{L.fAllLevels}</option>
                   {levelOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -406,10 +411,7 @@ export default function ExamResultsForm({
   if (isGrouped) {
     const groupMap = new Map<string, { label: string; sortKey: string; students: any[] }>()
     for (const s of students) {
-      const gradeName = s.grade?.name ?? (isRtl ? 'غير محدد' : 'Unknown')
-      const termName  = s.term?.name  ?? ''
-      const label     = termName ? `${gradeName} ${termName}` : gradeName
-      const key       = `${s.grade?.id ?? 'none'}__${s.term?.id ?? 'none'}`
+      const { key, label } = effLevel(s)
       if (!groupMap.has(key)) groupMap.set(key, { label, sortKey: sortGroupKey(label), students: [] })
       groupMap.get(key)!.students.push(s)
     }
