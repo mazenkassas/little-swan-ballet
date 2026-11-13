@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getLocale } from 'next-intl/server'
 import { format } from 'date-fns'
 import CheckInPanel from './CheckInPanel'
+import { onlyRealSessions } from '@/lib/sessionFilter'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,7 @@ export default async function CoachCheckInPage() {
     coachClassIds.length > 0
       ? supabase
           .from('sessions')
-          .select('id, date, class:classes(id, name, start_time, end_time, hall:halls(name))')
+          .select('id, date, class:classes(id, name, start_time, end_time, is_active, days_of_week, hall:halls(name))')
           .eq('date', today)
           .in('class_id', coachClassIds)
           .order('created_at')
@@ -68,7 +69,7 @@ export default async function CoachCheckInPage() {
   return (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     <CheckInPanel
-      todaySessions={(todaySessions || []) as any}
+      todaySessions={onlyRealSessions(todaySessions as any[], today) as any}
       todayLogs={todayLogs || []}
       history={(history || []) as any}
       isRtl={isRtl}

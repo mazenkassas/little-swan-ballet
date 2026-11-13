@@ -4,6 +4,7 @@ import { Plus, Clock, Users } from 'lucide-react'
 import { getLocale } from 'next-intl/server'
 import { format, addDays, startOfWeek, endOfWeek, getDay } from 'date-fns'
 import ClassCardActions from './ClassCardActions'
+import { onlyRealSessions } from '@/lib/sessionFilter'
 
 const DAY_MAP: Record<string, number> = {
   Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
@@ -136,7 +137,7 @@ export default async function ClassesPage({
 
     const { data: s } = await supabase
       .from('sessions')
-      .select('*, class:classes(name, start_time, end_time, grade:grades(name), term:terms(name)), hall:halls(name), coach:coaches(name_ar, name_en)')
+      .select('*, class:classes(name, start_time, end_time, is_active, days_of_week, grade:grades(name), term:terms(name)), hall:halls(name), coach:coaches(name_ar, name_en)')
       .gte('date', weekStartStr)
       .lte('date', weekEndStr)
       .order('date')
@@ -144,7 +145,7 @@ export default async function ClassesPage({
 
     // Deduplicate: keep only the first session per class+date (guards against DB duplicates)
     const seen = new Set<string>()
-    sessions = (s || []).filter((r: any) => {
+    sessions = onlyRealSessions(s as any[]).filter((r: any) => {
       const key = `${r.class_id}|${r.date}`
       if (seen.has(key)) return false
       seen.add(key)
@@ -157,13 +158,13 @@ export default async function ClassesPage({
   if (tab === 'sessions' && selectedDay) {
     const { data: dd } = await supabase
       .from('sessions')
-      .select(`id, status, class:classes(id, name, start_time, end_time, level:levels(name), default_coach:coaches(name_ar, name_en), class_students(student:students(id, name_ar, name_en, subscriptions(remaining_sessions, status, start_date)))), hall:halls(name)`)
+      .select(`id, status, date, class:classes(id, name, start_time, end_time, is_active, days_of_week, level:levels(name), default_coach:coaches(name_ar, name_en), class_students(student:students(id, name_ar, name_en, subscriptions(remaining_sessions, status, start_date)))), hall:halls(name)`)
       .eq('date', selectedDay)
       .order('created_at')
 
     // Deduplicate day detail too
     const seenDay = new Set<string>()
-    dayDetail = (dd || []).filter((r: any) => {
+    dayDetail = onlyRealSessions(dd as any[], selectedDay).filter((r: any) => {
       const key = r.class?.id
       if (!key || seenDay.has(key)) return false
       seenDay.add(key)

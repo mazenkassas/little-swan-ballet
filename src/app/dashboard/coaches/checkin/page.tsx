@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { MapPin, CheckCircle2, LogOut, AlertTriangle, Clock } from 'lucide-react'
 import { haversineDistance } from '@/lib/utils'
+import { onlyRealSessions } from '@/lib/sessionFilter'
 
 export default function CoachCheckinPage() {
   const supabase = createClient()
@@ -29,10 +30,10 @@ export default function CoachCheckinPage() {
         // Load today's sessions
         const today = new Date().toISOString().split('T')[0]
         const { data: sess } = await supabase.from('sessions')
-          .select('*, class:classes(name, level:levels(name)), hall:halls(name)')
+          .select('*, class:classes(name, is_active, days_of_week, level:levels(name)), hall:halls(name)')
           .eq('date', today)
           .or(`coach_id.eq.${coach.id}`)
-        setSessions(sess || [])
+        setSessions(onlyRealSessions(sess, today))
 
         // Active check-ins
         const { data: checkins } = await supabase.from('coach_attendance')

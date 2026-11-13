@@ -7,6 +7,7 @@ import {
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { canViewPage, parseRolePerms } from '@/lib/rolePermissions'
+import { onlyRealSessions } from '@/lib/sessionFilter'
 
 // "Today" always means today in the academy's time zone (the server runs in UTC).
 const TZ = 'Africa/Cairo'
@@ -110,7 +111,7 @@ export default async function DashboardHome() {
     supabase.from('students').select('id', { count: 'exact', head: true }),
     supabase.from('subscriptions').select('id, remaining_sessions, student:students(id, name_ar, name_en, status), class:classes(name)')
       .eq('status', 'active').lte('remaining_sessions', 1).order('remaining_sessions'),
-    supabase.from('sessions').select('id, status, coach_id, class:classes(name, start_time, end_time), coach:coaches(name_ar, name_en)').eq('date', date),
+    supabase.from('sessions').select('id, status, coach_id, class:classes(name, start_time, end_time, is_active, days_of_week), coach:coaches(name_ar, name_en)').eq('date', date),
     seesMoney ? supabase.from('payments').select('amount_paid, payment_method').eq('date', date) : Promise.resolve({ data: [] as { amount_paid: number; payment_method: string | null }[] }),
     seesMoney ? supabase.from('payments').select('amount_paid').gte('date', monthStart).lte('date', date).limit(10000) : Promise.resolve({ data: [] as { amount_paid: number }[] }),
     can('expenses') || seesMoney ? supabase.from('expenses').select('amount').eq('date', date) : Promise.resolve({ data: [] as { amount: number }[] }),
@@ -135,7 +136,7 @@ export default async function DashboardHome() {
   ])
 
   // Today's classes, in time order, with live state
-  const sess = (sessions.data || []).map(s => ({ ...s, cls: one(s.class), coachRow: one(s.coach) }))
+  const sess = onlyRealSessions(sessions.data, date).map(s => ({ ...s, cls: one(s.class), coachRow: one(s.coach) }))
     .sort((a, b) => String(a.cls?.start_time || '').localeCompare(String(b.cls?.start_time || '')))
   const hhmm = (t?: string | null) => String(t || '').slice(0, 5)
   const nowId = sess.find(s => s.status !== 'cancelled' && hhmm(s.cls?.start_time) <= hm && hm < hhmm(s.cls?.end_time))?.id

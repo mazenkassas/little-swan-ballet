@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react'
 import { format, addDays, startOfWeek, endOfWeek, getDay } from 'date-fns'
 import GenerateSessionsButton from './GenerateSessionsButton'
 import { getTranslations, getLocale } from 'next-intl/server'
+import { onlyRealSessions } from '@/lib/sessionFilter'
 
 const DAY_MAP: Record<string, number> = {
   Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
@@ -76,14 +77,14 @@ export default async function SessionsPage({
 
   const { data: sessions } = await supabase
     .from('sessions')
-    .select('*, class:classes(name, start_time, end_time, level:levels(name)), hall:halls(name), coach:coaches(name_ar)')
+    .select('*, class:classes(name, start_time, end_time, is_active, days_of_week, level:levels(name)), hall:halls(name), coach:coaches(name_ar)')
     .gte('date', weekStartStr)
     .lte('date', weekEndStr)
     .order('date')
     .order('created_at')
 
   const grouped: Record<string, any[]> = {}
-  sessions?.forEach(s => {
+  onlyRealSessions(sessions).forEach(s => {
     if (!grouped[s.date]) grouped[s.date] = []
     grouped[s.date].push(s)
   })

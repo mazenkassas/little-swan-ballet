@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
 import { GRACE_MIN, cairoDayRange, cairoInstant, cairoToday, fmtCairoTime, fmtClock, fmtDuration } from '@/lib/staffClock'
+import { onlyRealSessions } from '@/lib/sessionFilter'
 
 type Badge = { label: string; color: string }
 type Slot = { label: string; start: string | null; end: string | null; kind: 'class' | 'private' }
@@ -22,7 +23,7 @@ export default async function CoachToday({ isRtl }: { isRtl: boolean }) {
   const [{ data: coaches }, { data: sessions }, { data: privates }, { data: checkins }] = await Promise.all([
     supabase.from('coaches').select('id, name_ar, name_en').eq('is_active', true).order('name_ar'),
     supabase.from('sessions')
-      .select('id, status, coach_id, class:classes(name, start_time, end_time, default_coach_id)')
+      .select('id, status, coach_id, class:classes(name, start_time, end_time, default_coach_id, is_active, days_of_week)')
       .eq('date', date),
     supabase.from('private_sessions').select('coach_id, start_time, end_time').eq('date', date),
     supabase.from('coach_attendance')
@@ -50,7 +51,7 @@ export default async function CoachToday({ isRtl }: { isRtl: boolean }) {
 
   // Each coach's schedule for the day: her classes (session coach, or the class's default coach) and private sessions
   const slots: Record<string, Slot[]> = {}
-  for (const s of sessions ?? []) {
+  for (const s of onlyRealSessions(sessions, date)) {
     const cls = one(s.class)
     const coachId = s.coach_id || cls?.default_coach_id
     if (!coachId || s.status === 'cancelled') continue
