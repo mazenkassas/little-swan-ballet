@@ -214,7 +214,8 @@ export default function NewClassPage() {
         d.setDate(today.getDate() + ahead)
         return {
           class_id: newClass.id,
-          date:     d.toISOString().split('T')[0],
+          // Local calendar date — toISOString() would shift Cairo midnight to the previous day (UTC)
+          date:     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
           coach_id: form.default_coach_id || null,
           hall_id:  form.hall_id,
           status:   'scheduled',

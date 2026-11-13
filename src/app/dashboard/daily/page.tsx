@@ -100,7 +100,7 @@ export default async function DailyPage({
     return true
   })
 
-  const sessionDetails = await Promise.all(
+  const allSessionDetails = await Promise.all(
     sessions.map(async (session: any) => {
       const [{ data: enrolled }, { data: attendance }] = await Promise.all([
         supabase
@@ -131,6 +131,14 @@ export default async function DailyPage({
       return { session, students, attendance: attendance || [], makeupStudents }
     })
   )
+
+  // Only registered classes: the class must still exist, be active and meet on this weekday.
+  // (Stray rows were created a day early by an old bug.) A session that already has
+  // attendance is always kept, so recorded data never disappears.
+  const meetsToday = (cls: any) =>
+    !!cls && cls.is_active !== false &&
+    (cls.days_of_week || []).some((d: string) => String(d).trim().toLowerCase() === selectedDayName.toLowerCase())
+  const sessionDetails = allSessionDetails.filter(d => meetsToday(d.session.class) || d.attendance.length > 0)
 
   sessionDetails.sort((a, b) =>
     (a.session.class?.start_time || '').localeCompare(b.session.class?.start_time || '')
