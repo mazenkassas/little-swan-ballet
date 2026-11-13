@@ -1,10 +1,10 @@
-// Super-admin view: who is present today and whether they are within their working hours.
+// Super-admin view: the staff who logged in on a day — when they came, when they left, how long, and on time or not.
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
+import { LocationBadge } from '@/components/PresenceBadges'
 import {
-  GRACE_MIN, addDays, cairoDayRange, cairoInstant, cairoToday, fmtCairoDay, fmtCairoTime, fmtClock, fmtDuration,
+  GRACE_MIN, addDays, cairoDayRange, cairoInstant, cairoToday, fmtCairoDay, fmtCairoTime, fmtDuration,
   isLive, sessionEnd, weekDay, type ClockSession,
 } from '@/lib/staffClock'
 
@@ -23,7 +23,6 @@ export default async function StaffToday({ date, isRtl }: { date: string; isRtl:
     admin.from('staff')
       .select('id, name, name_en, role, shift_start, shift_end, work_days')
       .in('role', ['admin', 'staff'])
-      .eq('is_active', true)
       .order('name'),
     admin.from('staff_attendance')
       .select('staff_id, login_time, logout_time, last_seen, location_status, login_distance_m, login_device, notes')
@@ -33,21 +32,19 @@ export default async function StaffToday({ date, isRtl }: { date: string; isRtl:
   ])
 
   const L = isRtl ? {
-    present: 'حاضر', late: 'متأخر', absent: 'غائب', online: 'متصل الآن',
-    col: { staff: 'الموظف', shift: 'الدوام', inOut: 'دخول ← خروج', time: 'مدة التواجد', from: 'مكان التسجيل', status: 'الحالة' },
-    today: 'اليوم', backToday: 'العودة لليوم', now: 'الآن',
-    onTime: 'في الموعد', lateBy: (m: number) => `متأخر ${m} د`, leftEarly: (m: number) => `خرج مبكرًا ${m} د`,
-    absentS: 'غائب', dayOff: 'إجازة', notYet: 'لم يبدأ بعد', extra: 'يوم إضافي', noShift: 'لا يوجد دوام',
-    onlineNow: 'متصل الآن', sessions: (n: number) => `على ${n} مرات`, go: 'عرض',
-    empty: 'لا يوجد مديرون أو موظفون نشطون', role: { admin: 'مدير', staff: 'موظف' } as Record<string, string>,
+    loggedIn: 'سجّلوا الدخول', here: 'موجودون الآن', late: 'متأخرون',
+    col: { staff: 'الموظف', in: 'وقت الدخول', out: 'وقت الخروج', time: 'المدة', place: 'المكان', status: 'الحالة' },
+    today: 'اليوم', backToday: 'العودة لليوم', stillHere: 'ما زال موجودًا',
+    onTime: 'في الموعد', lateBy: (m: number) => `متأخر ${m} دقيقة`, leftEarly: (m: number) => `خرج مبكرًا ${m} دقيقة`,
+    extra: 'يوم إضافي', go: 'عرض', times: (n: number) => `${n} مرات دخول`,
+    empty: 'لم يسجّل أي موظف الدخول في هذا اليوم', role: { admin: 'مدير', staff: 'موظف' } as Record<string, string>,
   } : {
-    present: 'Present', late: 'Late', absent: 'Absent', online: 'Online now',
-    col: { staff: 'Staff', shift: 'Shift', inOut: 'In → Out', time: 'Time at work', from: 'Checked in from', status: 'Status' },
-    today: 'Today', backToday: 'Back to today', now: 'Now',
-    onTime: 'On time', lateBy: (m: number) => `Late ${m}m`, leftEarly: (m: number) => `Left early ${m}m`,
-    absentS: 'Absent', dayOff: 'Day off', notYet: 'Not yet', extra: 'Extra day', noShift: 'No shift set',
-    onlineNow: 'Online now', sessions: (n: number) => `over ${n} check-ins`, go: 'Show',
-    empty: 'No active admins or staff', role: { admin: 'Admin', staff: 'Staff' } as Record<string, string>,
+    loggedIn: 'Logged in', here: 'Here now', late: 'Late',
+    col: { staff: 'Staff', in: 'Logged in', out: 'Logged out', time: 'Time', place: 'Place', status: 'Status' },
+    today: 'Today', backToday: 'Back to today', stillHere: 'Still here',
+    onTime: 'On time', lateBy: (m: number) => `Late ${m} min`, leftEarly: (m: number) => `Left early ${m} min`,
+    extra: 'Extra day', go: 'Show', times: (n: number) => `${n} logins`,
+    empty: 'No staff logged in on this day', role: { admin: 'Admin', staff: 'Staff' } as Record<string, string>,
   }
 
   type Row = ClockSession & {
@@ -57,63 +54,57 @@ export default async function StaffToday({ date, isRtl }: { date: string; isRtl:
   sessions?.forEach(s => { (byStaff[s.staff_id] ||= []).push(s) })
 
   const dow = weekDay(date)
-  let present = 0, late = 0, absent = 0, online = 0
+  let here = 0, late = 0
 
-  const rows = (staff ?? []).map(m => {
-    const list = byStaff[m.id] ?? []
-    const hasShift = !!(m.shift_start && m.shift_end)
-    const workDay = (m.work_days ?? [0, 1, 2, 3, 4, 6]).includes(dow)
-    const shiftStart = hasShift ? cairoInstant(date, m.shift_start).getTime() : null
-    const shiftEnd = hasShift ? cairoInstant(date, m.shift_end).getTime() : null
-    const badges: Badge[] = []
+  // Only staff who logged in on this day, earliest first
+  const rows = (staff ?? [])
+    .filter(m => (byStaff[m.id] ?? []).length > 0)
+    .map(m => {
+      const list = byStaff[m.id]
+      const firstIn = new Date(list[0].login_time).getTime()
+      const live = list.some(s => isLive(s, now))
+      const lastOut = Math.max(...list.map(s => sessionEnd(s, now)))
+      const total = list.reduce((sum, s) => sum + (sessionEnd(s, now) - new Date(s.login_time).getTime()), 0)
+      const workDay = (m.work_days ?? [0, 1, 2, 3, 4, 6]).includes(dow)
+      const shiftStart = m.shift_start ? cairoInstant(date, m.shift_start).getTime() : null
+      const shiftEnd = m.shift_end ? cairoInstant(date, m.shift_end).getTime() : null
 
-    if (list.length === 0) {
-      if (!workDay) badges.push({ label: L.dayOff, color: C.grey })
-      else if (date > today || (isToday && shiftStart != null && now < shiftStart + GRACE_MIN * 60000))
-        badges.push({ label: L.notYet, color: C.grey })
-      else { badges.push({ label: L.absentS, color: C.red }); absent++ }
-      return { m, list, hasShift, badges, firstIn: null, lastOut: null, live: false, total: 0 }
-    }
-
-    present++
-    const firstIn = new Date(list[0].login_time).getTime()
-    const live = list.some(s => isLive(s, now))
-    const lastOut = Math.max(...list.map(s => sessionEnd(s, now)))
-    const total = list.reduce((sum, s) => sum + (sessionEnd(s, now) - new Date(s.login_time).getTime()), 0)
-
-    if (live) { badges.push({ label: L.onlineNow, color: C.green }); online++ }
-    if (!workDay) badges.push({ label: L.extra, color: C.purple })
-    else if (shiftStart != null && shiftEnd != null) {
-      const lateMin = Math.round((firstIn - shiftStart) / 60000)
-      if (lateMin > GRACE_MIN) { badges.push({ label: L.lateBy(lateMin), color: C.orange }); late++ }
-      else badges.push({ label: L.onTime, color: C.green })
-      if (!live && lastOut < shiftEnd) {
-        badges.push({ label: L.leftEarly(Math.round((shiftEnd - lastOut) / 60000)), color: C.orange })
+      const badges: Badge[] = []
+      if (!workDay) badges.push({ label: L.extra, color: C.purple })
+      else if (shiftStart != null) {
+        const lateMin = Math.round((firstIn - shiftStart) / 60000)
+        if (lateMin > GRACE_MIN) { badges.push({ label: L.lateBy(lateMin), color: C.orange }); late++ }
+        else badges.push({ label: L.onTime, color: C.green })
+        if (!live && shiftEnd != null && lastOut < shiftEnd) {
+          badges.push({ label: L.leftEarly(Math.round((shiftEnd - lastOut) / 60000)), color: C.orange })
+        }
       }
-    } else badges.push({ label: L.noShift, color: C.grey })
-
-    return { m, list, hasShift, badges, firstIn, lastOut, live, total }
-  })
+      if (live) here++
+      // Where they logged in from: the first login of the day
+      const first = list[0]
+      return { m, list, badges, firstIn, lastOut, live, total, first }
+    })
+    .sort((a, b) => a.firstIn - b.firstIn)
 
   const card = (label: string, value: number, color: string) => (
     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' }}>
-      <p style={{ margin: 0, color: 'var(--txt2)', fontSize: 11, fontWeight: 600 }}>{label}</p>
-      <p style={{ margin: '4px 0 0', color, fontSize: 22, fontWeight: 700 }}>{value}</p>
+      <p style={{ margin: 0, color: 'var(--txt2)', fontSize: 12, fontWeight: 600 }}>{label}</p>
+      <p style={{ margin: '4px 0 0', color, fontSize: 24, fontWeight: 700 }}>{value}</p>
     </div>
   )
 
   const pill = (b: Badge) => (
     <span key={b.label} style={{
       background: `${b.color}18`, color: b.color, border: `1px solid ${b.color}28`,
-      borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+      borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
     }}>{b.label}</span>
   )
 
   const th: React.CSSProperties = {
-    textAlign: isRtl ? 'right' : 'left', color: 'var(--txt2)', fontSize: 11, fontWeight: 600,
-    padding: '10px 14px', whiteSpace: 'nowrap',
+    textAlign: isRtl ? 'right' : 'left', color: 'var(--txt2)', fontSize: 12, fontWeight: 600,
+    padding: '12px 16px', whiteSpace: 'nowrap',
   }
-  const td: React.CSSProperties = { padding: '11px 14px', fontSize: 12, color: 'var(--txt1)' }
+  const td: React.CSSProperties = { padding: '14px 16px', fontSize: 14, color: 'var(--txt1)', whiteSpace: 'nowrap' }
 
   const prevDay = addDays(date, -1)
   const nextDay = addDays(date, 1)
@@ -156,65 +147,57 @@ export default async function StaffToday({ date, isRtl }: { date: string; isRtl:
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 16 }}>
-        {card(L.present, present, C.green)}
+        {card(L.loggedIn, rows.length, C.green)}
+        {isToday && card(L.here, here, C.purple)}
         {card(L.late, late, C.orange)}
-        {card(L.absent, absent, C.red)}
-        {isToday && card(L.online, online, C.purple)}
       </div>
 
       <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
-              {[L.col.staff, L.col.shift, L.col.inOut, L.col.time, L.col.from, L.col.status].map(c => <th key={c} style={th}>{c}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ m, list, hasShift, badges, firstIn, lastOut, live, total }) => {
-              const name = isRtl ? (m.name || m.name_en) : (m.name_en || m.name)
-              return (
-                <tr key={m.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={td}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{name}</p>
-                    <p style={{ margin: 0, color: 'var(--txt2)', fontSize: 11 }}>{L.role[m.role] ?? m.role}</p>
-                  </td>
-                  <td style={{ ...td, color: 'var(--txt2)', whiteSpace: 'nowrap' }}>
-                    {hasShift ? `${fmtClock(m.shift_start, isRtl)} – ${fmtClock(m.shift_end, isRtl)}` : '—'}
-                  </td>
-                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                    {firstIn ? (
-                      <>
-                        <b>{fmtCairoTime(firstIn, isRtl)}</b>
-                        <span style={{ color: 'var(--txt2)', margin: '0 6px' }}>{isRtl ? '←' : '→'}</span>
-                        {live ? <span style={{ color: C.green, fontWeight: 600 }}>{L.now}</span> : <b>{lastOut ? fmtCairoTime(lastOut, isRtl) : '—'}</b>}
-                      </>
-                    ) : '—'}
-                  </td>
-                  <td style={td}>
-                    <span style={{ fontWeight: 700 }}>{list.length ? fmtDuration(total, isRtl) : '—'}</span>
-                    {list.length > 1 && <span style={{ display: 'block', color: 'var(--txt2)', fontSize: 11 }}>{L.sessions(list.length)}</span>}
-                  </td>
-                  <td style={td}>
-                    {list.length === 0 ? '—' : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                        {list.map((s, i) => (
-                          <div key={i} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            <LocationBadge status={s.location_status} distance={s.login_distance_m}
-                              note={s.notes} live={isLive(s, now)} isRtl={isRtl} />
-                            <DeviceBadge device={s.login_device} isRtl={isRtl} />
-                          </div>
-                        ))}
+        {rows.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--txt2)', fontSize: 14 }}>{L.empty}</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
+                {[L.col.staff, L.col.in, L.col.out, L.col.time, L.col.place, L.col.status].map(c => <th key={c} style={th}>{c}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ m, list, badges, firstIn, lastOut, live, total, first }) => {
+                const name = isRtl ? (m.name || m.name_en) : (m.name_en || m.name)
+                return (
+                  <tr key={m.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={td}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span title={live ? L.stillHere : ''} style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: live ? C.green : 'var(--border)' }} />
+                        <div>
+                          <p style={{ margin: 0, fontWeight: 600 }}>{name}</p>
+                          <p style={{ margin: 0, color: 'var(--txt2)', fontSize: 11 }}>{L.role[m.role] ?? m.role}</p>
+                        </div>
                       </div>
-                    )}
-                  </td>
-                  <td style={td}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{badges.map(pill)}</div></td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-        {rows.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--txt2)', fontSize: 13 }}>{L.empty}</div>
+                    </td>
+                    <td style={{ ...td, fontWeight: 700 }}>{fmtCairoTime(firstIn, isRtl)}</td>
+                    <td style={td}>
+                      {live
+                        ? <span style={{ color: C.green, fontWeight: 700 }}>{L.stillHere}</span>
+                        : <b>{fmtCairoTime(lastOut, isRtl)}</b>}
+                    </td>
+                    <td style={td}>
+                      <b>{fmtDuration(total, isRtl)}</b>
+                      {list.length > 1 && <span style={{ display: 'block', color: 'var(--txt2)', fontSize: 11 }}>{L.times(list.length)}</span>}
+                    </td>
+                    <td style={td}>
+                      <LocationBadge status={first.location_status} distance={first.login_distance_m}
+                        note={first.notes} live={isLive(first, now)} isRtl={isRtl} />
+                    </td>
+                    <td style={td}>
+                      {badges.length ? <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{badges.map(pill)}</div> : <span style={{ color: 'var(--txt2)' }}>—</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
