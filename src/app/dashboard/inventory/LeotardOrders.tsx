@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
-  Search, Trash2, Download, Plus, House, CreditCard, Shirt, Scissors, UsersRound,
+  Search, Trash2, Upload, Plus, House, CreditCard, Shirt, Scissors, UsersRound,
   ShoppingCart, Wallet, HandCoins, Clock, UserRound, CalendarDays, ChevronLeft, ChevronRight,
   type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LEOTARD_ORDER_COLUMNS } from './leotardColumns'
 import { LEOTARD_CSS } from './leotardStyles'
+import { parseLeotardSheet, type ImportedOrder } from './leotardImport'
 
 export interface LeotardOrder {
   id: string
@@ -108,7 +109,7 @@ const LABELS = {
     emptySearch: 'No results match your search.',
     delRow: 'Delete row', delTitle: 'Delete this row?', delBody: 'This cannot be undone.',
     del: 'Delete', cancel: 'Cancel', unnamed: '(no name)',
-    exportCsv: 'Export', clear: 'Clear filters', filterHint: 'Click to show only these rows',
+    importXlsx: 'Import', clear: 'Clear filters', filterHint: 'Click to show only these rows',
     all: 'All', fPay: 'Payment', fSize: 'Size', fTailor: 'From tailor', fDelivery: 'To customer',
     showing: (n: number, of: number) => `Showing ${n} of ${of}`,
     addMonth: 'Add month', addMonthTitle: 'Add a month sheet', month: 'Month', year: 'Year', add: 'Add',
@@ -116,6 +117,15 @@ const LABELS = {
     actionFailed: 'That action failed. Check your connection and try again.',
     saving: 'Saving…', saved: 'All changes saved', notSaved: 'Not saved', retry: 'Retry',
     autoPay: 'Set automatically from the paid and total amounts',
+    importTitle: (n: number, sheet: string) => `Import ${n} ${n === 1 ? 'row' : 'rows'} into ${sheet}?`,
+    importBody: 'The rows are added to this sheet; rows already on it stay as they are.',
+    importDo: 'Import', importing: 'Importing…',
+    importDone: (n: number) => `${n} ${n === 1 ? 'row' : 'rows'} imported.`,
+    importNotExcel: 'Only Excel files (.xlsx) can be imported.',
+    importUnreadable: 'This file could not be read. Open it in Excel, save it as .xlsx and try again.',
+    importNoHeader: 'No "Name" column was found. The first row of the sheet should hold the column titles (Name, Date, Paid, Total…).',
+    importNoRows: 'The file has no rows to import.',
+    importFailed: 'The import failed, nothing was added. Check your connection and try again.',
     setupTitle: 'Leotard orders are not set up yet',
     setupBody: 'Run the file supabase/add_leotard_orders.sql in the Supabase SQL Editor, then refresh this page.',
   },
@@ -133,7 +143,7 @@ const LABELS = {
     emptySearch: 'مفيش نتايج مطابقة للبحث.',
     delRow: 'حذف الصف', delTitle: 'حذف هذا الصف؟', delBody: 'لا يمكن التراجع عن هذا الإجراء.',
     del: 'حذف', cancel: 'إلغاء', unnamed: '(بدون اسم)',
-    exportCsv: 'تصدير', clear: 'مسح الفلاتر', filterHint: 'اضغط لعرض هذه الصفوف فقط',
+    importXlsx: 'استيراد', clear: 'مسح الفلاتر', filterHint: 'اضغط لعرض هذه الصفوف فقط',
     all: 'الكل', fPay: 'الدفع', fSize: 'المقاس', fTailor: 'من الخياط', fDelivery: 'للعميل',
     showing: (n: number, of: number) => `عرض ${n} من ${of}`,
     addMonth: 'إضافة شهر', addMonthTitle: 'إضافة شيت شهر جديد', month: 'الشهر', year: 'السنة', add: 'إضافة',
@@ -141,6 +151,15 @@ const LABELS = {
     actionFailed: 'تعذر تنفيذ العملية. تأكد من الاتصال وحاول مرة أخرى.',
     saving: 'جارٍ الحفظ…', saved: 'تم حفظ كل التعديلات', notSaved: 'لم يُحفظ', retry: 'إعادة المحاولة',
     autoPay: 'تتحدد تلقائياً من المدفوع والاجمالي',
+    importTitle: (n: number, sheet: string) => `استيراد ${n} صف إلى ${sheet}؟`,
+    importBody: 'هتتضاف الصفوف للشيت ده، والصفوف الموجودة هتفضل زي ما هي.',
+    importDo: 'استيراد', importing: 'جارٍ الاستيراد…',
+    importDone: (n: number) => `تم استيراد ${n} صف.`,
+    importNotExcel: 'يمكن استيراد ملفات Excel بصيغة xlsx فقط.',
+    importUnreadable: 'تعذر قراءة الملف. افتحه في Excel واحفظه بصيغة xlsx وحاول مرة أخرى.',
+    importNoHeader: 'مفيش عمود "الاسم" في الملف. أول صف في الشيت لازم يكون عناوين الأعمدة (الاسم، التاريخ، المدفوع، الاجمالي…).',
+    importNoRows: 'الملف مفيهوش صفوف للاستيراد.',
+    importFailed: 'فشل الاستيراد ولم يُضف أي صف. تأكد من الاتصال وحاول مرة أخرى.',
     setupTitle: 'طلبات المايوهات غير مفعّلة بعد',
     setupBody: 'شغّل الملف supabase/add_leotard_orders.sql في Supabase SQL Editor ثم حدّث الصفحة.',
   },
@@ -316,6 +335,10 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
   const [extraMonths, setExtraMonths] = useState<string[]>([])
   const [monthForm, setMonthForm] = useState<{ y: number; m: number } | null>(null)
   const tabsRef = useRef<HTMLElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [toImport, setToImport] = useState<ImportedOrder[] | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
     try {
@@ -548,27 +571,40 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
     if (next) { next.focus(); next.select() } else el.blur()
   }
 
-  // Download the rows on screen as a CSV file that Excel opens with Arabic intact
-  function exportCsv() {
-    const lang = isRtl ? 'ar' : 'en'
-    const label = (opts: Opt[], v: string | null) => opts.find(o => o.v === v)?.[lang] || v || ''
-    const head = [L.num, L.name, L.date, L.day, L.group, L.paid, L.remaining, L.total, L.payStatus,
-      L.cash, L.instapay, L.size, L.tailor, L.delivery]
-    const lines = visible.map(({ r, i }) => [
-      i + 1, r.customer_name, r.order_date || '', label(OPTIONS.day, r.day_of_week), r.group_name || '',
-      r.paid_amount, r.total_amount - r.paid_amount, r.total_amount, label(OPTIONS.payStatus, payOf(r)),
-      r.cash ? L.cash : '', r.instapay ? L.instapay : '', r.size || '',
-      label(OPTIONS.tailor, r.tailor_status), label(OPTIONS.delivery, r.delivery_status),
-    ])
-    const csv = [head, ...lines]
-      .map(cells => cells.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
-      .join('\r\n')
-    const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff) + csv], { type: 'text/csv;charset=utf-8' }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `leotards-${active}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  // Read an Excel file and ask before adding its rows to the open month sheet
+  async function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // so the same file can be picked again
+    if (!file) return
+    setImportMsg(null)
+    if (!/\.xlsx$/i.test(file.name)) { setImportMsg({ ok: false, text: L.importNotExcel }); return }
+    let data: unknown[][]
+    try {
+      const { readSheet } = await import('read-excel-file/browser')
+      data = await readSheet(file) as unknown[][]
+    } catch {
+      setImportMsg({ ok: false, text: L.importUnreadable }); return
+    }
+    const res = parseLeotardSheet(data, OPTIONS, [LABELS.en.footTotal, LABELS.ar.footTotal])
+    if (!res.ok) { setImportMsg({ ok: false, text: res.reason === 'noHeader' ? L.importNoHeader : L.importNoRows }); return }
+    setToImport(res.orders)
+  }
+
+  async function confirmImport() {
+    if (!toImport || importing) return
+    setImporting(true)
+    const { data, error } = await supabase
+      .from('leotard_orders')
+      .insert(toImport.map(o => ({ ...o, sheet_month: active })))
+      .select(LEOTARD_ORDER_COLUMNS)
+    setImporting(false)
+    setToImport(null)
+    if (error || !data) { setImportMsg({ ok: false, text: L.importFailed }); return }
+    const added = (data as unknown as LeotardOrder[])
+      .map(r => ({ ...r, total_amount: Number(r.total_amount) || 0, paid_amount: Number(r.paid_amount) || 0 }))
+    clearFilters()
+    setRows(rs => [...rs, ...added])
+    setImportMsg({ ok: true, text: L.importDone(added.length) })
   }
 
   // Number of orders on each month sheet, shown on its tab
@@ -605,8 +641,10 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
         )}
         {!isStock && !setupNeeded && (
           <div className="lsw-tools">
-            <button className="lsw-btn ghost" onClick={exportCsv} disabled={!visible.length}>
-              <Download size={14} aria-hidden />{L.exportCsv}
+            <input ref={fileRef} type="file" hidden onChange={pickFile}
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            <button className="lsw-btn ghost" onClick={() => fileRef.current?.click()} disabled={importing}>
+              <Upload size={14} aria-hidden />{importing ? L.importing : L.importXlsx}
             </button>
             <button className="lsw-btn" onClick={addRow} disabled={adding}>
               <Plus size={14} aria-hidden />{L.addRow}
@@ -674,6 +712,12 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
             </p>
           )}
           {failed && <p className="lsw-err">{L.actionFailed}</p>}
+          {importMsg && (
+            <p role="status" className={importMsg.ok ? 'lsw-ok' : 'lsw-err'}>
+              <span>{importMsg.text}</span>
+              <button className="x" onClick={() => setImportMsg(null)} aria-label={L.cancel}>✕</button>
+            </p>
+          )}
 
           {/* Sheet */}
           <div className="lsw-wrap">
@@ -859,6 +903,22 @@ export default function LeotardOrders({ orders, students, slots, currentMonth, s
           </div>
         )
       })()}
+
+      {/* Import confirmation */}
+      {toImport && (
+        <div className="lsw-overlay" onClick={() => !importing && setToImport(null)}>
+          <div className="lsw-modal" onClick={e => e.stopPropagation()}>
+            <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--txt1)' }}>{L.importTitle(toImport.length, activeLabel)}</p>
+            <p style={{ marginTop: 6, fontSize: 12, color: 'var(--txt2)' }}>{L.importBody}</p>
+            <div className="btns">
+              <button onClick={confirmImport} disabled={importing}
+                style={{ background: '#d4667a', color: '#fff', border: 'none' }}>{importing ? L.importing : L.importDo}</button>
+              <button onClick={() => setToImport(null)} disabled={importing}
+                style={{ background: 'transparent', color: 'var(--txt1)', border: '1px solid var(--border)' }}>{L.cancel}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete confirmation */}
       {toDelete && (

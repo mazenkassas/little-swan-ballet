@@ -99,6 +99,8 @@ html.dark .lsw-stat.amber b{color:#f2b04a}
 /* Messages */
 .lsw-err{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px;padding:10px 14px;border-radius:12px;background:color-mix(in srgb,#e04040 9%,var(--lsw-card));border:1px solid #e0404045;color:#e04040;font-size:13px;font-weight:600}
 .lsw-err button{border:0;border-radius:8px;background:#e04040;color:#fff;font:inherit;font-weight:700;padding:6px 14px;cursor:pointer}
+.lsw-ok{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px;padding:10px 14px;border-radius:12px;background:color-mix(in srgb,#11734b 9%,var(--lsw-card));border:1px solid #11734b45;color:#11734b;font-size:13px;font-weight:600}
+.lsw-ok button,.lsw-err button.x{border:0;background:transparent;color:inherit;font:inherit;font-weight:700;padding:2px 6px;cursor:pointer}
 
 /* Sheet */
 .lsw-wrap{--cell:var(--lsw-card);background:var(--lsw-card);border:1px solid var(--lsw-line);border-radius:14px;overflow:auto;max-height:max(360px,calc(100vh - 330px));box-shadow:var(--lsw-shadow);scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--lsw-rose) 40%,transparent) transparent}
