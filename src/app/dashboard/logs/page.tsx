@@ -131,7 +131,7 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
 
   const [{ data: logsData, count, error }, { data: staffList }, { data: coachList }] = await Promise.all([
     query,
-    supabase.from('staff').select('name, name_en, email').order('name'),
+    supabase.from('staff').select('name, name_en, email, role').order('name'),
     supabase.from('coaches').select('name_ar, name_en, email').order('name_ar'),
   ])
   const logs = (logsData ?? []) as Log[]
@@ -197,7 +197,12 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
     return `/dashboard/logs${s ? `?${s}` : ''}`
   }
 
-  const actorOptions = [...people.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  // User filter: only admin / staff accounts (no super admins, no coaches).
+  const actorOptions = ((staffList ?? []) as (Named & { role?: string })[])
+    .filter(s => s.email && (s.role === 'admin' || s.role === 'staff'))
+    .map(s => [s.email!.toLowerCase(), pickName(s) || s.email!] as [string, string])
+    .filter(([email], i, arr) => arr.findIndex(([e]) => e === email) === i)
+    .sort((a, b) => a[1].localeCompare(b[1]))
   const tableOptions = Object.keys(TABLES).sort((a, b) => tableLabel(a).localeCompare(tableLabel(b)))
 
   const label: React.CSSProperties = {
