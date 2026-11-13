@@ -56,7 +56,7 @@ export default async function ExamDetailPage({
     students = allStudents ?? []
   }
 
-  const CLASS_FIELDS = 'id, name, days_of_week, start_time, end_time, grade:grades(name, order_num), term:terms(name, order_num)'
+  const CLASS_FIELDS = 'id, name, days_of_week, start_time, end_time, grade:grades(id, name, order_num), term:terms(id, name, order_num)'
   const studentIds = students.map(s => s.id)
   const [{ data: existing }, { data: enrolments }, { data: allClasses }] = await Promise.all([
     supabase.from('student_exams').select('*').eq('exam_id', id),

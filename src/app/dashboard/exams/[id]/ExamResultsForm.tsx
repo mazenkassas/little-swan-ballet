@@ -8,10 +8,12 @@ import { transferStudent } from '../../students/actions'
 import { compareClassNames } from '@/lib/classOrder'
 
 type Result = 'pass' | 'fail' | 'evaluation' | 'special_committee' | 'transferred' | 'wrong_level'
+type Named = { id?: string; name: string; order_num?: number | null }
 type ClassRow = {
   id: string; name: string; days_of_week: string[] | null; start_time: string | null; end_time: string | null
-  grade: { name: string } | { name: string }[] | null; term: { name: string } | { name: string }[] | null
+  grade: Named | Named[] | null; term: Named | Named[] | null
 }
+type Level = { key: string; gradeId: string; termId: string | null; label: string; order: [number, number] }
 
 const one = <T,>(x: T | T[] | null | undefined): T | null => (Array.isArray(x) ? x[0] ?? null : x ?? null)
 
@@ -83,9 +85,9 @@ export default function ExamResultsForm({
     fShowing: (n: number, t: number) => `عرض ${n} من ${t}`, fNone: 'لا توجد طالبات مطابقة للفلاتر',
     fSavedHint: 'فلتر النتيجة يعتمد على النتائج المحفوظة',
     wrongLevel: 'ليست من هذا المستوى',
-    wTitle: 'مجموعة الامتحان', wSub: (n: string) => `اختر المجموعة التي ستمتحن معها ${n}`,
-    wHint: 'لن تتغير مجموعتها الأصلية — هذه المجموعة لهذا الامتحان فقط.',
-    wConfirm: 'حفظ', wCancel: 'إلغاء', wRemove: 'إزالة', wChip: 'مجموعة الامتحان:',
+    wTitle: 'مستوى الامتحان', wSub: (n: string) => `اختر المستوى الذي ستمتحن فيه ${n}`, wSearch: 'ابحث عن مستوى…', wPick: 'اختر مستوى', wNoMatch: 'لا توجد مستويات مطابقة',
+    wHint: 'لن يتغير مستواها الأصلي ولا مجموعتها — هذا المستوى لهذا الامتحان فقط.',
+    wConfirm: 'حفظ', wCancel: 'إلغاء', wRemove: 'إزالة', wChip: 'مستوى الامتحان:',
   } : {
     pass: 'Pass', fail: 'Fail', evaluation: 'Evaluation', committee: 'Special Committee', transferred: 'Transferred',
     notes: 'Notes…', noClass: 'Not enrolled in a class', save: 'Save Results', saving: 'Saving…', saved: 'Saved ✓',
@@ -100,9 +102,9 @@ export default function ExamResultsForm({
     fShowing: (n: number, t: number) => `Showing ${n} of ${t}`, fNone: 'No students match these filters',
     fSavedHint: 'Result filter uses saved results',
     wrongLevel: 'Not this level',
-    wTitle: 'Exam class', wSub: (n: string) => `Choose the class ${n} will sit this exam with`,
-    wHint: "Her original class won't change — this class is for this exam only.",
-    wConfirm: 'Save', wCancel: 'Cancel', wRemove: 'Remove', wChip: 'Exam class:',
+    wTitle: 'Exam level', wSub: (n: string) => `Choose the level ${n} will sit this exam in`, wSearch: 'Search levels…', wPick: 'Choose a level', wNoMatch: 'No levels match',
+    wHint: "Her original level and class won't change — this level is for this exam only.",
+    wConfirm: 'Save', wCancel: 'Cancel', wRemove: 'Remove', wChip: 'Exam level:',
   }
 
   const RESULTS: { key: Result; label: string; color: string }[] = [
@@ -122,18 +124,34 @@ export default function ExamResultsForm({
   const [error,  setError]  = useState('')
   const [transferFor, setTransferFor] = useState<any | null>(null)
   const [wrongFor,    setWrongFor]    = useState<any | null>(null)
-  // Exam-only class per student (doesn't touch her real enrolment)
-  const [examClass,   setExamClass]   = useState<Record<string, string | null>>(() =>
-    Object.fromEntries(existingResults.map(r => [r.student_id, r.exam_class_id ?? null])))
-  const classById = useMemo(() => new Map(allClasses.map(c => [c.id, c])), [allClasses])
+  // Exam-only level (grade + term) per student — doesn't touch her real grade/term or classes
+  const [examLevel,   setExamLevel]   = useState<Record<string, string | null>>(() =>
+    Object.fromEntries(existingResults.map(r => [r.student_id, r.exam_grade_id ? `${r.exam_grade_id}__${r.exam_term_id ?? ''}` : null])))
+  // Every grade + term combination that has an active class, in level order
+  const levels = useMemo(() => {
+    const m = new Map<string, Level>()
+    for (const c of allClasses) {
+      const g = one(c.grade), t = one(c.term)
+      if (!g?.id) continue
+      const key = `${g.id}__${t?.id ?? ''}`
+      if (!m.has(key)) m.set(key, {
+        key, gradeId: g.id, termId: t?.id ?? null,
+        label: [g.name, t?.name].filter(Boolean).join(' · '),
+        order: [g.order_num ?? 999, t?.order_num ?? 999],
+      })
+    }
+    return [...m.values()].sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1] || a.label.localeCompare(b.label))
+  }, [allClasses])
+  const levelByKey = useMemo(() => new Map(levels.map(l => [l.key, l])), [levels])
 
-  async function saveExamClass(studentId: string, classId: string | null): Promise<string | null> {
+  async function saveExamLevel(studentId: string, lvl: Level | null): Promise<string | null> {
+    const patch = { exam_grade_id: lvl?.gradeId ?? null, exam_term_id: lvl?.termId ?? null }
     const q = existingBy.has(studentId)
-      ? supabase.from('student_exams').update({ exam_class_id: classId }).eq('exam_id', exam.id).eq('student_id', studentId)
-      : supabase.from('student_exams').insert({ student_id: studentId, exam_id: exam.id, result: 'pending', exam_class_id: classId })
+      ? supabase.from('student_exams').update(patch).eq('exam_id', exam.id).eq('student_id', studentId)
+      : supabase.from('student_exams').insert({ student_id: studentId, exam_id: exam.id, result: 'pending', ...patch })
     const { error: err } = await q
     if (err) return err.message
-    setExamClass(prev => ({ ...prev, [studentId]: classId }))
+    setExamLevel(prev => ({ ...prev, [studentId]: lvl?.key ?? null }))
     router.refresh()
     return null
   }
@@ -236,22 +254,22 @@ export default function ExamResultsForm({
     results, notes, classesByStudent, RESULTS, L, isRtl,
     onResultChange: changeResult, onNoteChange: changeNote, onTransfer: (s: any) => setTransferFor(s),
     onWrongLevel: (s: any) => setWrongFor(s),
-    examClass, classById,
+    examLevel, levelByKey,
   }
   const errorBox = error && (
     <p role="alert" style={{ margin: 0, padding: '10px 14px', borderRadius: 10, background: '#e0404012', border: '1px solid #e0404040', color: '#e04040', fontSize: 12.5, fontWeight: 600 }}>{error}</p>
   )
   const wrongModal = wrongFor && (
-    <ExamClassModal
+    <ExamLevelModal
       student={wrongFor}
-      current={examClass[wrongFor.id] ?? null}
-      own={classesByStudent[wrongFor.id] || []}
-      allClasses={allClasses}
+      current={examLevel[wrongFor.id] ?? null}
+      own={`${wrongFor.grade?.id ?? ''}__${wrongFor.term?.id ?? ''}`}
+      levels={levels}
       L={L}
       isRtl={isRtl}
       onClose={() => setWrongFor(null)}
-      onSave={async classId => {
-        const e = await saveExamClass(wrongFor.id, classId)
+      onSave={async lvl => {
+        const e = await saveExamLevel(wrongFor.id, lvl)
         if (!e) setWrongFor(null)
         return e
       }}
@@ -464,7 +482,7 @@ function Count({ n, label, color, muted }: { n: number; label: string; color: st
   )
 }
 
-function StudentList({ students, results, notes, classesByStudent, RESULTS, L, isRtl, onResultChange, onNoteChange, onTransfer, onWrongLevel, examClass, classById }: {
+function StudentList({ students, results, notes, classesByStudent, RESULTS, L, isRtl, onResultChange, onNoteChange, onTransfer, onWrongLevel, examLevel, levelByKey }: {
   students: any[]
   results: Record<string, Result | ''>
   notes: Record<string, string>
@@ -476,8 +494,8 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
   onNoteChange: (studentId: string, value: string) => void
   onTransfer: (student: any) => void
   onWrongLevel: (student: any) => void
-  examClass: Record<string, string | null>
-  classById: Map<string, ClassRow>
+  examLevel: Record<string, string | null>
+  levelByKey: Map<string, Level>
 }) {
   return (
     <div>
@@ -488,8 +506,8 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
         const rowColor    = result === 'transferred' ? '#e8960a' : RESULTS.find(r => r.key === result)?.color
         const classes     = classesByStudent[student.id] || []
         const moved       = result === 'transferred'
-        const examCls     = examClass[student.id] ? classById.get(examClass[student.id]!) ?? null : null
-        const wrong       = !!examClass[student.id]
+        const examLvl     = examLevel[student.id] ? levelByKey.get(examLevel[student.id]!) ?? null : null
+        const wrong       = !!examLevel[student.id]
 
         return (
           <div key={student.id} style={{
@@ -524,7 +542,7 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
                   {wrong && (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#c27c00', background: '#e8960a14', border: '1px solid #e8960a40', borderRadius: 6, padding: '2px 8px' }}>
                       <UserX size={11} />{L.wChip}
-                      <span dir="ltr">{examCls ? classLabel(examCls, isRtl) : '—'}</span>
+                      <span dir="ltr">{examLvl ? examLvl.label : '—'}</span>
                     </span>
                   )}
                 </div>
@@ -687,15 +705,15 @@ function TransferModal({ student, current, allClasses, L, isRtl, onClose, onDone
   )
 }
 
-function ExamClassModal({ student, current, own, allClasses, L, isRtl, onClose, onSave }: {
+function ExamLevelModal({ student, current, own, levels, L, isRtl, onClose, onSave }: {
   student: any
   current: string | null
-  own: ClassRow[]
-  allClasses: ClassRow[]
+  own: string
+  levels: Level[]
   L: Record<string, any>
   isRtl: boolean
   onClose: () => void
-  onSave: (classId: string | null) => Promise<string | null>
+  onSave: (lvl: Level | null) => Promise<string | null>
 }) {
   const [q, setQ] = useState('')
   const [to, setTo] = useState(current || '')
@@ -705,17 +723,15 @@ function ExamClassModal({ student, current, own, allClasses, L, isRtl, onClose, 
 
   const list = useMemo(() => {
     const s = q.trim().toLowerCase()
-    return allClasses
-      .map(c => ({ c, label: classLabel(c, isRtl) }))
-      .filter(x => !s || x.label.toLowerCase().includes(s) || x.c.name.toLowerCase().includes(s))
-      .sort((a, b) => compareClassNames(a.c.name, b.c.name))
-  }, [allClasses, q, isRtl])
+    return levels.filter(l => !s || l.label.toLowerCase().includes(s))
+  }, [levels, q])
 
-  function save(classId: string | null) {
-    if (classId !== null && !classId) { setErr(L.tPick); return }
+  function save(clear: boolean) {
+    const lvl = clear ? null : levels.find(l => l.key === to) ?? null
+    if (!clear && !lvl) { setErr(L.wPick); return }
     setErr('')
     start(async () => {
-      const e = await onSave(classId)
+      const e = await onSave(lvl)
       if (e) setErr(e)
     })
   }
@@ -745,18 +761,18 @@ function ExamClassModal({ student, current, own, allClasses, L, isRtl, onClose, 
         <div style={{ padding: '0 18px 10px' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--txt2)' }}>
             <Search size={14} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder={L.tSearch} aria-label={L.tSearch} autoFocus
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder={L.wSearch} aria-label={L.wSearch} autoFocus
               style={{ flex: 1, border: 0, outline: 0, background: 'transparent', color: 'var(--txt1)', fontSize: 13, fontFamily: 'inherit' }} />
           </label>
         </div>
 
-        <div role="listbox" aria-label={L.tPick} style={{ overflowY: 'auto', padding: '0 10px', flex: 1 }}>
-          {list.length === 0 && <p style={{ textAlign: 'center', color: 'var(--txt2)', fontSize: 12.5, padding: 20 }}>{L.tNoMatch}</p>}
-          {list.map(({ c, label }) => {
-            const isOwn = own.some(x => x.id === c.id)
-            const on = to === c.id
+        <div role="listbox" aria-label={L.wPick} style={{ overflowY: 'auto', padding: '0 10px', flex: 1 }}>
+          {list.length === 0 && <p style={{ textAlign: 'center', color: 'var(--txt2)', fontSize: 12.5, padding: 20 }}>{L.wNoMatch}</p>}
+          {list.map(({ key, label }) => {
+            const isOwn = own === key
+            const on = to === key
             return (
-              <button key={c.id} type="button" role="option" aria-selected={on} onClick={() => { setTo(c.id); setErr('') }} style={{
+              <button key={key} type="button" role="option" aria-selected={on} onClick={() => { setTo(key); setErr('') }} style={{
                 display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'start', margin: '2px 0',
                 padding: '9px 10px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5,
                 background: on ? '#d4667a1c' : 'transparent', border: `1px solid ${on ? '#d4667a66' : 'transparent'}`,
@@ -771,11 +787,11 @@ function ExamClassModal({ student, current, own, allClasses, L, isRtl, onClose, 
 
         {err && <p role="alert" style={{ margin: '8px 18px 0', fontSize: 12, fontWeight: 600, color: '#e04040' }}>{err}</p>}
         <div style={{ display: 'flex', gap: 8, padding: 14, borderTop: '1px solid var(--border)', marginTop: 8 }}>
-          <button type="button" onClick={() => save(to)} disabled={pending} style={{ flex: 1, height: 38, borderRadius: 10, border: 0, background: '#d4667a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: pending ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: pending ? .6 : 1 }}>
+          <button type="button" onClick={() => save(false)} disabled={pending} style={{ flex: 1, height: 38, borderRadius: 10, border: 0, background: '#d4667a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: pending ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: pending ? .6 : 1 }}>
             {pending ? '…' : L.wConfirm}
           </button>
           {current && (
-            <button type="button" onClick={() => save(null)} disabled={pending} style={{ flex: 1, height: 38, borderRadius: 10, border: '1px solid #e0404055', background: 'transparent', color: '#e04040', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button type="button" onClick={() => save(true)} disabled={pending} style={{ flex: 1, height: 38, borderRadius: 10, border: '1px solid #e0404055', background: 'transparent', color: '#e04040', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
               {L.wRemove}
             </button>
           )}
