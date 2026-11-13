@@ -1,8 +1,10 @@
 // Super-admin view: who is present today and whether they are within their working hours.
 import { createAdminClient } from '@/lib/supabase/admin'
+import Link from 'next/link'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
 import {
-  GRACE_MIN, cairoDayRange, cairoInstant, cairoToday, fmtCairoTime, fmtDuration,
+  GRACE_MIN, addDays, cairoDayRange, cairoInstant, cairoToday, fmtCairoDay, fmtCairoTime, fmtClock, fmtDuration,
   isLive, sessionEnd, weekDay, type ClockSession,
 } from '@/lib/staffClock'
 
@@ -32,17 +34,19 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
 
   const L = isRtl ? {
     present: 'حاضر', late: 'متأخر', absent: 'غائب', online: 'متصل الآن',
-    col: { staff: 'الموظف', shift: 'الدوام', in: 'دخول', out: 'خروج', time: 'مدة التواجد', location: 'الموقع', device: 'الجهاز', status: 'الحالة' },
+    col: { staff: 'الموظف', shift: 'الدوام', inOut: 'دخول ← خروج', time: 'مدة التواجد', from: 'مكان التسجيل', status: 'الحالة' },
+    today: 'اليوم', backToday: 'العودة لليوم', now: 'الآن',
     onTime: 'في الموعد', lateBy: (m: number) => `متأخر ${m} د`, leftEarly: (m: number) => `خرج مبكرًا ${m} د`,
     absentS: 'غائب', dayOff: 'إجازة', notYet: 'لم يبدأ بعد', extra: 'يوم إضافي', noShift: 'لا يوجد دوام',
-    onlineNow: 'متصل الآن', sessions: (n: number) => `${n} جلسات`, go: 'عرض',
+    onlineNow: 'متصل الآن', sessions: (n: number) => `على ${n} مرات`, go: 'عرض',
     empty: 'لا يوجد مديرون أو موظفون نشطون', role: { admin: 'مدير', staff: 'موظف' } as Record<string, string>,
   } : {
     present: 'Present', late: 'Late', absent: 'Absent', online: 'Online now',
-    col: { staff: 'Staff', shift: 'Shift', in: 'Clock In', out: 'Clock Out', time: 'Online Time', location: 'Location', device: 'Device', status: 'Status' },
+    col: { staff: 'Staff', shift: 'Shift', inOut: 'In → Out', time: 'Time at work', from: 'Checked in from', status: 'Status' },
+    today: 'Today', backToday: 'Back to today', now: 'Now',
     onTime: 'On time', lateBy: (m: number) => `Late ${m}m`, leftEarly: (m: number) => `Left early ${m}m`,
     absentS: 'Absent', dayOff: 'Day off', notYet: 'Not yet', extra: 'Extra day', noShift: 'No shift set',
-    onlineNow: 'Online now', sessions: (n: number) => `${n} sessions`, go: 'Show',
+    onlineNow: 'Online now', sessions: (n: number) => `over ${n} check-ins`, go: 'Show',
     empty: 'No active admins or staff', role: { admin: 'Admin', staff: 'Staff' } as Record<string, string>,
   }
 
@@ -111,19 +115,44 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
   }
   const td: React.CSSProperties = { padding: '11px 14px', fontSize: 12, color: 'var(--txt1)' }
 
+  const prevDay = addDays(date, -1)
+  const nextDay = addDays(date, 1)
+  const dayHref = (d: string) => `/dashboard/staff?tab=today${d === today ? '' : `&date=${d}`}`
+  const navBtn: React.CSSProperties = {
+    width: 34, height: 34, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-card)',
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--txt1)', textDecoration: 'none',
+  }
+  const Prev = isRtl ? ChevronRight : ChevronLeft
+  const Next = isRtl ? ChevronLeft : ChevronRight
+
   return (
     <div style={{ padding: '24px 28px' }}>
-      <form style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <input type="hidden" name="tab" value="today" />
-        <input type="date" name="date" defaultValue={date} max={today} style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8,
-          padding: '7px 12px', fontSize: 13, color: 'var(--txt1)', colorScheme: 'light dark',
-        }} />
-        <button type="submit" style={{
-          background: '#d4667a', border: 'none', borderRadius: 8, padding: '7px 16px',
-          color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-        }}>{L.go}</button>
-      </form>
+      {/* Day picker: ‹ day › */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <Link href={dayHref(prevDay)} style={navBtn} aria-label="previous day"><Prev size={16} /></Link>
+        <span style={{ minWidth: 190, textAlign: 'center', fontSize: 14, fontWeight: 700, color: 'var(--txt1)' }}>
+          {isToday ? `${L.today} · ` : ''}{fmtCairoDay(date, isRtl, true)}
+        </span>
+        {nextDay <= today
+          ? <Link href={dayHref(nextDay)} style={navBtn} aria-label="next day"><Next size={16} /></Link>
+          : <span style={{ ...navBtn, opacity: 0.35 }}><Next size={16} /></span>}
+        {!isToday && (
+          <Link href={dayHref(today)} style={{ fontSize: 12, color: '#d4667a', textDecoration: 'none', fontWeight: 600, marginInlineStart: 4 }}>
+            {L.backToday}
+          </Link>
+        )}
+        <form style={{ display: 'flex', gap: 8, marginInlineStart: 'auto' }}>
+          <input type="hidden" name="tab" value="today" />
+          <input type="date" name="date" defaultValue={date} max={today} style={{
+            height: 34, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8,
+            padding: '0 10px', fontSize: 13, color: 'var(--txt1)', colorScheme: 'light dark', fontFamily: 'inherit',
+          }} />
+          <button type="submit" style={{
+            height: 34, background: '#d4667a', border: 'none', borderRadius: 8, padding: '0 16px',
+            color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+          }}>{L.go}</button>
+        </form>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 16 }}>
         {card(L.present, present, C.green)}
@@ -133,10 +162,10 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
       </div>
 
       <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
-              {[L.col.staff, L.col.shift, L.col.in, L.col.out, L.col.time, L.col.location, L.col.device, L.col.status].map(c => <th key={c} style={th}>{c}</th>)}
+              {[L.col.staff, L.col.shift, L.col.inOut, L.col.time, L.col.from, L.col.status].map(c => <th key={c} style={th}>{c}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -148,29 +177,32 @@ export default async function TodayPresence({ date, isRtl }: { date: string; isR
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{name}</p>
                     <p style={{ margin: 0, color: 'var(--txt2)', fontSize: 11 }}>{L.role[m.role] ?? m.role}</p>
                   </td>
-                  <td style={{ ...td, color: 'var(--txt2)' }} dir="ltr">
-                    {hasShift ? `${m.shift_start!.slice(0, 5)} – ${m.shift_end!.slice(0, 5)}` : '—'}
+                  <td style={{ ...td, color: 'var(--txt2)', whiteSpace: 'nowrap' }}>
+                    {hasShift ? `${fmtClock(m.shift_start, isRtl)} – ${fmtClock(m.shift_end, isRtl)}` : '—'}
                   </td>
-                  <td style={td} dir="ltr">{firstIn ? fmtCairoTime(firstIn) : '—'}</td>
-                  <td style={td} dir="ltr">{live ? '—' : lastOut ? fmtCairoTime(lastOut) : '—'}</td>
+                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                    {firstIn ? (
+                      <>
+                        <b>{fmtCairoTime(firstIn, isRtl)}</b>
+                        <span style={{ color: 'var(--txt2)', margin: '0 6px' }}>{isRtl ? '←' : '→'}</span>
+                        {live ? <span style={{ color: C.green, fontWeight: 600 }}>{L.now}</span> : <b>{lastOut ? fmtCairoTime(lastOut, isRtl) : '—'}</b>}
+                      </>
+                    ) : '—'}
+                  </td>
                   <td style={td}>
-                    <span dir="ltr" style={{ fontWeight: 600 }}>{list.length ? fmtDuration(total) : '—'}</span>
-                    {list.length > 1 && <span style={{ color: 'var(--txt2)', fontSize: 11, marginInlineStart: 6 }}>({L.sessions(list.length)})</span>}
+                    <span style={{ fontWeight: 700 }}>{list.length ? fmtDuration(total, isRtl) : '—'}</span>
+                    {list.length > 1 && <span style={{ display: 'block', color: 'var(--txt2)', fontSize: 11 }}>{L.sessions(list.length)}</span>}
                   </td>
                   <td style={td}>
                     {list.length === 0 ? '—' : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                         {list.map((s, i) => (
-                          <LocationBadge key={i} status={s.location_status} distance={s.login_distance_m}
-                            note={s.notes} live={isLive(s, now)} isRtl={isRtl} />
+                          <div key={i} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            <LocationBadge status={s.location_status} distance={s.login_distance_m}
+                              note={s.notes} live={isLive(s, now)} isRtl={isRtl} />
+                            <DeviceBadge device={s.login_device} isRtl={isRtl} />
+                          </div>
                         ))}
-                      </div>
-                    )}
-                  </td>
-                  <td style={td}>
-                    {list.length === 0 ? '—' : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                        {list.map((s, i) => <DeviceBadge key={i} device={s.login_device} isRtl={isRtl} />)}
                       </div>
                     )}
                   </td>

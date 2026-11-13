@@ -2,19 +2,13 @@
 // Coaches have no fixed shift, so "on time" is measured against the start of her first class that day.
 import { createClient } from '@/lib/supabase/server'
 import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
-import { GRACE_MIN, cairoDayRange, cairoInstant, cairoToday, fmtCairoTime, fmtDuration } from '@/lib/staffClock'
+import { GRACE_MIN, cairoDayRange, cairoInstant, cairoToday, fmtCairoTime, fmtClock, fmtDuration } from '@/lib/staffClock'
 
 type Badge = { label: string; color: string }
 type Slot = { label: string; start: string | null; end: string | null; kind: 'class' | 'private' }
 
 const C = { green: '#3dab7e', orange: '#e8960a', red: '#e04040', grey: '#8a8a9a', purple: '#7c5cdb', blue: '#4a90d9' }
 const one = <T,>(x: T | T[] | null | undefined): T | null => (Array.isArray(x) ? x[0] ?? null : x ?? null)
-
-function hour12(t: string | null) {
-  if (!t) return ''
-  const [h, m] = t.split(':').map(Number)
-  return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''} ${h < 12 ? 'AM' : 'PM'}`
-}
 
 export default async function CoachTodayPresence({ isRtl }: { isRtl: boolean }) {
   const supabase = await createClient()
@@ -40,16 +34,18 @@ export default async function CoachTodayPresence({ isRtl }: { isRtl: boolean }) 
 
   const L = isRtl ? {
     present: 'حاضرة', late: 'متأخرة', absent: 'غائبة', inClass: 'في الحصة الآن',
-    col: { coach: 'المدربة', classes: 'حصص اليوم', in: 'دخول', out: 'خروج', time: 'الساعات', location: 'الموقع', device: 'الجهاز', status: 'الحالة' },
+    col: { coach: 'المدربة', classes: 'حصص اليوم', inOut: 'دخول ← خروج', time: 'الساعات', from: 'مكان التسجيل', status: 'الحالة' },
+    now: 'الآن',
     onTime: 'في الموعد', lateBy: (m: number) => `متأخرة ${m} د`, absentS: 'غائبة', notYet: 'لم تبدأ بعد',
     noClasses: 'لا توجد حصص', extra: 'بدون حصص مجدولة', inClassNow: 'في الحصة الآن', privateS: 'برايفت',
-    checkins: (n: number) => `${n} مرات`, today: 'اليوم', empty: 'لا توجد مدربات لديها حصص أو تسجيل حضور اليوم', cancelled: 'ملغاة',
+    checkins: (n: number) => `على ${n} مرات`, today: 'اليوم', empty: 'لا توجد مدربات لديها حصص أو تسجيل حضور اليوم', cancelled: 'ملغاة',
   } : {
     present: 'Present', late: 'Late', absent: 'Absent', inClass: 'In class now',
-    col: { coach: 'Coach', classes: "Today's classes", in: 'Check In', out: 'Check Out', time: 'Hours', location: 'Location', device: 'Device', status: 'Status' },
+    col: { coach: 'Coach', classes: "Today's classes", inOut: 'In → Out', time: 'Hours', from: 'Checked in from', status: 'Status' },
+    now: 'Now',
     onTime: 'On time', lateBy: (m: number) => `Late ${m}m`, absentS: 'Absent', notYet: 'Not yet',
     noClasses: 'No classes', extra: 'No classes scheduled', inClassNow: 'In class now', privateS: 'Private',
-    checkins: (n: number) => `${n} check-ins`, today: 'Today', empty: 'No coaches have classes or check-ins today', cancelled: 'cancelled',
+    checkins: (n: number) => `over ${n} check-ins`, today: 'Today', empty: 'No coaches have classes or check-ins today', cancelled: 'cancelled',
   }
 
   // Each coach's schedule for the day: her classes (session coach, or the class's default coach) and private sessions
@@ -146,55 +142,58 @@ export default async function CoachTodayPresence({ isRtl }: { isRtl: boolean }) 
       </div>
 
       <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 860 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
-              {[L.col.coach, L.col.classes, L.col.in, L.col.out, L.col.time, L.col.location, L.col.device, L.col.status].map(h => <th key={h} style={th}>{h}</th>)}
+              {[L.col.coach, L.col.classes, L.col.inOut, L.col.time, L.col.from, L.col.status].map(h => <th key={h} style={th}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
             {rows.map(({ c, list, sched, badges, firstIn, lastOut, open, total }) => {
               const name = isRtl ? (c.name_ar || c.name_en) : (c.name_en || c.name_ar)
-              const quiet = sched.length === 0 && list.length === 0
               return (
-                <tr key={c.id} style={{ borderBottom: '1px solid var(--border)', opacity: quiet ? 0.6 : 1 }}>
+                <tr key={c.id} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={td}><p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{name}</p></td>
                   <td style={td}>
                     {sched.length === 0 ? <span style={{ color: 'var(--txt2)' }}>—</span> : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                         {sched.map((s, i) => (
-                          <span key={i} dir="ltr" style={{
+                          <span key={i} style={{
                             fontSize: 11, fontWeight: 600, borderRadius: 6, padding: '2px 8px', whiteSpace: 'nowrap',
                             color: s.kind === 'private' ? C.blue : '#c9506a',
                             background: s.kind === 'private' ? '#4a90d912' : '#d4667a12',
                             border: `1px solid ${s.kind === 'private' ? '#4a90d926' : '#d4667a26'}`,
                           }}>
-                            {s.kind === 'private' && s.start ? `${s.label} · ${hour12(s.start)}${s.end ? ' – ' + hour12(s.end) : ''}` : s.label}
+                            {s.label}
+                            {s.start && <span style={{ fontWeight: 500, opacity: 0.85 }}> · {fmtClock(s.start, isRtl)}{s.end ? ` – ${fmtClock(s.end, isRtl)}` : ''}</span>}
                           </span>
                         ))}
                       </div>
                     )}
                   </td>
-                  <td style={td} dir="ltr">{firstIn ? fmtCairoTime(firstIn) : '—'}</td>
-                  <td style={td} dir="ltr">{open ? '—' : lastOut ? fmtCairoTime(lastOut) : '—'}</td>
+                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                    {firstIn ? (
+                      <>
+                        <b>{fmtCairoTime(firstIn, isRtl)}</b>
+                        <span style={{ color: 'var(--txt2)', margin: '0 6px' }}>{isRtl ? '←' : '→'}</span>
+                        {open ? <span style={{ color: C.green, fontWeight: 600 }}>{L.now}</span> : <b>{lastOut ? fmtCairoTime(lastOut, isRtl) : '—'}</b>}
+                      </>
+                    ) : '—'}
+                  </td>
                   <td style={td}>
-                    <span dir="ltr" style={{ fontWeight: 600 }}>{list.length ? fmtDuration(total) : '—'}</span>
-                    {list.length > 1 && <span style={{ color: 'var(--txt2)', fontSize: 11, marginInlineStart: 6 }}>({L.checkins(list.length)})</span>}
+                    <span style={{ fontWeight: 700 }}>{list.length ? fmtDuration(total, isRtl) : '—'}</span>
+                    {list.length > 1 && <span style={{ display: 'block', color: 'var(--txt2)', fontSize: 11 }}>{L.checkins(list.length)}</span>}
                   </td>
                   <td style={td}>
                     {list.length === 0 ? '—' : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                         {list.map((x, i) => (
-                          <LocationBadge key={i} status={x.location_status} distance={x.check_in_distance_m}
-                            note={x.notes} live={isToday && !x.check_out_time} isRtl={isRtl} />
+                          <div key={i} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            <LocationBadge status={x.location_status} distance={x.check_in_distance_m}
+                              note={x.notes} live={isToday && !x.check_out_time} isRtl={isRtl} />
+                            <DeviceBadge device={x.check_in_device} isRtl={isRtl} />
+                          </div>
                         ))}
-                      </div>
-                    )}
-                  </td>
-                  <td style={td}>
-                    {list.length === 0 ? '—' : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                        {list.map((x, i) => <DeviceBadge key={i} device={x.check_in_device} isRtl={isRtl} />)}
                       </div>
                     )}
                   </td>

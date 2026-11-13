@@ -90,17 +90,57 @@ export function hoursBetween(startMs: number, endMs: number): number {
   return Math.max(0, Math.round(((endMs - startMs) / 3600000) * 100) / 100)
 }
 
-/** '7h 05m' style duration. */
-export function fmtDuration(ms: number): string {
+/** '7h 05m' style duration ('7 س 05 د' in Arabic). */
+export function fmtDuration(ms: number, isRtl = false): string {
   const totalMin = Math.max(0, Math.round(ms / 60000))
   const h = Math.floor(totalMin / 60)
   const m = totalMin % 60
-  return `${h}h ${String(m).padStart(2, '0')}m`
+  return isRtl ? `${h} س ${String(m).padStart(2, '0')} د` : `${h}h ${String(m).padStart(2, '0')}m`
 }
 
-/** 'HH:MM' in Cairo time. */
-export function fmtCairoTime(at: string | number | Date): string {
-  return new Date(at).toLocaleTimeString('en-GB', {
-    timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+/** '9:05 AM' in Cairo time ('9:05 ص' in Arabic). Always 12-hour, Latin digits. */
+export function fmtCairoTime(at: string | number | Date, isRtl = false): string {
+  const s = new Date(at).toLocaleTimeString('en-US', {
+    timeZone: TZ, hour: 'numeric', minute: '2-digit', hour12: true,
   })
+  return isRtl ? s.replace('AM', 'ص').replace('PM', 'م') : s
+}
+
+/** A wall-clock 'HH:MM[:SS]' (e.g. a shift or class start) as '9:00 AM'. */
+export function fmtClock(t: string | null | undefined, isRtl = false): string {
+  if (!t) return ''
+  const [h, m] = t.split(':').map(Number)
+  return `${h % 12 || 12}:${String(m || 0).padStart(2, '0')} ${h < 12 ? (isRtl ? 'ص' : 'AM') : (isRtl ? 'م' : 'PM')}`
+}
+
+/** 'Thursday, 13 Nov' for a Cairo 'YYYY-MM-DD' date. */
+export function fmtCairoDay(date: string, isRtl = false, withYear = false): string {
+  return new Intl.DateTimeFormat(isRtl ? 'ar-EG-u-nu-latn' : 'en-GB', {
+    timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}),
+  }).format(new Date(date + 'T12:00:00Z'))
+}
+
+/** [start, end) of a Cairo calendar month ('YYYY-MM') as Date instants. */
+export function cairoMonthRange(month: string): [Date, Date] {
+  const [y, m] = month.split('-').map(Number)
+  const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+  return [cairoInstant(`${month}-01`), cairoInstant(next)]
+}
+
+/** 'YYYY-MM' shifted by n months. */
+export function addMonths(month: string, n: number): string {
+  const [y, m] = month.split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 1 + n, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/** 'YYYY-MM-DD' shifted by n days. */
+export function addDays(date: string, n: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
+}
+
+/** The Cairo 'YYYY-MM-DD' of an instant. */
+export function cairoDateOf(at: string | number | Date): string {
+  return cairoToday(new Date(at))
 }

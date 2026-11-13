@@ -1,24 +1,53 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
-import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { getLocale } from 'next-intl/server'
 import CoachCardActions from './CoachCardActions'
 import CoachTodayPresence from './CoachTodayPresence'
-import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
+import ClockLog, { type ClockEntry } from '@/components/ClockLog'
+import { cairoDateOf, cairoMonthRange, cairoToday, fmtDuration } from '@/lib/staffClock'
+
+type CoachName = { name_ar?: string | null; name_en?: string | null }
+type CoachLogRow = {
+  id: string; coach_id: string; check_in_time: string; check_out_time: string | null; hours_worked: number | null
+  location_status: string | null; check_in_distance_m: number | null; notes: string | null; check_in_device: string | null
+  coach: CoachName | null
+  session: { class: { name: string | null } | null } | null
+}
+
+/** Month's log rows → ClockLog entries. */
+function toLogEntries(rows: CoachLogRow[], nameOf: (c: CoachName | null) => string, today: string, now = Date.now()): ClockEntry[] {
+  return rows.map(log => {
+    const inMs  = new Date(log.check_in_time).getTime()
+    const outMs = log.check_out_time ? new Date(log.check_out_time).getTime() : null
+    // No check-out yet: still in class if it's today, otherwise she forgot to check out
+    const state = outMs != null ? 'done' : cairoDateOf(log.check_in_time) === today ? 'live' : 'open'
+    const ms = log.hours_worked != null ? Number(log.hours_worked) * 3600000
+      : outMs != null ? outMs - inMs : state === 'live' ? now - inMs : null
+    return {
+      id: log.id, personId: log.coach_id, name: nameOf(log.coach),
+      sub: log.session?.class?.name ?? null,
+      inAt: log.check_in_time, outAt: outMs, state, ms,
+      location: log.location_status, distance: log.check_in_distance_m, note: log.notes, device: log.check_in_device,
+    }
+  })
+}
 
 export default async function CoachesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; month?: string; person?: string }>
 }) {
   const params   = await searchParams
   const tab      = params.tab === 'log' ? 'log' : params.tab === 'today' ? 'today' : 'coaches'
   const locale   = await getLocale()
   const isRtl    = locale === 'ar'
   const supabase = await createClient()
-  const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
-  const monthEnd   = format(endOfMonth(new Date()), 'yyyy-MM-dd')
+  const today     = cairoToday()
+  const thisMonth = today.slice(0, 7)
+  const logMonth  = params.month && /^\d{4}-\d{2}$/.test(params.month) && params.month <= thisMonth ? params.month : thisMonth
+  const logPerson = params.person && /^[0-9a-f-]{36}$/i.test(params.person) ? params.person : ''
+  const [curStart, curEnd] = cairoMonthRange(thisMonth)
 
   const { data: coaches } = await supabase
     .from('coaches')
@@ -31,8 +60,8 @@ export default async function CoachesPage({
   const { data: attendance } = await supabase
     .from('coach_attendance')
     .select('coach_id, hours_worked, location_status')
-    .gte('created_at', monthStart)
-    .lte('created_at', monthEnd)
+    .gte('check_in_time', curStart.toISOString())
+    .lt('check_in_time', curEnd.toISOString())
     .not('hours_worked', 'is', null)
 
   const coachStats: Record<string, { hours: number; flagged: number }> = {}
@@ -42,12 +71,6 @@ export default async function CoachesPage({
     if (a.location_status === 'invalid' || a.location_status === 'denied') coachStats[a.coach_id].flagged++
   })
 
-  const { data: monthLog } = await supabase
-    .from('coach_attendance')
-    .select('*, coach:coaches(name_ar, name_en), session:sessions(*, class:classes(name))')
-    .gte('check_in_time', `${monthStart}T00:00:00`)
-    .lte('check_in_time', `${monthEnd}T23:59:59`)
-    .order('check_in_time', { ascending: false })
 
   const L = isRtl ? {
     title: 'المدربات',
@@ -60,10 +83,7 @@ export default async function CoachesPage({
     payroll: 'الراتب المتوقع',
     ratePerHour: 'ج.م / ساعة',
     noCoaches: 'لا توجد مدربات',
-    col: { coach: 'المدربة', group: 'المجموعة', checkIn: 'تسجيل دخول', checkOut: 'تسجيل خروج', hours: 'الساعات', location: 'الموقع', device: 'الجهاز' },
-    active: 'جارٍ', inProgress: 'في الحصة',
-    locationValid: 'داخل النطاق', locationInvalid: 'خارج النطاق',
-    noLog: 'لا توجد سجلات هذا الشهر',
+    inClassNow: 'في الحصة الآن',
   } : {
     title: 'Coaches',
     sub: `${activeCount} active • ${inactiveCount} inactive`,
@@ -75,22 +95,25 @@ export default async function CoachesPage({
     payroll: 'Payroll',
     ratePerHour: 'EGP/hr',
     noCoaches: 'No coaches',
-    col: { coach: 'Coach', group: 'Group', checkIn: 'Check In', checkOut: 'Check Out', hours: 'Hours', location: 'Location', device: 'Device' },
-    active: 'Active', inProgress: 'In Progress',
-    locationValid: 'Valid ✓', locationInvalid: 'Invalid ⚠',
-    noLog: 'No check-ins this month',
+    inClassNow: 'In class now',
   }
 
-  function fmtTime(iso: string | null) {
-    if (!iso) return null
-    return new Date(iso).toLocaleTimeString(isRtl ? 'ar-EG' : 'en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
-  }
-
-  function fmtDateTime(iso: string | null) {
-    if (!iso) return '—'
-    return new Date(iso).toLocaleString(isRtl ? 'ar-EG' : 'en-GB', {
-      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
-    })
+  // ── Month's log ──────────────────────────────────────────────────────
+  const nameOf = (c: CoachName | null | undefined) =>
+    (isRtl ? (c?.name_ar || c?.name_en) : (c?.name_en || c?.name_ar)) || '—'
+  const logPeople: [string, string][] = ((coaches ?? []) as (CoachName & { id: string })[]).map(c => [c.id, nameOf(c)])
+  let logEntries: ClockEntry[] = []
+  if (tab === 'log') {
+    const [mStart, mEnd] = cairoMonthRange(logMonth)
+    let q = supabase
+      .from('coach_attendance')
+      .select('*, coach:coaches(name_ar, name_en), session:sessions(class:classes(name))')
+      .gte('check_in_time', mStart.toISOString())
+      .lt('check_in_time', mEnd.toISOString())
+      .order('check_in_time', { ascending: false })
+    if (logPerson) q = q.eq('coach_id', logPerson)
+    const { data: monthLog } = await q
+    logEntries = toLogEntries((monthLog ?? []) as CoachLogRow[], nameOf, today)
   }
 
   return (
@@ -182,7 +205,7 @@ export default async function CoachesPage({
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={{ color: 'var(--txt2)', fontSize: 12 }}>{L.hoursMonth}</span>
                       <span style={{ color: 'var(--txt1)', fontSize: 13, fontWeight: 600 }}>
-                        {stats.hours.toFixed(1)} {isRtl ? 'س' : 'h'}
+                        {fmtDuration(stats.hours * 3600000, isRtl)}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -212,88 +235,17 @@ export default async function CoachesPage({
         </div>
       )}
 
-      {/* ── Today's Log Tab ── */}
+      {/* ── Month's Log Tab ── */}
       {tab === 'log' && (
-        <div style={{ padding: '24px 28px' }}>
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
-                  {[L.col.coach, L.col.group, L.col.checkIn, L.col.checkOut, L.col.hours, L.col.location, L.col.device].map(col => (
-                    <th key={col} style={{
-                      textAlign: isRtl ? 'right' : 'left', color: 'var(--txt2)',
-                      fontSize: 11, fontWeight: 600, padding: '10px 14px', whiteSpace: 'nowrap',
-                    }}>
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {monthLog?.map((log: any) => {
-                  const checkInStr  = fmtDateTime(log.check_in_time)
-                  const checkOutStr = fmtTime(log.check_out_time)
-                  const coachName   = isRtl ? (log.coach?.name_ar || log.coach?.name_en) : (log.coach?.name_en || log.coach?.name_ar)
-                  const groupName   = log.session?.class?.name || '—'
-                  return (
-                    <tr key={log.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '11px 14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{
-                            width: 26, height: 26, borderRadius: 13, flexShrink: 0,
-                            background: '#4a90d918', border: '1px solid #4a90d928',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 10, fontWeight: 700, color: '#4a90d9',
-                          }}>
-                            {(coachName || '').charAt(0)}
-                          </div>
-                          <span style={{ color: 'var(--txt1)', fontSize: 13, fontWeight: 600 }}>{coachName}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '11px 14px', color: 'var(--txt2)', fontSize: 12 }}>{groupName}</td>
-                      <td style={{ padding: '11px 14px', color: 'var(--txt1)', fontSize: 12, fontWeight: 500 }}>{checkInStr || '—'}</td>
-                      <td style={{ padding: '11px 14px', fontSize: 12 }}>
-                        {checkOutStr ? (
-                          <span style={{ color: 'var(--txt1)', fontWeight: 500 }}>{checkOutStr}</span>
-                        ) : (
-                          <span style={{
-                            background: '#3dab7e18', color: '#3dab7e',
-                            border: '1px solid #3dab7e28',
-                            borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600,
-                          }}>{L.active}</span>
-                        )}
-                      </td>
-                      <td style={{ padding: '11px 14px', fontSize: 12 }}>
-                        {log.hours_worked != null ? (
-                          <span style={{ color: 'var(--txt1)', fontWeight: 600 }}>
-                            {Number(log.hours_worked).toFixed(1)} {isRtl ? 'س' : 'h'}
-                          </span>
-                        ) : (
-                          <span style={{
-                            background: '#e8960a18', color: '#e8960a',
-                            border: '1px solid #e8960a28',
-                            borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600,
-                          }}>{L.inProgress}</span>
-                        )}
-                      </td>
-                      <td style={{ padding: '11px 14px' }}>
-                        <LocationBadge status={log.location_status} distance={log.check_in_distance_m} isRtl={isRtl} />
-                      </td>
-                      <td style={{ padding: '11px 14px' }}>
-                        <DeviceBadge device={log.check_in_device} isRtl={isRtl} />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            {(!monthLog || monthLog.length === 0) && (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--txt2)', fontSize: 13 }}>
-                {L.noLog}
-              </div>
-            )}
-          </div>
-        </div>
+        <ClockLog
+          entries={logEntries}
+          people={logPeople}
+          month={logMonth}
+          person={logPerson}
+          basePath="/dashboard/coaches"
+          isRtl={isRtl}
+          liveLabel={L.inClassNow}
+        />
       )}
     </div>
   )
