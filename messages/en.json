@@ -310,7 +310,7 @@
   },
   "logs": {
     "title": "Audit Logs",
-    "subtitle": "Every change made in the system — who, what and when",
+    "subtitle": "What admins and staff changed — who, what and when",
     "from": "From",
     "to": "To",
     "section": "Section",
