@@ -518,6 +518,12 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
             background: rowColor ? rowColor + '08' : 'transparent', transition: 'background 0.15s',
           }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+              <span aria-hidden dir="ltr" style={{
+                minWidth: 26, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 700, color: 'var(--txt2)', fontVariantNumeric: 'tabular-nums', marginInlineEnd: -6,
+              }}>
+                {idx + 1}.
+              </span>
               <div style={{
                 width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
                 background: '#d4667a18', border: '1px solid #d4667a30',
