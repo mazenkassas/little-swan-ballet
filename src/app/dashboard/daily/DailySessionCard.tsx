@@ -13,6 +13,7 @@ import {
   sessionCountsForStudent,
   isStudentOnHoliday,
   getActiveSubForClass,
+  needsPayment,
 } from '@/lib/subscriptionLogic'
 import { syncStudentPackage } from '../subscriptions/actions'
 
@@ -129,6 +130,15 @@ export default function DailySessionCard({
       return { ...sub, remaining_sessions: remainingOverride[sub.id] }
     }
     return sub
+  }
+
+  // Due date = end date, pay date = renewal date (worked out on the server)
+  function subDatesOf(sub: any) {
+    return { dueDate: sub?.due_date ?? sub?.end_date ?? null, payDate: sub?.pay_date ?? sub?.next_cycle_start ?? null }
+  }
+  function fmtFull(d: string) {
+    const [y, m, day] = d.split('-')
+    return `${Number(day)}/${Number(m)}/${y}`
   }
 
   const enrolledIds = new Set(students.map((s: any) => s.id))
@@ -351,8 +361,7 @@ export default function DailySessionCard({
   const payRequiredCount  = visibleStudents.filter((s: any) => {
     if (paidStudentIds.has(s.id)) return false
     const sub = getActiveSub(s)
-    const subStarted = !sub?.start_date || session.date >= sub.start_date
-    return !!sub && subStarted && sub.remaining_sessions === 0
+    return needsPayment(sub, subDatesOf(sub), session.date)
   }).length
 
   const DAY_ABBREVS = new Set(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])
@@ -544,7 +553,8 @@ export default function DailySessionCard({
                   const subStarted    = !sub?.start_date || session.date >= sub.start_date
                   const isPending     = !!sub && !subStarted
                   const isLocallyPaid = paidStudentIds.has(student.id)
-                  const isPay         = !isLocallyPaid && !!sub && subStarted && remaining === 0
+                  const dates         = subDatesOf(sub)
+                  const isPay         = !isLocallyPaid && needsPayment(sub, dates, session.date)
                   const noSub         = !sub
 
                   function fmtDate(d: string) {
@@ -626,14 +636,15 @@ export default function DailySessionCard({
 
                       {/* Due Date */}
                       <td style={{ ...td(), textAlign: 'center' }}>
-                        {sub?.end_date ? (() => {
-                          const expired = sub.end_date < today
+                        {sub && dates.dueDate ? (() => {
+                          const due: string = dates.dueDate
+                          const expired = due < today
                           const in7 = new Date(today); in7.setDate(in7.getDate() + 7)
-                          const soon = !expired && sub.end_date <= in7.toISOString().split('T')[0]
+                          const soon = !expired && due <= in7.toISOString().split('T')[0]
                           const clr = expired ? '#e04040' : soon ? '#e8960a' : '#4a90d9'
                           return (
                             <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: `${clr}18`, color: clr, border: `1px solid ${clr}28`, whiteSpace: 'nowrap' }}>
-                              {sub.end_date}
+                              {fmtFull(due)}
                             </span>
                           )
                         })() : <span style={{ color: 'var(--txt2)', fontSize: 11 }}>—</span>}
@@ -641,8 +652,8 @@ export default function DailySessionCard({
 
                       {/* Pay Date */}
                       <td style={{ ...td(), textAlign: 'center' }}>
-                        {(sub as any)?.payment?.date
-                          ? <span style={{ fontSize: 10, fontWeight: 700, color: '#4a90d9', whiteSpace: 'nowrap' }}>{(sub as any).payment.date}</span>
+                        {sub && dates.payDate
+                          ? <span style={{ fontSize: 10, fontWeight: 700, color: dates.payDate <= session.date ? '#e04040' : '#4a90d9', whiteSpace: 'nowrap' }}>{fmtFull(dates.payDate)}</span>
                           : <span style={{ color: 'var(--txt2)', fontSize: 11 }}>—</span>}
                       </td>
 

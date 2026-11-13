@@ -354,3 +354,48 @@ export function computePackageFromDates(opts: {
     : null
   return { total, remaining, nextCycleStart }
 }
+
+/* ─── Due date / pay date (shown on Daily) ─────────────────────── */
+
+export type SubDates = {
+  /** Due date = the package's end date (last class it covers) */
+  dueDate: string | null
+  /** Pay date = renewal date: the first class after the package, when the next one must be paid */
+  payDate: string | null
+}
+
+/**
+ * Due date and pay date of a package.
+ *  - due = the stored end date, else the calendar end (last class of the package)
+ *  - pay = the stored renewal date (next_cycle_start), else the first class after the due date
+ */
+export function subscriptionDates(
+  sub: { end_date?: string | null; next_cycle_start?: string | null } | null | undefined,
+  classDays: string[],
+  schedule?: { endDate: string | null; nextStart: string | null } | null,
+): SubDates {
+  if (!sub) return { dueDate: null, payDate: null }
+  const dueDate = sub.end_date || schedule?.endDate || null
+  const payDate = sub.next_cycle_start
+    || (sub.end_date ? nextClassDateAfter(classDays, sub.end_date) : null)
+    || schedule?.nextStart
+    || null
+  return { dueDate, payDate }
+}
+
+/**
+ * A started package needs payment on `onDate` when its sessions are used up,
+ * its due date has passed, or its pay (renewal) date has arrived.
+ */
+export function needsPayment(
+  sub: { start_date?: string | null; remaining_sessions?: number | null } | null | undefined,
+  dates: SubDates,
+  onDate: string,
+): boolean {
+  if (!sub) return false
+  if (sub.start_date && onDate < sub.start_date) return false
+  if ((sub.remaining_sessions ?? 0) <= 0) return true
+  if (dates.dueDate && dates.dueDate < onDate) return true
+  if (dates.payDate && dates.payDate <= onDate) return true
+  return false
+}

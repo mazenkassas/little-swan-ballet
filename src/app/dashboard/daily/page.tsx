@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { format, addDays, subDays, addWeeks, subWeeks, isToday, parseISO } from 'date-fns'
 import { formatCurrency } from '@/lib/utils'
 import DailySessionCard from './DailySessionCard'
-import { isAutoCountOn } from '@/lib/packageSync'
+import { isAutoCountOn, computePackages, cairoDate } from '@/lib/packageSync'
+import { subscriptionDates, needsPayment } from '@/lib/subscriptionLogic'
 import JumpToDate from './JumpToDate'
 import DailyPrivateSection from './DailyPrivateSection'
 import DailyRevenueSection from './DailyRevenueSection'
@@ -49,8 +50,8 @@ export default async function DailyPage({
 
   // Week strip — 7 days starting from Sunday of the selected week
   const startOfCurrentWeek = subDays(selectedDate, selectedDate.getDay())
-  const dayShortEn = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
-  const dayShortAr = ['أحد', 'اثن', 'ثلا', 'أرب', 'خمس', 'جمع', 'سبت']
+  const dayShortEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const dayShortAr = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
   const weekStrip = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(startOfCurrentWeek, i)
     const dateStr = format(d, 'yyyy-MM-dd')
@@ -144,6 +145,25 @@ export default async function DailyPage({
     (a.session.class?.start_time || '').localeCompare(b.session.class?.start_time || '')
   )
 
+  // ── Due date (= end date) and pay date (= renewal date) of every package shown ──
+  const shownSubIds = [...new Set(sessionDetails.flatMap(d =>
+    d.students.flatMap((s: any) => (s.subscriptions || []).filter((x: any) => x.status === 'active').map((x: any) => x.id))))]
+  const schedules = new Map<string, { endDate: string | null; nextStart: string | null }>()
+  if (shownSubIds.length) {
+    const computed = await computePackages(supabase, { subIds: shownSubIds, today: cairoDate() }).catch(() => [])
+    for (const p of computed) if (p.schedule.ok) schedules.set(p.id, p.schedule)
+  }
+  for (const d of sessionDetails) {
+    const days: string[] = d.session.class?.days_of_week || []
+    for (const s of d.students) {
+      for (const x of s.subscriptions || []) {
+        const dates = subscriptionDates(x, days, schedules.get(x.id))
+        x.due_date = dates.dueDate
+        x.pay_date = dates.payDate
+      }
+    }
+  }
+
   // ── Financials ────────────────────────────────────────────────────────────
   const { data: payments } = await supabase
     .from('payments')
@@ -174,8 +194,7 @@ export default async function DailyPage({
       const sub = s.subscriptions?.find(
         (x: any) => x.status === 'active' && (x.class_id === session.class_id || !x.class_id)
       )
-      const subStarted = !sub?.start_date || selectedDay >= sub.start_date
-      if (sub && subStarted && sub.remaining_sessions === 0) payRequiredMap.set(s.id, s)
+      if (sub && needsPayment(sub, { dueDate: sub.due_date ?? null, payDate: sub.pay_date ?? null }, selectedDay)) payRequiredMap.set(s.id, s)
     })
   })
   const payRequired = [...payRequiredMap.values()]
@@ -301,7 +320,7 @@ export default async function DailyPage({
               key={day.dateStr}
               href={nav(day.dateStr)}
               style={{
-                flex: 1, minWidth: 56, textDecoration: 'none',
+                flex: 1, minWidth: 68, textDecoration: 'none',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                 padding: '6px 4px', borderRadius: 10,
                 background: day.isSelected ? '#d4667a' : day.isToday ? '#d4667a12' : 'transparent',
@@ -309,7 +328,7 @@ export default async function DailyPage({
                 transition: 'background 0.12s',
               }}
             >
-              <span style={{ fontSize: 9, fontWeight: 600, color: day.isSelected ? '#ffcccc' : 'var(--txt2)', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: day.isSelected ? '#ffcccc' : 'var(--txt2)', whiteSpace: 'nowrap' }}>
                 {day.short}
               </span>
               <span style={{ fontSize: 14, fontWeight: 800, color: day.isSelected ? '#fff' : day.isToday ? '#d4667a' : 'var(--txt1)' }}>
