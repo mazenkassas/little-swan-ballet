@@ -1,5 +1,6 @@
 'use client'
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { Eye, Pencil, Trash2, AlertTriangle } from 'lucide-react'
 import { deleteExam } from './actions'
@@ -110,13 +111,14 @@ export default function ExamCardActions({ id, name, isRtl }: Props) {
 
   return (
     <div>
-      {showConfirm && (
+      {showConfirm && createPortal(
         <DeleteModal
           name={name} isRtl={isRtl}
           onConfirm={handleConfirmDelete}
           onCancel={() => setShowConfirm(false)}
           pending={pending}
-        />
+        />,
+        document.body,
       )}
 
       <div style={{ display: 'flex', gap: 6 }}>
