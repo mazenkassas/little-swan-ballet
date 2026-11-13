@@ -83,9 +83,9 @@ export default function ExamResultsForm({
     fShowing: (n: number, t: number) => `عرض ${n} من ${t}`, fNone: 'لا توجد طالبات مطابقة للفلاتر',
     fSavedHint: 'فلتر النتيجة يعتمد على النتائج المحفوظة',
     wrongLevel: 'ليست من هذا المستوى',
-    wTitle: 'الطالبة ليست من هذه المجموعة',
-    wBody: (n: string) => `${n} لا تنتمي لهذه المجموعة — قد تكون مسجلة في مستوى أعلى أو أقل. سيتم استبعادها من نتائج هذا الامتحان.`,
-    wConfirm: 'تأكيد', wCancel: 'إلغاء', wHint: 'اضغط "حفظ النتائج" بعد التأكيد.',
+    wTitle: 'مجموعة الامتحان', wSub: (n: string) => `اختر المجموعة التي ستمتحن معها ${n}`,
+    wHint: 'لن تتغير مجموعتها الأصلية — هذه المجموعة لهذا الامتحان فقط.',
+    wConfirm: 'حفظ', wCancel: 'إلغاء', wRemove: 'إزالة', wChip: 'مجموعة الامتحان:',
   } : {
     pass: 'Pass', fail: 'Fail', evaluation: 'Evaluation', committee: 'Special Committee', transferred: 'Transferred',
     notes: 'Notes…', noClass: 'Not enrolled in a class', save: 'Save Results', saving: 'Saving…', saved: 'Saved ✓',
@@ -100,9 +100,9 @@ export default function ExamResultsForm({
     fShowing: (n: number, t: number) => `Showing ${n} of ${t}`, fNone: 'No students match these filters',
     fSavedHint: 'Result filter uses saved results',
     wrongLevel: 'Not this level',
-    wTitle: "Student isn't in this group",
-    wBody: (n: string) => `${n} doesn't belong to this group — she may be enrolled in a higher or lower level. She will be excluded from this exam's results.`,
-    wConfirm: 'Confirm', wCancel: 'Cancel', wHint: 'Press "Save Results" after confirming.',
+    wTitle: 'Exam class', wSub: (n: string) => `Choose the class ${n} will sit this exam with`,
+    wHint: "Her original class won't change — this class is for this exam only.",
+    wConfirm: 'Save', wCancel: 'Cancel', wRemove: 'Remove', wChip: 'Exam class:',
   }
 
   const RESULTS: { key: Result; label: string; color: string }[] = [
@@ -122,6 +122,21 @@ export default function ExamResultsForm({
   const [error,  setError]  = useState('')
   const [transferFor, setTransferFor] = useState<any | null>(null)
   const [wrongFor,    setWrongFor]    = useState<any | null>(null)
+  // Exam-only class per student (doesn't touch her real enrolment)
+  const [examClass,   setExamClass]   = useState<Record<string, string | null>>(() =>
+    Object.fromEntries(existingResults.map(r => [r.student_id, r.exam_class_id ?? null])))
+  const classById = useMemo(() => new Map(allClasses.map(c => [c.id, c])), [allClasses])
+
+  async function saveExamClass(studentId: string, classId: string | null): Promise<string | null> {
+    const q = existingBy.has(studentId)
+      ? supabase.from('student_exams').update({ exam_class_id: classId }).eq('exam_id', exam.id).eq('student_id', studentId)
+      : supabase.from('student_exams').insert({ student_id: studentId, exam_id: exam.id, result: 'pending', exam_class_id: classId })
+    const { error: err } = await q
+    if (err) return err.message
+    setExamClass(prev => ({ ...prev, [studentId]: classId }))
+    router.refresh()
+    return null
+  }
 
   // ── Filters ──
   const [query,       setQuery]       = useState('')
@@ -220,25 +235,25 @@ export default function ExamResultsForm({
   const listProps = {
     results, notes, classesByStudent, RESULTS, L, isRtl,
     onResultChange: changeResult, onNoteChange: changeNote, onTransfer: (s: any) => setTransferFor(s),
-    onWrongLevel: (s: any) => {
-      // Already marked → pressing again clears it; otherwise ask first
-      if (results[s.id] === 'wrong_level') changeResult(s.id, 'wrong_level')
-      else setWrongFor(s)
-    },
+    onWrongLevel: (s: any) => setWrongFor(s),
+    examClass, classById,
   }
   const errorBox = error && (
     <p role="alert" style={{ margin: 0, padding: '10px 14px', borderRadius: 10, background: '#e0404012', border: '1px solid #e0404040', color: '#e04040', fontSize: 12.5, fontWeight: 600 }}>{error}</p>
   )
   const wrongModal = wrongFor && (
-    <WrongLevelAlert
+    <ExamClassModal
       student={wrongFor}
+      current={examClass[wrongFor.id] ?? null}
+      own={classesByStudent[wrongFor.id] || []}
+      allClasses={allClasses}
       L={L}
       isRtl={isRtl}
       onClose={() => setWrongFor(null)}
-      onConfirm={() => {
-        setResults(prev => ({ ...prev, [wrongFor.id]: 'wrong_level' }))
-        setSaved(false)
-        setWrongFor(null)
+      onSave={async classId => {
+        const e = await saveExamClass(wrongFor.id, classId)
+        if (!e) setWrongFor(null)
+        return e
       }}
     />
   )
@@ -271,7 +286,6 @@ export default function ExamResultsForm({
     { key: 'pending',     label: L.pending,      color: '#8a8a9a' },
     ...RESULTS,
     { key: 'transferred', label: L.transferred,  color: '#e8960a' },
-    { key: 'wrong_level', label: L.wrongLevel,   color: '#6b7280' },
   ]
   const selectStyle: React.CSSProperties = {
     width: '100%', height: 34, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-page)',
@@ -395,7 +409,6 @@ export default function ExamResultsForm({
           const count = (k: Result) => group.students.filter(s => results[s.id] === k).length
           const pass = count('pass'), fail = count('fail')
           const other = group.students.filter(s => results[s.id] && results[s.id] !== 'pass' && results[s.id] !== 'fail').length
-          const pending = group.students.length - pass - fail - other
           return (
             <div key={group.label} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
               <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-page)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -404,7 +417,6 @@ export default function ExamResultsForm({
                   <Count n={pass} label={L.pass} color="#3dab7e" />
                   <Count n={fail} label={L.fail} color="#e04040" />
                   {other > 0 && <Count n={other} label={L.other} color="#8B6EC8" />}
-                  <Count n={pending} label={L.pending} color="var(--txt2)" muted />
                 </div>
               </div>
               <StudentList students={group.shown} {...listProps} />
@@ -452,7 +464,7 @@ function Count({ n, label, color, muted }: { n: number; label: string; color: st
   )
 }
 
-function StudentList({ students, results, notes, classesByStudent, RESULTS, L, isRtl, onResultChange, onNoteChange, onTransfer, onWrongLevel }: {
+function StudentList({ students, results, notes, classesByStudent, RESULTS, L, isRtl, onResultChange, onNoteChange, onTransfer, onWrongLevel, examClass, classById }: {
   students: any[]
   results: Record<string, Result | ''>
   notes: Record<string, string>
@@ -464,6 +476,8 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
   onNoteChange: (studentId: string, value: string) => void
   onTransfer: (student: any) => void
   onWrongLevel: (student: any) => void
+  examClass: Record<string, string | null>
+  classById: Map<string, ClassRow>
 }) {
   return (
     <div>
@@ -471,10 +485,11 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
         const result      = results[student.id] || ''
         const displayName = isRtl ? student.name_ar : (student.name_en || student.name_ar)
         const initials    = (student.name_ar || '').slice(0, 1)
-        const rowColor    = result === 'transferred' ? '#e8960a' : result === 'wrong_level' ? '#6b7280' : RESULTS.find(r => r.key === result)?.color
+        const rowColor    = result === 'transferred' ? '#e8960a' : RESULTS.find(r => r.key === result)?.color
         const classes     = classesByStudent[student.id] || []
         const moved       = result === 'transferred'
-        const wrong       = result === 'wrong_level'
+        const examCls     = examClass[student.id] ? classById.get(examClass[student.id]!) ?? null : null
+        const wrong       = !!examClass[student.id]
 
         return (
           <div key={student.id} style={{
@@ -506,6 +521,12 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
                         {classLabel(c, isRtl)}
                       </span>
                     ))}
+                  {wrong && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#c27c00', background: '#e8960a14', border: '1px solid #e8960a40', borderRadius: 6, padding: '2px 8px' }}>
+                      <UserX size={11} />{L.wChip}
+                      <span dir="ltr">{examCls ? classLabel(examCls, isRtl) : '—'}</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -536,9 +557,9 @@ function StudentList({ students, results, notes, classesByStudent, RESULTS, L, i
                 <button type="button" onClick={() => onWrongLevel(student)} aria-pressed={wrong} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   padding: '5px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                  background: wrong ? '#6b728022' : 'var(--bg-page)',
-                  border: `1px solid ${wrong ? '#6b728066' : 'var(--border)'}`,
-                  color: wrong ? 'var(--txt1)' : 'var(--txt2)',
+                  background: wrong ? '#e8960a22' : 'var(--bg-page)',
+                  border: `1px solid ${wrong ? '#e8960a55' : 'var(--border)'}`,
+                  color: wrong ? '#c27c00' : 'var(--txt2)',
                 }}>
                   <UserX size={12} />{L.wrongLevel}
                 </button>
@@ -666,36 +687,98 @@ function TransferModal({ student, current, allClasses, L, isRtl, onClose, onDone
   )
 }
 
-function WrongLevelAlert({ student, L, isRtl, onClose, onConfirm }: {
-  student: any; L: Record<string, any>; isRtl: boolean; onClose: () => void; onConfirm: () => void
+function ExamClassModal({ student, current, own, allClasses, L, isRtl, onClose, onSave }: {
+  student: any
+  current: string | null
+  own: ClassRow[]
+  allClasses: ClassRow[]
+  L: Record<string, any>
+  isRtl: boolean
+  onClose: () => void
+  onSave: (classId: string | null) => Promise<string | null>
 }) {
+  const [q, setQ] = useState('')
+  const [to, setTo] = useState(current || '')
+  const [err, setErr] = useState('')
+  const [pending, start] = useTransition()
   const name = isRtl ? student.name_ar : (student.name_en || student.name_ar)
+
+  const list = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    return allClasses
+      .map(c => ({ c, label: classLabel(c, isRtl) }))
+      .filter(x => !s || x.label.toLowerCase().includes(s) || x.c.name.toLowerCase().includes(s))
+      .sort((a, b) => compareClassNames(a.c.name, b.c.name))
+  }, [allClasses, q, isRtl])
+
+  function save(classId: string | null) {
+    if (classId !== null && !classId) { setErr(L.tPick); return }
+    setErr('')
+    start(async () => {
+      const e = await onSave(classId)
+      if (e) setErr(e)
+    })
+  }
+
   return (
     <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{
       position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(30,12,20,.5)', backdropFilter: 'blur(3px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
     }}>
-      <div role="alertdialog" aria-modal="true" aria-label={L.wTitle} style={{
-        width: '100%', maxWidth: 420, background: 'var(--bg-popup)', border: '1px solid var(--border)', borderRadius: 16,
+      <div role="dialog" aria-modal="true" aria-label={L.wTitle} style={{
+        width: '100%', maxWidth: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+        background: 'var(--bg-popup)', border: '1px solid var(--border)', borderRadius: 16,
         boxShadow: '0 20px 60px rgba(0,0,0,.35)', direction: isRtl ? 'rtl' : 'ltr', overflow: 'hidden',
       }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '18px 18px 6px' }}>
-          <div style={{
-            width: 38, height: 38, borderRadius: 10, flexShrink: 0, background: '#e8960a18', border: '1px solid #e8960a30',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <AlertTriangle size={18} color="#e8960a" />
-          </div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '16px 18px 10px' }}>
           <div style={{ flex: 1 }}>
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--txt1)' }}>{L.wTitle}</p>
-            <p style={{ margin: '6px 0 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--txt2)' }}>{L.wBody(name)}</p>
-            <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--txt2)', opacity: .8 }}>{L.wHint}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--txt2)' }}>{L.wSub(name)}</p>
           </div>
+          <button type="button" onClick={onClose} aria-label={L.wCancel} style={{ background: 'none', border: 0, color: 'var(--txt2)', cursor: 'pointer', padding: 4 }}><X size={16} /></button>
         </div>
-        <div style={{ display: 'flex', gap: 8, padding: 14, borderTop: '1px solid var(--border)', marginTop: 12 }}>
-          <button type="button" onClick={onConfirm} autoFocus style={{ flex: 1, height: 38, borderRadius: 10, border: 0, background: '#d4667a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-            {L.wConfirm}
+
+        <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, margin: '0 18px 10px', padding: '8px 10px', borderRadius: 10, background: '#e8960a12', border: '1px solid #e8960a30', color: '#c27c00', fontSize: 11.5, fontWeight: 600, lineHeight: 1.5 }}>
+          <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 2 }} />{L.wHint}
+        </p>
+
+        <div style={{ padding: '0 18px 10px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--txt2)' }}>
+            <Search size={14} />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder={L.tSearch} aria-label={L.tSearch} autoFocus
+              style={{ flex: 1, border: 0, outline: 0, background: 'transparent', color: 'var(--txt1)', fontSize: 13, fontFamily: 'inherit' }} />
+          </label>
+        </div>
+
+        <div role="listbox" aria-label={L.tPick} style={{ overflowY: 'auto', padding: '0 10px', flex: 1 }}>
+          {list.length === 0 && <p style={{ textAlign: 'center', color: 'var(--txt2)', fontSize: 12.5, padding: 20 }}>{L.tNoMatch}</p>}
+          {list.map(({ c, label }) => {
+            const isOwn = own.some(x => x.id === c.id)
+            const on = to === c.id
+            return (
+              <button key={c.id} type="button" role="option" aria-selected={on} onClick={() => { setTo(c.id); setErr('') }} style={{
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'start', margin: '2px 0',
+                padding: '9px 10px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5,
+                background: on ? '#d4667a1c' : 'transparent', border: `1px solid ${on ? '#d4667a66' : 'transparent'}`,
+                color: 'var(--txt1)', fontWeight: on ? 700 : 500,
+              }}>
+                <span dir="ltr" style={{ flex: 1, textAlign: isRtl ? 'right' : 'left' }}>{label}</span>
+                {isOwn && <span style={{ fontSize: 10.5, color: 'var(--txt2)', border: '1px solid var(--border)', borderRadius: 999, padding: '1px 7px' }}>{L.tCurrent}</span>}
+              </button>
+            )
+          })}
+        </div>
+
+        {err && <p role="alert" style={{ margin: '8px 18px 0', fontSize: 12, fontWeight: 600, color: '#e04040' }}>{err}</p>}
+        <div style={{ display: 'flex', gap: 8, padding: 14, borderTop: '1px solid var(--border)', marginTop: 8 }}>
+          <button type="button" onClick={() => save(to)} disabled={pending} style={{ flex: 1, height: 38, borderRadius: 10, border: 0, background: '#d4667a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: pending ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: pending ? .6 : 1 }}>
+            {pending ? '…' : L.wConfirm}
           </button>
+          {current && (
+            <button type="button" onClick={() => save(null)} disabled={pending} style={{ flex: 1, height: 38, borderRadius: 10, border: '1px solid #e0404055', background: 'transparent', color: '#e04040', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              {L.wRemove}
+            </button>
+          )}
           <button type="button" onClick={onClose} style={{ flex: 1, height: 38, borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--txt1)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             {L.wCancel}
           </button>

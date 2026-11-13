@@ -78,7 +78,6 @@ export default async function ExamDetailPage({
   const passed  = recorded.filter(r => r.result === 'pass').length
   const failed  = recorded.filter(r => r.result === 'fail').length
   const other   = recorded.length - passed - failed
-  const pending = Math.max(students.length - recorded.length, 0)
 
   // Show grouped view when multiple targets (or all levels)
   const isGrouped = !targets || targets.length !== 1
@@ -168,16 +167,9 @@ export default async function ExamDetailPage({
               borderRadius: 10, padding: '8px 16px',
             }}>
               <p style={{ fontSize: 20, fontWeight: 700, color: '#8B6EC8', margin: 0 }}>{other}</p>
-              <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0 }}>{isRtl ? 'تقييم / لجنة / منقول / مستوى آخر' : 'Eval / committee / moved / other level'}</p>
+              <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0 }}>{isRtl ? 'تقييم / لجنة / منقول' : 'Eval / committee / moved'}</p>
             </div>
           )}
-          <div style={{
-            textAlign: 'center', background: 'var(--bg-card)', border: '1px solid var(--border)',
-            borderRadius: 10, padding: '8px 16px',
-          }}>
-            <p style={{ fontSize: 20, fontWeight: 700, color: 'var(--txt2)', margin: 0 }}>{pending}</p>
-            <p style={{ fontSize: 10, color: 'var(--txt2)', margin: 0 }}>{t('pending')}</p>
-          </div>
         </div>
       </div>
 
