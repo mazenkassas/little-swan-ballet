@@ -1,7 +1,7 @@
 // Month's check-in log for staff and coaches (Attendance page).
 // One simple list grouped by day: who · in → out · how long · where from.
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { DeviceBadge, LocationBadge } from '@/components/PresenceBadges'
 import { addMonths, cairoDateOf, cairoToday, fmtCairoDay, fmtCairoTime, fmtDuration } from '@/lib/staffClock'
 
@@ -105,13 +105,16 @@ export default function ClockLog({
           {Object.entries(query).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
           <input type="hidden" name="tab" value="log" />
           {month !== thisMonth && <input type="hidden" name="month" value={month} />}
-          <select name="person" defaultValue={person} style={{
-            height: 34, minWidth: 160, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-card)',
-            color: 'var(--txt1)', fontSize: 13, padding: '0 10px', fontFamily: 'inherit',
-          }}>
-            <option value="">{L.everyone}</option>
-            {people.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-          </select>
+          <div style={{ position: 'relative' }}>
+            <select name="person" defaultValue={person} className="clocklog-select" aria-label={L.everyone}>
+              <option value="">{L.everyone}</option>
+              {people.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+            <ChevronDown size={14} style={{
+              position: 'absolute', top: '50%', transform: 'translateY(-50%)', insetInlineEnd: 10,
+              color: 'var(--txt2)', pointerEvents: 'none',
+            }} />
+          </div>
           <button type="submit" style={{
             height: 34, background: C.accent, border: 'none', borderRadius: 8, padding: '0 16px',
             color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
@@ -176,6 +179,14 @@ export default function ClockLog({
           gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--border);
         }
         .clocklog-row:last-child { border-bottom: none; }
+        .clocklog-select {
+          height: 34px; min-width: 180px; border-radius: 8px; border: 1px solid var(--border);
+          background: var(--bg-popup, var(--bg-card)); color: var(--txt1); font-size: 13px; font-weight: 600;
+          padding-block: 0; padding-inline: 12px 32px; font-family: inherit; cursor: pointer;
+          appearance: none; -webkit-appearance: none; color-scheme: light dark; outline: none;
+        }
+        .clocklog-select:focus { border-color: ${C.accent}; }
+        .clocklog-select option { background: var(--bg-popup, var(--bg-card)); color: var(--txt1); font-weight: 500; }
         @media (max-width: 760px) {
           .clocklog { padding: 16px !important; }
           .clocklog-row { grid-template-columns: 1fr auto; row-gap: 6px; }
